@@ -207,3 +207,22 @@ def test_zone_et_agent_responsable(client, h, base):
     assert next(x for x in zs if x["id"] == base["zone"]["id"])["agent_id"] == base["ag1"]["id"]
     assert client.patch(f"/api/zones/{base['zone']['id']}", json={"agent_id": 99999}, headers=h("chef1")).status_code == 422
     assert client.patch(f"/api/zones/{base['zone']['id']}", json={"agent_id": None}, headers=h("chef1")).json()["agent_id"] is None
+
+
+def test_montant_limite_a_l_encours_de_collecte(client, h, base):
+    ag = base["ag1"]["id"]
+    c = _cycle(client, h, base, client_key="c1", mise=500, debut="2026-10-01", fin="2026-10-31", nb_lignes_prevues=4)   # encours de départ : 4 x 500 = 2000
+    s = lambda m, jour="2026-10-07": client.post("/api/collecte/saisie", json={"cycle_id": c["id"], "agent_id": ag, "date_collecte": jour, "montant_collecte": m}, headers=h("chef1"))
+    r = s(2500)
+    assert r.status_code == 422 and "encours" in r.json()["detail"] and "2000" in r.json()["detail"]
+    assert s(2000).status_code == 201                                                       # le plein encours est accepté
+    r = s(500, "2026-10-08")
+    assert r.status_code == 422 and "encours" in r.json()["detail"]                         # plus rien à collecter
+    # correction : le maximum tient compte de l'ancien montant de la ligne
+    lid = next(l["id"] for l in client.get("/api/collecte/jour", params={"date": "2026-10-07"}, headers=h("chef1")).json()["lignes"] if l["cycle_id"] == c["id"])
+    assert client.put(f"/api/collecte/lignes/{lid}", json={"montant_collecte": 2500}, headers=h("chef1")).status_code == 422
+    assert client.put(f"/api/collecte/lignes/{lid}", json={"montant_collecte": 1500}, headers=h("chef1")).status_code == 200
+    assert s(500, "2026-10-09").status_code == 201                                          # il reste 500 après la correction
+    # type 3 : collecte libre, pas de plafond
+    c3 = _cycle(client, h, base, client_key="c2", produit="P3", mise=500, debut="2026-10-01", fin="2026-10-31")
+    assert client.post("/api/collecte/saisie", json={"cycle_id": c3["id"], "agent_id": ag, "date_collecte": "2026-10-07", "montant_collecte": 987654}, headers=h("chef1")).status_code == 201

@@ -60,6 +60,7 @@ function CycleLiaison({ cycle: c, comptes, peut, peutRetirer, onFait }: { cycle:
   const type3 = c.type_cycle === 3
   const m = Number(montant)
   const multipleOk = !m || type3 || m % c.mise_courante === 0
+  const depasse = !type3 && c.reste_a_collecter !== null && m > c.reste_a_collecter
   const cible = comptes.find((x) => String(x.id) === compte)
   const lie = c.compte_lie_id !== null && String(c.compte_lie_id) === compte
 
@@ -88,7 +89,7 @@ function CycleLiaison({ cycle: c, comptes, peut, peutRetirer, onFait }: { cycle:
           <Field label="Alimenter la tontine depuis le compte (F)" hint={`${type3 ? 'Montant libre' : `Multiple de ${c.mise_courante} F`} · disponible ${xof(cible.disponible)}`}>
             <Input type="number" min={1} step={type3 ? 1 : c.mise_courante} value={montant} aria-label={`Montant vers ${c.numero}`} onChange={(e) => setMontant(e.target.value)} />
           </Field>
-          <Button variant="primary" disabled={busy || !(m > 0) || !multipleOk || m > cible.disponible}
+          <Button variant="primary" disabled={busy || !(m > 0) || !multipleOk || depasse || m > cible.disponible}
             onClick={() => void run(() => api.post('/api/virements/epargne-vers-tontine', { compte_id: cible.id, cycle_id: c.id, montant: m }),
               'Tontine alimentée', () => { setMontant(''); onFait() })}>Virer vers la tontine</Button>
           {peutRetirer && (
@@ -99,6 +100,7 @@ function CycleLiaison({ cycle: c, comptes, peut, peutRetirer, onFait }: { cycle:
         </div>
       )}
       {!multipleOk && <Alert tone="bad">Le montant doit être un multiple de la mise ({xof(c.mise_courante)}).</Alert>}
+      {depasse && <Alert tone="bad">Le montant dépasse l'encours de collecte ({xof(c.reste_a_collecter ?? 0)}).</Alert>}
     </div>
   )
 }

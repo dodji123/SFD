@@ -100,7 +100,8 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
   const m = Number(montant)
   const type3 = c?.type_cycle === 3
   const multipleOk = !c || !m || type3 || m % c.mise_courante === 0
-  const pret = !!c && !!agent && m > 0 && multipleOk && !busy
+  const depasse = !!c && !type3 && c.reste_a_collecter !== null && m > c.reste_a_collecter
+  const pret = !!c && !!agent && m > 0 && multipleOk && !depasse && !busy
 
   const enregistrer = useCallback(() => api.post('/api/collecte/saisie', { cycle_id: c!.id, agent_id: Number(agent), date_collecte: jour, montant_collecte: m }), [c, agent, jour, m])
   const valider = () => void run(enregistrer, 'Collecte enregistrée', () => {
@@ -144,7 +145,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
         <Field label="Mise"><Input readOnly value={c ? xof(c.mise_courante) : ''} /></Field>
         <Field label="Total déjà collecté"><Input readOnly value={c ? xof(c.montant_collecte) : ''} /></Field>
         <Field label="Encours de collecte"><Input readOnly value={c ? (c.reste_a_collecter === null ? 'Libre (type 3)' : xof(c.reste_a_collecter)) : ''} /></Field>
-        <Field label="Montant à saisir (F)" hint={c ? (type3 ? 'Montant libre pour une mise de type 3' : `Multiple de ${c.mise_courante} F`) : undefined}>
+        <Field label="Montant à saisir (F)" hint={c ? (type3 ? 'Montant libre pour une mise de type 3' : `Multiple de ${c.mise_courante} F, au plus ${c.reste_a_collecter ?? 0} F`) : undefined}>
           <Input ref={refMontant} type="number" min={1} step={type3 || !c ? 1 : c.mise_courante} value={montant} disabled={!c}
             onChange={(e) => setMontant(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pret) valider() }} aria-label="Montant à saisir" />
         </Field>
@@ -152,6 +153,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
       </div>
       {erreur && <Alert tone="warn">{erreur}</Alert>}
       {!multipleOk && c && <Alert tone="bad">Le montant doit être un multiple de la mise ({xof(c.mise_courante)}).</Alert>}
+      {depasse && c && <Alert tone="bad">Le montant dépasse l'encours de collecte ({xof(c.reste_a_collecter ?? 0)}).</Alert>}
     </Card>
   )
 }

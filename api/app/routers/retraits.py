@@ -152,6 +152,9 @@ def virer_vers_tontine(body: VirementIn, user: User = Depends(require("epargne:w
     with tx(user.login) as cur:
         verifier_agence(cur, user, "compte_epargne", body.compte_id)
         verifier_agence(cur, user, "cycle", body.cycle_id)
+        c = one_row(cur, "SELECT c.type_cycle, s.reste_a_collecter FROM cycle c JOIN v_cycle_situation s ON s.cycle_id = c.id WHERE c.id = %s", (body.cycle_id,))
+        if c["type_cycle"] != 3 and c["reste_a_collecter"] is not None and body.montant > c["reste_a_collecter"]:
+            raise HTTPException(status_code=422, detail=f"Le montant dépasse l'encours à collecter ({max(int(c['reste_a_collecter']), 0)} F)")
         vid = one_row(cur, "SELECT virement_epargne_vers_tontine(%s, %s, %s, COALESCE(%s, current_date), %s) AS id",
                       (body.compte_id, body.cycle_id, body.montant, body.date, user.id))["id"]
         return one_row(cur, "SELECT * FROM virement WHERE id = %s", (vid,))

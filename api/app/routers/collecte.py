@@ -166,6 +166,12 @@ def cycle_du_client(suffixe: str, produit_id: int, zone_id: int | None = None, a
         return {"client": cl, "cycle": c}
 
 
+def _verifier_reste(c: dict, montant: int, deja: int) -> None:
+    """Le montant saisi ne dépasse pas l'encours de collecte (sauf type 3, collecte libre). `deja` : ancien montant de la ligne corrigée."""
+    if c["type_cycle"] != 3 and c["reste_a_collecter"] is not None and montant > c["reste_a_collecter"] + deja:
+        raise HTTPException(status_code=422, detail=f"Le montant dépasse l'encours à collecter ({max(int(c['reste_a_collecter']) + deja, 0)} F)")
+
+
 class SaisieIn(BaseModel):
     cycle_id: int
     agent_id: int
@@ -180,9 +186,10 @@ def saisie_guichet(body: SaisieIn, user: User = Depends(require("collecte:write"
         raise HTTPException(status_code=422, detail="La date de collecte ne peut pas être dans le futur")
     with tx() as cur:
         verifier_agence(cur, user, "cycle", body.cycle_id)
-        c = one_row(cur, "SELECT type_cycle, mise_courante, numero FROM cycle WHERE id = %s", (body.cycle_id,))
+        c = one_row(cur, "SELECT c.type_cycle, c.mise_courante, c.numero, s.reste_a_collecter FROM cycle c JOIN v_cycle_situation s ON s.cycle_id = c.id WHERE c.id = %s", (body.cycle_id,))
     if c["type_cycle"] != 3 and body.montant_collecte % int(c["mise_courante"]) != 0:
         raise HTTPException(status_code=422, detail=f"Le montant doit être un multiple de la mise ({int(c['mise_courante'])} F)")
+    _verifier_reste(c, body.montant_collecte, 0)
     return saisir_lignes(body.cycle_id, LignesIn(lignes=[LigneIn(date_collecte=body.date_collecte, montant_collecte=body.montant_collecte, agent_id=body.agent_id)]), user)
 
 
@@ -270,7 +277,8 @@ def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int 
 
 
 def _ligne_autorisee(cur, user: User, ligne_id: int) -> dict:
-    l = one_row(cur, "SELECT l.id, l.agent_id, c.agence_id, c.type_cycle, c.mise_courante FROM ligne_collecte l JOIN cycle c ON c.id = l.cycle_id WHERE l.id = %s", (ligne_id,))
+    l = one_row(cur, "SELECT l.id, l.agent_id, l.montant_collecte, c.agence_id, c.type_cycle, c.mise_courante, s.reste_a_collecter FROM ligne_collecte l "
+                     "JOIN cycle c ON c.id = l.cycle_id JOIN v_cycle_situation s ON s.cycle_id = c.id WHERE l.id = %s", (ligne_id,))
     if l is None or (user.agence_id is not None and l["agence_id"] != user.agence_id):
         raise HTTPException(status_code=404, detail="Introuvable")
     if user.role == "agent" and l["agent_id"] != user.agent_id:
@@ -288,6 +296,7 @@ def modifier_ligne(ligne_id: int, body: CorrectionIn, user: User = Depends(requi
         l = _ligne_autorisee(cur, user, ligne_id)
         if l["type_cycle"] != 3 and body.montant_collecte % int(l["mise_courante"]) != 0:
             raise HTTPException(status_code=422, detail=f"Le montant doit être un multiple de la mise ({int(l['mise_courante'])} F)")
+        _verifier_reste(l, body.montant_collecte, int(l["montant_collecte"]))
         cur.execute("SELECT modifier_ligne_collecte(%s, %s)", (ligne_id, body.montant_collecte))
     return {"ok": True}
 
