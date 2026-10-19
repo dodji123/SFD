@@ -88,18 +88,23 @@ class RubriqueIn(BaseModel):
 
 @router.get("/rubriques-paie")
 def lister_rubriques(user: User = Depends(require("rh:read"))):
+    """Un utilisateur d'agence voit les rubriques de son agence et les rubriques globales ; le siège voit tout."""
+    ag = agence_filter(user)
     with tx() as cur:
-        return all_rows(cur, "SELECT * FROM rubrique_paie ORDER BY ordre, id")
+        return all_rows(cur, "SELECT * FROM rubrique_paie WHERE (%s::int IS NULL OR agence_id IS NULL OR agence_id = %s) ORDER BY ordre, id", (ag, ag))
 
 
 @router.post("/rubriques-paie", status_code=201)
 def creer_rubrique(body: RubriqueIn, user: User = Depends(require("rh:write"))):
+    """Un utilisateur d'agence ne crée que des rubriques de son agence (jamais globales ni d'une autre agence) ;
+    seul le siège peut créer une rubrique globale (agence_id vide)."""
+    ag = agence_scope(user, body.agence_id) if user.agence_id is not None else body.agence_id
     with tx(user.login) as cur:
         return one_row(
             cur,
             "INSERT INTO rubrique_paie(agence_id, code, libelle, type, mode, valeur, base, ordre) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
-            (body.agence_id, body.code, body.libelle, body.type, body.mode, body.valeur, body.base, body.ordre))
+            (ag, body.code, body.libelle, body.type, body.mode, body.valeur, body.base, body.ordre))
 
 
 # ---------------------------------------------------------------- commissions et bulletins

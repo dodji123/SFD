@@ -105,7 +105,7 @@ def saisir_lignes(cycle_id: int, body: LignesIn, user: User = Depends(require("c
     """Saisie du livret. Tout ou rien : une ligne refusée annule le lot. La page et le numéro de ligne
     sont attribués à la suite des lignes existantes s'ils ne sont pas fournis."""
     with tx(user.login) as cur:
-        verifier_agence(cur, user, "cycle", cycle_id)
+        ag = verifier_agence(cur, user, "cycle", cycle_id)
         idx = one_row(cur, "SELECT COALESCE(max((page - 1) * 31 + no_ligne), 0) AS m FROM ligne_collecte WHERE cycle_id = %s", (cycle_id,))["m"]
         for ln in body.lignes:
             agent = ln.agent_id
@@ -117,6 +117,8 @@ def saisir_lignes(cycle_id: int, body: LignesIn, user: User = Depends(require("c
                 agent = user.agent_id
             if agent is None:
                 raise HTTPException(status_code=422, detail="agent_id obligatoire pour une ligne de collecte")
+            if one_row(cur, "SELECT 1 AS x FROM agent WHERE id = %s AND agence_id = %s", (agent, ag)) is None:
+                raise HTTPException(status_code=422, detail="L'agent n'appartient pas à l'agence du cycle")
             if ln.page is not None and ln.no_ligne is not None:
                 page, no = ln.page, ln.no_ligne
             else:

@@ -107,6 +107,12 @@ def test_employes_contrats_bulletins(client, h, agences, sql):
     for rub in ({"code": "PRIME", "libelle": "Prime", "type": "gain", "mode": "fixe", "valeur": 5000, "base": "salaire_base", "ordre": 10},
                 {"code": "COT", "libelle": "Cotisation", "type": "retenue_salariale", "mode": "pourcentage", "valeur": 0.04, "ordre": 20}):
         assert client.post("/api/rubriques-paie", json=rub, headers=h("rh1")).status_code == 201
+    # portée des rubriques : le RH de l'agence 2 ne crée pas de rubrique pour l'agence 1 ; la sienne est rattachée à son agence
+    autre = {"code": "AUTRE", "libelle": "x", "type": "gain", "mode": "fixe", "valeur": 1}
+    assert client.post("/api/rubriques-paie", json={**autre, "agence_id": agences["a1"]}, headers=h2).status_code == 403
+    mienne = client.post("/api/rubriques-paie", json=autre, headers=h2)
+    assert mienne.status_code == 201 and mienne.json()["agence_id"] == agences["a2"]
+    assert all(r["agence_id"] in (None, agences["a2"]) for r in client.get("/api/rubriques-paie", headers=h2).json())
     assert client.post(f"/api/employes/{eid}/avances", json={"montant": 20000, "date_avance": "2026-09-15"}, headers=h("rh1")).status_code == 201
     b = client.post("/api/bulletins", json={"employe_id": eid, "periode": "2026-10-15"}, headers=h("rh1"))
     assert b.status_code == 201, b.text
