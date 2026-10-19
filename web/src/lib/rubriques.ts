@@ -1,0 +1,45 @@
+// Libellés et regroupement des rubriques du rapport journalier (clés renvoyées par la base).
+export const LIBELLES_RUBRIQUES: Record<string, string> = {
+  collecte_montant: 'Montant collecté',
+  collecte_nb_lignes: 'Lignes de collecte',
+  mises_collectees: 'Mises collectées',
+  virements_epargne_vers_tontine: 'Virements épargne → tontine',
+  versements_agents: 'Versements des agents',
+  versements_manquants: 'Manquants de tournée',
+  versements_surplus: 'Surplus de tournée',
+  retraits_clients: 'Retraits payés aux clients',
+  virements_tontine_vers_epargne: 'Virements tontine → épargne',
+  ecarts_pertes_agents: 'Pertes sur retraits (agents)',
+  ecarts_manquants_agents: 'Manquants imputés aux agents',
+  retenues_sur_commission: 'Retenues sur commission',
+  epargne_depots: "Dépôts d'épargne",
+  epargne_retraits: "Retraits d'épargne",
+  credits_decaisses_nb: 'Crédits débloqués (nombre)',
+  credits_decaisses_montant: 'Crédits débloqués (montant)',
+  remboursements_capital: 'Remboursements : capital',
+  remboursements_interets: 'Remboursements : intérêts',
+  remboursements_penalites: 'Remboursements : pénalités',
+  remboursements_tontine: 'Remboursés sur tontine',
+  remboursements_prelevement: 'Remboursés par prélèvement',
+  remboursements_especes: 'Remboursés en espèces',
+  saisies_garantie: 'Garanties saisies',
+  echeances_echues_nb: 'Échéances échues (nombre)',
+  echeances_echues_montant: 'Échéances échues (montant dû)',
+  echeances_a_venir_nb: 'Échéances à venir 7 j (nombre)',
+  echeances_a_venir_montant: 'Échéances à venir 7 j (montant)',
+  points_fidelite: 'Points de fidélité attribués',
+  caisse_encaissements: 'Caisse : encaissements',
+  caisse_decaissements: 'Caisse : décaissements',
+  cycles_clotures: 'Cycles clôturés',
+}
+
+export const SECTIONS_RUBRIQUES: { titre: string; cles: string[] }[] = [
+  { titre: 'Collecte', cles: ['collecte_montant', 'collecte_nb_lignes', 'mises_collectees', 'virements_epargne_vers_tontine', 'cycles_clotures'] },
+  { titre: 'Tournées et écarts', cles: ['versements_agents', 'versements_manquants', 'versements_surplus', 'ecarts_pertes_agents', 'ecarts_manquants_agents', 'retenues_sur_commission'] },
+  { titre: 'Retraits et virements', cles: ['retraits_clients', 'virements_tontine_vers_epargne', 'epargne_depots', 'epargne_retraits'] },
+  { titre: 'Crédits', cles: ['credits_decaisses_nb', 'credits_decaisses_montant', 'remboursements_capital', 'remboursements_interets', 'remboursements_penalites', 'remboursements_tontine', 'remboursements_prelevement', 'remboursements_especes', 'saisies_garantie'] },
+  { titre: 'Échéances et fidélité', cles: ['echeances_echues_nb', 'echeances_echues_montant', 'echeances_a_venir_nb', 'echeances_a_venir_montant', 'points_fidelite'] },
+  { titre: 'Caisse', cles: ['caisse_encaissements', 'caisse_decaissements'] },
+]
+
+export const ESTCOMPTE = new Set(['collecte_nb_lignes', 'credits_decaisses_nb', 'echeances_echues_nb', 'echeances_a_venir_nb', 'points_fidelite', 'cycles_clotures'])

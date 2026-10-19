@@ -1,0 +1,1441 @@
+code;libelle;classe;parent;imputable
+10;VALEURS EN CAISSE;1;;f
+101;Billets et monnaies;1;10;f
+1011;Billets et monnaies émis par la BCEAO;1;101;t
+1012;Billets et monnaies étrangers;1;101;t
+11;COMPTES ORDINAIRES CHEZ LES INSTITUTIONS FINANCIERES;1;;f
+110;Banque Centrale;1;11;f
+1101;Banque Centrale;1;110;t
+111;Organe Financier/Caisse Centrale;1;11;f
+1111;Organe Financier/Caisse Centrale;1;111;f
+11111;Organe Financier;1;1111;f
+111111;Organe Financier;1;11111;t
+111116;Dettes rattachées;1;11111;t
+111117;Créances rattachées;1;11111;t
+11112;Caisse Centrale;1;1111;f
+111121;Caisse Centrale;1;11112;t
+111126;Dettes rattachées;1;11112;t
+111127;Créances rattachées;1;11112;t
+112;Trésor Public;1;11;f
+1121;Trésor Public;1;112;t
+113;Centre des Chèques Postaux;1;11;f
+1131;Centre des Chèques Postaux;1;113;t
+1136;Dettes rattachées;1;113;t
+1137;Créances rattachées;1;113;t
+114;Banques et correspondants;1;11;f
+1141;Banques et correspondants;1;114;t
+1146;Dettes rattachées;1;114;t
+1147;Créances rattachées;1;114;t
+115;Etablissements Financiers;1;11;f
+1151;Etablissements Financiers;1;115;t
+1156;Dettes rattachées;1;115;t
+1157;Créances rattachées;1;115;t
+116;Systèmes Financiers Décentralisés;1;11;f
+1161;Systèmes Financiers Décentralisés;1;116;t
+1166;Dettes rattachées;1;116;t
+1167;Créances rattachées;1;116;t
+117;Autres institutions financières;1;11;f
+1171;Autres institutions financières;1;117;t
+1176;Dettes rattachées;1;117;t
+1177;Créances rattachées;1;117;t
+12;AUTRES COMPTES DE DEPOTS CHEZ LES INSTITUTIONS FINANCIERES;1;;f
+126;Dépôts à terme constitués;1;12;f
+1261;Dépôts à terme constitués;1;126;f
+12611;Dépôts à terme constitués de 0 à 6 mois au plus;1;1261;f
+126111;Dépôts à terme constitués de 0 à 6 mois au plus chez l’organe financier;1;12611;t
+126112;Dépôts à terme constitués de 0 à 6 mois au plus au Trésor public;1;12611;t
+126113;Dépôts à terme constitués de 0 à 6 mois au plus chez les CCP;1;12611;t
+126114;Dépôts à terme constitués de 0 à 6 mois au plus chez les banques et correspondants;1;12611;t
+126115;Dépôts à terme constitués de 0 à 6 mois au plus chez les établissements financiers;1;12611;t
+126116;Dépôts à terme constitués de 0 à 6 mois au plus chez les SFD;1;12611;t
+126117;Dépôts à terme constitués de 0 à 6 mois au plus chez les autres institutions financières;1;12611;t
+12612;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus;1;1261;f
+126121;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus chez l’organe financier;1;12612;t
+126122;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus au Trésor Public;1;12612;t
+126123;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus chez les CCP;1;12612;t
+126124;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus chez les banques et correspondants;1;12612;t
+126125;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus chez les établissements financiers;1;12612;t
+126126;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus chez les SFD;1;12612;t
+126127;Dépôts à terme constitués de plus de 6 mois à 12 mois au plus chez les autres institutions financières;1;12612;t
+12613;Dépôts à terme constitués de plus d’1 an à 2 ans au plus;1;1261;f
+126131;Dépôts à terme constitués de plus d’1 an à 2 ans au plus chez l’organe Financier;1;12613;t
+126132;Dépôts à terme constitués de plus d’1 an à 2 ans au plus au Trésor Public;1;12613;t
+126133;Dépôts à terme constitués de plus d’1 an à 2 ans au plus chez les CCP;1;12613;t
+126134;Dépôts à terme constitués de plus d’1 an à 2 ans au plus chez les banques et correspondants;1;12613;t
+126135;Dépôts à terme constitués de plus d’1 an à 2 ans au plus chez les établissements financiers;1;12613;t
+126136;Dépôts à terme constitués de plus d’1 an à 2 ans au plus chez les SFD;1;12613;t
+126137;Dépôts à terme constitués de plus d’1 an à 2 ans au plus chez les autres institutions financières;1;12613;t
+12614;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus;1;1261;f
+126141;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus chez l’organe financier;1;12614;t
+126142;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus au Trésor Public;1;12614;t
+126143;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus chez les CCP;1;12614;t
+126144;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus chez les banques et correspondants;1;12614;t
+126145;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus chez les établissements financiers;1;12614;t
+126146;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus chez les SFD;1;12614;t
+126147;Dépôts à terme constitués de plus de 2 ans à 3 ans au plus chez les autres institutions financières;1;12614;t
+12615;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus;1;1261;f
+126151;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus chez l’organe financier;1;12615;t
+126152;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus au Trésor Public;1;12615;t
+126153;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus chez les CCP;1;12615;t
+126154;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus chez les banques et correspondants;1;12615;t
+126155;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus chez les établissements financiers;1;12615;t
+126156;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus chez les SFD;1;12615;t
+126157;Dépôts à terme constitués de plus de 3 ans à 10 ans au plus chez les autres institutions financières;1;12615;t
+12616;Dépôts à terme constitués de plus de 10 ans;1;1261;f
+126161;Dépôts à terme constitués de plus de 10 ans chez l’organe financier;1;12616;t
+126162;Dépôts à terme constitués de plus de 10 ans au Trésor Public;1;12616;t
+126163;Dépôts à terme constitués de plus de 10 ans chez les CCP;1;12616;t
+126164;Dépôts à terme constitués de plus de 10 ans chez les banques et correspondants;1;12616;t
+126165;Dépôts à terme constitués de plus de 10 ans chez les établissements financiers;1;12616;t
+126166;Dépôts à terme constitués de plus de 10 ans chez les SFD;1;12616;t
+126167;Dépôts à terme constitués de plus de 10 ans chez les autres institutions financières;1;12616;t
+1267;Créances rattachées;1;126;t
+127;Dépôts de garantie constitués;1;12;f
+1271;Dépôts de garantie constitués;1;127;f
+12711;Dépôts de garantie constitués de 0 à 6 mois au plus;1;1271;f
+127111;Dépôts de garantie constitués de 0 à 6 mois au plus chez l’organe financier;1;12711;t
+127112;Dépôts de garantie constitués de 0 à 6 mois au plus au Trésor Public;1;12711;t
+127113;Dépôts de garantie constitués de 0 à 6 mois au plus chez les CCP;1;12711;t
+127114;Dépôts de garantie constitués de 0 à 6 mois au plus chez les banques et correspondants;1;12711;t
+127115;Dépôts de garantie constitués de 0 à 6 mois au plus chez les établissements financiers;1;12711;t
+127116;Dépôts de garantie constitués de 0 à 6 mois au plus chez les SFD;1;12711;t
+127117;Dépôts de garantie constitués de 0 à 6 mois au plus chez les autres institutions financières;1;12711;t
+12712;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus;1;1271;f
+127121;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus chez l’organe financier;1;12712;t
+127122;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus au Trésor Public;1;12712;t
+127123;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus chez les CCP;1;12712;t
+127124;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus chez les banques et correspondants;1;12712;t
+127125;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus chez les établissements financiers;1;12712;t
+127126;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus chez les SFD;1;12712;t
+127127;Dépôts de garantie constitués de plus de 6 mois à 12 mois au plus chez les autres institutions financières;1;12712;t
+12713;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus;1;1271;f
+127131;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus chez l’organe financier;1;12713;t
+127132;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus au Trésor Public;1;12713;t
+127133;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus chez les CCP;1;12713;t
+127134;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus chez les banques et correspondants;1;12713;t
+127135;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus chez les établissements financiers;1;12713;t
+127136;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus chez les SFD;1;12713;t
+127137;Dépôts de garantie constitués de plus d’1 an à 2 ans au plus chez les autres institutions financières;1;12713;t
+12714;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus;1;1271;f
+127141;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus chez l’organe financier;1;12714;t
+127142;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus au Trésor Public;1;12714;t
+127143;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus chez les CCP;1;12714;t
+127144;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus chez les banques et correspondants;1;12714;t
+127145;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus chez les établissements financiers;1;12714;t
+127146;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus chez les SFD;1;12714;t
+127147;Dépôts de garantie constitués de plus de 2 ans à 3 ans au plus chez les autres institutions financières;1;12714;t
+12715;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus;1;1271;f
+127151;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus chez l’organe financier;1;12715;t
+127152;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus au Trésor Public;1;12715;t
+127153;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus chez les CCP;1;12715;t
+127154;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus chez les banques et correspondants;1;12715;t
+127155;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus chez les établissements financiers;1;12715;t
+127156;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus chez les SFD;1;12715;t
+127157;Dépôts de garantie constitués de plus de 3 ans à 10 ans au plus chez les autres institutions financières;1;12715;t
+12716;Dépôts de garantie constitués de plus de 10 ans;1;1271;f
+127161;Dépôts de garantie constitués de plus de 10 ans chez l’organe financier;1;12716;t
+127162;Dépôts de garantie constitués de plus de 10 ans au Trésor Public;1;12716;t
+127163;Dépôts de garantie constitués de plus de 10 ans chez les CCP;1;12716;t
+127164;Dépôts de garantie constitués de plus de 10 ans chez les banques et correspondants;1;12716;t
+127165;Dépôts de garantie constitués de plus de 10 ans chez les établissements financiers;1;12716;t
+127166;Dépôts de garantie constitués de plus de 10 ans chez les SFD;1;12716;t
+127167;Dépôts de garantie constitués de plus de 10 ans chez les autres institutions financières;1;12716;t
+1277;Créances rattachées;1;127;t
+128;Autres dépôts constitués;1;12;f
+1281;Autres dépôts constitués;1;128;t
+1287;Créances rattachées;1;128;t
+13;COMPTES DE PRETS AUX INSTITUTIONS FINANCIERES;1;;f
+131;Prêts à moins d’1 an;1;13;f
+1311;Prêts à moins d’1 an;1;131;f
+13111;Prêts à moins d’1 an à l’Organe Financier/Caisse Centrale;1;1311;f
+131111;Prêts à moins d’1 an à l’Organe Financier;1;13111;t
+131112;Prêts à moins d’1 an à la Caisse Centrale;1;13111;t
+13112;Prêts à moins d’1 an aux banques et correspondants;1;1311;t
+13113;Prêts à moins d’1 an aux SFD;1;1311;t
+13114;Prêts à moins d’1 an à d’autres institutions financières;1;1311;t
+1317;Créances rattachées;1;131;t
+133;Prêts à terme;1;13;f
+1331;Prêts à terme;1;133;f
+13311;Prêts à terme à l’Organe Financier/Caisse Centrale;1;1331;f
+133111;Prêts à terme à l’Organe Financier;1;13311;t
+133112;Prêts à terme à la Caisse Centrale;1;13311;t
+13312;Prêts à terme aux banques et correspondants;1;1331;t
+13313;Prêts à terme aux SFD;1;1331;t
+13314;Prêts à terme à d’autres institutions financières;1;1331;t
+1337;Créances rattachées;1;133;t
+15;COMPTES ORDINAIRES DES INSTITUTIONS FINANCIERES;1;;f
+151;Organe financier;1;15;f
+1511;Organe Financier;1;151;t
+1516;Dettes rattachées;1;151;t
+1517;Créances rattachées;1;151;t
+152;Trésor Public;1;15;f
+1521;Trésor Public;1;152;t
+1526;Dettes rattachées;1;152;t
+1527;Créances rattachées;1;152;t
+153;Centre des Chèques Postaux;1;15;f
+1531;Centre des Chèques Postaux;1;153;t
+1536;Dettes rattachées;1;153;t
+1537;Créances rattachées;1;153;t
+154;Banques et correspondants;1;15;f
+1541;Banques et correspondants;1;154;t
+1546;Dettes rattachées;1;154;t
+1547;Créances rattachées;1;154;t
+155;Etablissements financiers;1;15;f
+1551;Etablissements financiers;1;155;t
+1556;Dettes rattachées;1;155;t
+1557;Créances rattachées;1;155;t
+156;Systèmes Financiers Décentralisés;1;15;f
+1561;Systèmes Financiers Décentralisés;1;156;t
+1566;Dettes rattachées;1;156;t
+1567;Créances rattachées;1;156;t
+157;Autres institutions financières;1;15;f
+1571;Autres institutions financières;1;157;t
+1576;Dettes rattachées;1;157;t
+1577;Créances rattachées;1;157;t
+16;AUTRES COMPTES DE DEPOTS DES INSTITUTIONS FINANCIERES;1;;f
+161;Dépôts à terme reçus;1;16;f
+1611;Dépôts à terme reçus;1;161;f
+16111;Dépôts à terme reçus de 0 à 6 mois au plus;1;1611;f
+161111;Dépôts à terme reçus de 0 à 6 mois au plus de l’organe financier;1;16111;t
+161112;Dépôts à terme reçus de 0 à 6 mois au plus du Trésor Public;1;16111;t
+161113;Dépôts à terme reçus de 0 à 6 mois au plus des CCP;1;16111;t
+161114;Dépôts à terme reçus de 0 à 6 mois au plus des banques et correspondants;1;16111;t
+161115;Dépôts à terme reçus de 0 à 6 mois au plus des établissements financiers;1;16111;t
+161116;Dépôts à terme reçus de 0 à 6 mois au plus des SFD;1;16111;t
+161117;Dépôts à terme reçus de 0 à 6 mois au plus des autres institutions financières;1;16111;t
+16112;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus;1;1611;f
+161121;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus de l’organe financier;1;16112;t
+161122;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus du Trésor Public;1;16112;t
+161123;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus des CCP;1;16112;t
+161124;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus des banques et correspondants;1;16112;t
+161125;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus des établissements financiers;1;16112;t
+161126;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus des SFD;1;16112;t
+161127;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus des autres institutions financières;1;16112;t
+16113;Dépôts à terme reçus de plus d’1 an à 2 ans au plus;1;1611;f
+161131;Dépôts à terme reçus de plus d’1 an à 2 ans au plus de l’organe financier;1;16113;t
+161132;Dépôts à terme reçus de plus d’1 an à 2 ans au plus du Trésor Public;1;16113;t
+161133;Dépôts à terme reçus de plus d’1 an à 2 ans au plus des CCP;1;16113;t
+161134;Dépôts à terme reçus de plus d’1 an à 2 ans au plus des banques et correspondants;1;16113;t
+161135;Dépôts à terme reçus de plus d’1 an à 2 ans au plus des établissements financiers;1;16113;t
+161136;Dépôts à terme reçus de plus d’1 an à 2 ans au plus des SFD;1;16113;t
+161137;Dépôts à terme reçus de plus d’1 an à 2 ans au plus des autres institutions financières;1;16113;t
+16114;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus;1;1611;f
+161141;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus de l’organe financier;1;16114;t
+161142;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus du Trésor Public;1;16114;t
+161143;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus des CCP;1;16114;t
+161144;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus des banques et correspondants;1;16114;t
+161145;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus des établissements financiers;1;16114;t
+161146;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus des SFD;1;16114;t
+161147;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus des autres institutions financières;1;16114;t
+16115;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus;1;1611;f
+161151;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus de l’organe financier;1;16115;t
+161152;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus du Trésor Public;1;16115;t
+161153;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus des CCP;1;16115;t
+161154;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus des banques et correspondants;1;16115;t
+161155;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus des établissements financiers;1;16115;t
+161156;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus des SFD;1;16115;t
+161157;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus des autres institutions financières;1;16115;t
+16116;Dépôts à terme reçus de plus de 10 ans;1;1611;f
+161161;Dépôts à terme reçus de plus de 10 ans de l’organe financier;1;16116;t
+161162;Dépôts à terme reçus de plus de 10 ans du Trésor Public;1;16116;t
+161163;Dépôts à terme reçus de plus de 10 ans des CCP;1;16116;t
+161164;Dépôts à terme reçus de plus de 10 ans des banques et correspondants;1;16116;t
+161165;Dépôts à terme reçus de plus de 10 ans des établissements financiers;1;16116;t
+161166;Dépôts à terme reçus de plus de 10 ans des SFD;1;16116;t
+161167;Dépôts à terme reçus de plus de 10 ans des autres institutions financières;1;16116;t
+1616;Dettes rattachées;1;161;t
+162;Dépôts de garantie reçus;1;16;f
+1621;Dépôts de garantie reçus;1;162;f
+16211;Dépôts de garantie reçus de 0 à 6 mois au plus;1;1621;f
+162111;Dépôts de garantie reçus de 0 à 6 mois au plus de l’organe financier;1;16211;t
+162112;Dépôts de garantie reçus de 0 à 6 mois au plus du Trésor Public;1;16211;t
+162113;Dépôts de garantie reçus de 0 à 6 mois au plus des CCP;1;16211;t
+162114;Dépôts de garantie reçus de 0 à 6 mois au plus des banques et correspondants;1;16211;t
+162115;Dépôts de garantie reçus de 0 à 6 mois au plus des établissements financiers;1;16211;t
+162116;Dépôts de garantie reçus de 0 à 6 mois au plus des SFD;1;16211;t
+162117;Dépôts de garantie reçus de 0 à 6 mois au plus des autres institutions financières;1;16211;t
+16212;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus;1;1621;f
+162121;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus de l’organe financier;1;16212;t
+162122;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus du Trésor Public;1;16212;t
+162123;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus des CCP;1;16212;t
+162124;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus des banques et correspondants;1;16212;t
+162125;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus des établissements financiers;1;16212;t
+162126;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus des SFD;1;16212;t
+162127;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus des autres institutions financières;1;16212;t
+16213;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus;1;1621;f
+162131;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus de l’organe financier;1;16213;t
+162132;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus du Trésor Public;1;16213;t
+162133;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus des CCP;1;16213;t
+162134;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus des banques et correspondants;1;16213;t
+162135;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus des établissements financiers;1;16213;t
+162136;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus des SFD;1;16213;t
+162137;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus des autres institutions financières;1;16213;t
+16214;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus;1;1621;f
+162141;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus de l’organe financier;1;16214;t
+162142;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus du Trésor Public;1;16214;t
+162143;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus des CCP;1;16214;t
+162144;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus des banques et correspondants;1;16214;t
+162145;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus des établissements financiers;1;16214;t
+162146;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus des SFD;1;16214;t
+162147;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus des autres institutions financières;1;16214;t
+16215;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus;1;1621;f
+162151;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus de l’organe financier;1;16215;t
+162152;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus du Trésor Public;1;16215;t
+162153;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus des CCP;1;16215;t
+162154;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus des banques et correspondants;1;16215;t
+162155;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus des établissements financiers;1;16215;t
+162156;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus des SFD;1;16215;t
+162157;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus des autres institutions financières;1;16215;t
+16216;Dépôts de garantie reçus de plus de 10 ans;1;1621;f
+162161;Dépôts de garantie reçus de plus de 10 ans de l’organe financier;1;16216;t
+162162;Dépôts de garantie reçus de plus de 10 ans du Trésor Public;1;16216;t
+162163;Dépôts de garantie reçus de plus de 10 ans des CCP;1;16216;t
+162164;Dépôts de garantie reçus de plus de 10 ans des banques et correspondants;1;16216;t
+162165;Dépôts de garantie reçus de plus de 10 ans des établissements financiers;1;16216;t
+162166;Dépôts de garantie reçus de plus de 10 ans des SFD;1;16216;t
+162167;Dépôts de garantie reçus de plus de 10 ans des autres institutions financières;1;16216;t
+1626;Dettes rattachées;1;162;t
+165;Autres dépôts reçus;1;16;f
+1651;Autres dépôts reçus;1;165;t
+1656;Dettes rattachées;1;165;t
+17;COMPTES D'EMPRUNTS ET AUTRES SOMMES DUES AUX INSTITUTIONS FINANCIERES;1;;f
+175;Emprunts à moins d’un an;1;17;f
+1751;E m prunts à m oins d’un an;1;175;f
+17511;Emprunts à moins d’un an auprès de l’Organe Financier/Caisse Centrale;1;1751;f
+175111;Emprunts à moins d’un an auprès de l’Organe Financier;1;17511;t
+175112;Emprunts à moins d’un an auprès de la Caisse Centrale;1;17511;t
+17512;Emprunts à moins d’un an auprès des banques et correspondants;1;1751;t
+17513;Emprunts à moins d’un an auprès des SFD;1;1751;t
+17514;Emprunts à moins d’un an auprès d’autres institutions financières;1;1751;t
+1756;Dettes rattachées;1;175;t
+178;Emprunts à terme;1;17;f
+1781;Emprunts à terme;1;178;f
+17811;Emprunts à terme auprès de l’Organe Financier/Caisse Centrale;1;1781;f
+178111;Emprunts à terme auprès de l’Organe Financier;1;17811;t
+178112;Emprunts à terme auprès de la Caisse Centrale;1;17811;t
+17812;Emprunts à terme auprès des banques et correspondants;1;1781;t
+17813;Emprunts à terme auprès des SFD;1;1781;t
+17814;Emprunts à terme auprès d’autres institutions financières;1;1781;t
+1786;Dettes rattachées;1;178;t
+179;Autres sommes dues aux institutions financières;1;17;t
+18;RESSOURCES AFFECTEES;1;;f
+181;Ressources affectées à court terme;1;18;t
+182;Ressources affectées à moyen terme;1;18;t
+183;Ressources affectées à long terme;1;18;t
+184;Intérêts capitalisés;1;18;t
+19;COMPTES DE PRETS EN SOUFFRANCE ET IMMOBILISES;1;;f
+191;Prêts immobilisés;1;19;t
+192;Prêts en souffrance de 6 mois au plus;1;19;f
+1921;Prêts en souffrance de 0 à 3 mois au plus;1;192;t
+1922;Prêts en souffrance de plus de 3 mois à 6 mois au plus;1;192;t
+193;Prêts en souffrance de plus de 6 mois à 12 mois au plus;1;19;t
+194;Prêts en souffrance de plus de 12 mois à 24 mois au plus;1;19;t
+199;Provisions sur prêts en souffrance;1;19;f
+1991;Provisions sur prêts en souffrance de 6 mois au plus;1;199;f
+19911;Provisions sur prêts en souffrance de 0 à 3 mois au plus;1;1991;t
+19912;Provisions sur prêts en souffrance de plus 3 mois à 6 mois au plus;1;1991;t
+1992;Provisions sur prêts en souffrance de plus de 6 mois à 12 mois au plus;1;199;t
+1993;Provisions sur prêts en souffrance de plus de 12 mois à 24 mois au plus;1;199;t
+20;CREDITS AUX MEMBRES, BENEFICIAIRES OU CLIENTS;2;;f
+202;Crédits à court terme;2;20;f
+2022;Crédits ordinaires;2;202;f
+20221;Crédits ordinaires;2;2022;f
+202211;Crédits à court terme de 0 à 6 mois au plus;2;20221;t
+202212;Crédits à court terme de plus de 6 mois à 12 mois au plus;2;20221;t
+20227;Créances rattachées;2;2022;t
+2023;D écouverts;2;202;f
+20231;Découverts;2;2023;t
+20237;Créances rattachées;2;2023;t
+203;Crédits à moyen terme;2;20;f
+2031;Crédits à m oyen terme;2;203;f
+20311;Crédits à moyen terme de plus d’1 an à 2 ans au plus;2;2031;t
+20312;Crédits à moyen terme de plus de 2 ans à 3 ans au plus;2;2031;t
+2037;Créances rattachées;2;203;t
+204;Crédits à long terme;2;20;f
+2041;Crédits à long terme;2;204;f
+20411;Crédits à long terme de plus de 3 ans à 10 ans au plus;2;2041;t
+20412;Crédits à long terme de plus de 10 ans;2;2041;t
+2047;Créances rattachées;2;204;t
+25;COMPTES DES MEMBRES, BENEFICIAIRES OU CLIENTS;2;;f
+251;Comptes ordinaires;2;25;f
+2511;Comptes ordinaires;2;251;f
+25111;Comptes ordinaires;2;2511;t
+25116;Dettes rattachées;2;2511;t
+25117;Créances rattachées;2;2511;t
+2512;Comptes ordinaires sur livret;2;251;f
+25121;Comptes ordinaires;2;2512;t
+25126;Dettes rattachées;2;2512;t
+252;Dépôts à terme reçus;2;25;f
+2521;Dépôts à terme reçus;2;252;f
+25211;Dépôts à terme reçus de 0 à 6 mois au plus;2;2521;t
+25212;Dépôts à terme reçus de plus de 6 mois à 12 mois au plus;2;2521;t
+25213;Dépôts à terme reçus de plus d’1 an à 2 ans au plus;2;2521;t
+25214;Dépôts à terme reçus de plus de 2 ans à 3 ans au plus;2;2521;t
+25215;Dépôts à terme reçus de plus de 3 ans à 10 ans au plus;2;2521;t
+25216;Dépôts à terme reçus de plus de 10 ans;2;2521;t
+2526;Dettes rattachées;2;252;t
+253;Comptes d'épargne à régime spécial;2;25;f
+2531;Livrets d'épargne;2;253;f
+25311;Livrets d'épargne;2;2531;t
+25316;Dettes rattachées;2;2531;t
+2532;Comptes d'épargne-logement;2;253;f
+25321;Comptes d'épargne-logement;2;2532;t
+25326;Dettes rattachées;2;2532;t
+2533;Plans d'épargne-logement;2;253;f
+25331;Plans d'épargne-logement;2;2533;t
+25336;Dettes rattachées;2;2533;t
+2539;Autres comptes d'épargne à régime spécial;2;253;f
+25391;Autres comptes d'épargne à régime spécial;2;2539;t
+25396;Dettes rattachées;2;2539;t
+254;Dépôts de garantie reçus;2;25;f
+2545;Dépôts de garantie reçus;2;254;f
+25451;Dépôts de garantie reçus de 0 à 6 mois au plus;2;2545;t
+25452;Dépôts de garantie reçus de plus de 6 mois à 12 mois au plus;2;2545;t
+25453;Dépôts de garantie reçus de plus d’1 an à 2 ans au plus;2;2545;t
+25454;Dépôts de garantie reçus de plus de 2 ans à 3 ans au plus;2;2545;t
+25455;Dépôts de garantie reçus de plus de 3 ans à 10 ans au plus;2;2545;t
+25456;Dépôts de garantie reçus de plus de 10 ans;2;2545;t
+2546;Dettes rattachées;2;254;t
+255;Autres dépôts reçus;2;25;f
+2551;Autres dépôts reçus;2;255;t
+2556;Dettes rattachées;2;255;t
+27;EMPRUNTS ET AUTRES SOMMES DUES AUX MEMBRES, CLIENTS OU BENEFICIAIRES;2;;f
+271;Emprunts aux membres, clients ou bénéficiaires;2;27;f
+2711;Emprunts;2;271;f
+27111;Emprunts à moins d’un an;2;2711;t
+27112;Emprunts à terme;2;2711;t
+2716;Dettes rattachées;2;271;t
+272;Autres sommes dues aux membres, clients ou bénéficiaires;2;27;f
+2721;Dispositions à payer;2;272;t
+2722;Provisions pour chèques certifiés;2;272;t
+2725;Divers;2;272;t
+2726;Dettes rattachées;2;272;t
+29;COMPTES DE CREDITS EN SOUFFRANCE;2;;f
+291;Crédits immobilisés;2;29;t
+292;Crédits en souffrance de 6 mois au plus;2;29;f
+2921;Crédits en souffrance de 0 à 3 mois au plus;2;292;t
+2922;Crédits en souffrance de plus de 3 mois à 6 mois au plus;2;292;t
+293;Crédits en souffrance de plus de 6 mois à 12 mois au plus;2;29;t
+294;Crédits en souffrance de plus de 12 mois à 24 mois au plus;2;29;t
+299;Provisions sur crédits en souffrance;2;29;f
+2991;Provisions sur crédits en souffrance de 6 mois au plus;2;299;f
+29911;Provisions sur crédits en souffrance de 0 à 3 mois au plus;2;2991;t
+29912;Provisions sur crédits en souffrance de plus de 3 mois à 6 mois au plus;2;2991;t
+2992;Provisions sur crédits en souffrance de plus de 6 mois à 12 mois au plus;2;299;t
+2993;Provisions sur crédits en souffrance de plus de 12 mois à 24 mois au plus;2;299;t
+30;TITRES DE PLACEMENT;3;;f
+301;Obligations;3;30;t
+302;Autres titres à revenu fixe;3;30;t
+303;Actions;3;30;t
+304;Autres titres à revenu variable;3;30;t
+305;Versements restant à effectuer;3;30;t
+307;Créances rattachées;3;30;t
+309;Provisions pour dépréciation;3;30;t
+32;COMPTES DE STOCKS ET EMPLOIS DIVERS;3;;f
+321;Stocks de biens meubles;3;32;f
+3211;Stocks de biens meubles;3;321;t
+3219;Provisions pour dépréciation;3;321;t
+322;Stocks de marchandises;3;32;f
+3221;Stocks de marchandises;3;322;t
+3229;Provisions pour dépréciation;3;322;t
+323;Stocks de fournitures;3;32;f
+3231;Stocks de fournitures;3;323;t
+3239;Provisions pour dépréciation;3;323;t
+324;Autres stocks et assimilés;3;32;f
+3241;Autres stocks et assimilés;3;324;t
+3249;Provisions pour dépréciation;3;324;t
+33;DEBITEURS ET CREDITEURS DIVERS;3;;f
+331;Débiteurs divers;3;33;f
+3311;Fournisseurs débiteurs;3;331;t
+3312;Personnel, avances et acomptes;3;331;t
+3313;Organismes sociaux, créances diverses;3;331;t
+3314;Etat, créances diverses;3;331;f
+33141;Avances et acomptes versés sur impôts et taxes directs;3;3314;t
+33142;Avances et acomptes versés sur impôts et taxes indirects;3;3314;t
+33143;Autres créances diverses;3;3314;t
+3315;Organismes internationaux, créances diverses;3;331;t
+3316;Autres débiteurs divers;3;331;t
+3319;Autres créances en souffrance;3;331;f
+33191;Autres créances en souffrance;3;3319;t
+33199;Provisions pour dépréciation;3;3319;t
+332;Créditeurs divers;3;33;f
+3321;Fournisseurs;3;332;f
+33211;Fournisseurs d’exploitation;3;3321;t
+33212;Fournisseurs d’investissement;3;3321;t
+33213;Fournisseurs - factures non parvenues;3;3321;t
+33214;Fournisseurs - Avances et acomptes versés;3;3321;t
+3322;Personnel;3;332;t
+3323;Organismes sociaux;3;332;t
+3324;Etat et collectivités publiques;3;332;f
+33241;Impôts et taxes directs;3;3324;t
+33242;Impôts et taxes indirects;3;3324;t
+33243;Autres impôts et taxes;3;3324;t
+3325;Organismes internationaux;3;332;t
+3326;Dividendes à payer;3;332;t
+3327;Autres créditeurs divers;3;332;t
+37;COMPTES TRANSITOIRES ET D'ATTENTE;3;;f
+371;Comptes d'encaissement;3;37;f
+3711;Valeurs à l'encaissement avec crédit immédiat;3;371;f
+37111;reçues des membres, bénéficiaires ou clients;3;3711;t
+37112;reçues des correspondants;3;3711;t
+3712;Comptes de valeurs à imputer;3;371;t
+3713;Valeurs à rejeter;3;371;t
+372;Comptes de recouvrement;3;37;t
+373;Comptes de contrepartie des comptes de recouvrement;3;37;t
+374;Comptes de différences de conversion;3;37;f
+3741;Comptes d'ajustement;3;374;f
+37411;Comptes d'ajustement devises;3;3741;t
+3742;Comptes d'écarts-actif;3;374;f
+37421;Comptes d'écarts sur devises garantis;3;3742;t
+37429;Autres comptes d'écarts sur devises;3;3742;t
+3743;Comptes d'écarts-passif;3;374;f
+37431;Comptes d'écarts sur devises garantis;3;3743;t
+37439;Autres comptes d'écarts sur devises;3;3743;t
+375;Comptes de réévaluation des opérations de change;3;37;f
+3757;Comptes de position de change;3;375;t
+3758;Comptes de contre-valeur de position de change;3;375;t
+376;Comptes d'opérations sur crédits consortiaux;3;37;f
+3761;Comptes d'appels de fonds sur crédits consortiaux;3;376;t
+3762;Comptes de contrepartie de comptes d'appels de fonds sur crédits consortiaux;3;376;t
+378;Autres comptes transitoires;3;37;t
+379;Comptes d'attente;3;37;f
+3791;Comptes d'attente - actif;3;379;t
+3792;Comptes d'attente - passif;3;379;t
+38;COMPTES DE REGULARISATION;3;;f
+381;Comptes de régularisation - actif;3;38;f
+3811;Charges à répartir sur plusieurs exercices;3;381;t
+3812;Charges constatées d'avance;3;381;t
+3814;Comptes d'abonnement de produits;3;381;t
+3815;Produits à recevoir;3;381;t
+382;Comptes de régularisation - passif;3;38;f
+3822;Produits constatés d'avance;3;382;t
+3824;Comptes d'abonnement de charges;3;382;t
+3825;Charges à payer;3;382;t
+39;COMPTES DE LIAISON;3;;t
+41;IMMOBILISATIONS FINANCIERES;4;;f
+410;Prêts et titres subordonnés;4;41;f
+4101;Prêts et titres subordonnés à terme;4;410;f
+41012;Prêts subordonnés à terme;4;4101;t
+41014;Titres subordonnés à terme;4;4101;t
+4102;Prêts et titres subordonnés à durée indéterminée;4;410;f
+41022;Prêts subordonnés à durée indéterminée;4;4102;t
+41024;Titres subordonnés à durée indéterminée;4;4102;t
+4107;Créances rattachées;4;410;t
+412;Titres de participation;4;41;f
+4121;Titres de participation des banques et correspondants et des établissements financiers;4;412;t
+4122;Titres de participation de SFD;4;412;t
+4123;Titres de participation d'autres entreprises à caractère financier;4;412;t
+4124;Titres de participation de sociétés immobilières;4;412;f
+41241;Titres de participation de sociétés immobilières d'exploitation;4;4124;t
+41242;Titres de participation de sociétés immobilières hors exploitation;4;4124;t
+4125;Titres de participation d'autres entreprises à caractère non financier;4;412;t
+4126;Versements restant à effectuer;4;412;t
+4127;Créances rattachées;4;412;t
+4129;Provisions pour dépréciation;4;412;t
+414;Titres d'investissement;4;41;f
+4141;Obligations;4;414;t
+4142;Autres titres à revenu fixe;4;414;t
+4147;Créances rattachées;4;414;t
+4149;Provisions pour dépréciation;4;414;t
+42;DEPOTS ET CAUTIONNEMENTS;4;;f
+421;Cautions sur loyers;4;42;t
+422;Dépôts pour l’électricité;4;42;t
+423;Dépôts pour l’eau;4;42;t
+424;Dépôts pour le gaz;4;42;t
+425;Dépôts pour le téléphone, le télex, la télécopie;4;42;t
+426;Cautionnements sur marchés publics;4;42;t
+427;Créances rattachées;4;42;t
+428;Autres dépôts et cautionnements sur autres opérations;4;42;t
+429;Provisions pour dépréciation des dépôts et cautionnements;4;42;t
+43;IMMOBILISATIONS EN COURS;4;;f
+431;Immobilisations incorporelles en cours;4;43;f
+4311;Immobilisations incorporelles en cours;4;431;t
+4319;Provisions pour dépréciation;4;431;t
+432;Immobilisations corporelles en cours;4;43;f
+4321;Immobilisations corporelles en cours;4;432;f
+43211;Aménagements de terrain en cours;4;4321;t
+43212;Bâtiments et installations en cours;4;4321;t
+43213;Matériels en cours;4;4321;f
+432131;Matériel et outillage industriel et commercial en cours;4;43213;t
+432132;Matériel et outillage agricole en cours;4;43213;t
+432133;Matériel d’emballage récupérable et identifiable en cours;4;43213;t
+432134;Matériel et mobilier de bureau en cours;4;43213;t
+432135;Matériel de transport en cours;4;43213;t
+432136;Immobilisations animales et agricoles en cours;4;43213;t
+432137;Agencements et aménagements du matériel en cours;4;43213;t
+432138;Autres matériels en cours;4;43213;t
+4329;Provisions pour dépréciation;4;432;f
+43291;Provisions pour dépréciation des immobilisations corporelles en cours;4;4329;f
+432911;Provisions pour dépréciation des aménagements de terrains en cours;4;43291;t
+432912;Provisions pour dépréciation des bâtiments et installations en cours;4;43291;t
+432913;Provisions pour dépréciation de matériels en cours;4;43291;t
+44;IMMOBILISATIONS D'EXPLOITATION;4;;f
+441;Immobilisations incorporelles;4;44;f
+4411;Fonds commercial;4;441;f
+44111;Droit au bail;4;4411;t
+44112;Autres éléments du fonds commercial;4;4411;t
+4412;Frais d'établissement;4;441;f
+44121;Frais de constitution;4;4412;t
+44122;Frais de modification du capital;4;4412;t
+44123;Frais de fonctionnement antérieurs au démarrage;4;4412;t
+44124;Frais divers d’établissement;4;4412;t
+4413;Autres immobilisations incorporelles;4;441;t
+4418;Amortissements;4;441;t
+4419;Provisions pour dépréciation;4;441;t
+442;Immobilisations corporelles;4;44;f
+4421;Immobilisations corporelles;4;442;f
+44211;Terrains;4;4421;f
+442111;Terrains agricoles et forestiers;4;44211;t
+442112;Terrains nus;4;44211;t
+442113;Terrains bâtis;4;44211;t
+442114;Travaux de mise en valeur des terrains;4;44211;t
+442115;Terrains de gisement;4;44211;t
+442116;Terrains aménagés;4;44211;t
+442117;Terrains mis en concession;4;44211;t
+442118;Autres terrains;4;44211;t
+44212;Bâtiments, installations techniques et agencements;4;4421;f
+442121;Bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;44212;t
+442122;Bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;44212;t
+442123;Ouvrages d’infrastructure;4;44212;t
+442124;Installations techniques;4;44212;t
+442125;Aménagements de bureaux;4;44212;t
+442126;Bâtiments industriels, agricoles et commerciaux mis en concession;4;44212;t
+442127;Autres installations et agencements;4;44212;t
+44213;Matériel;4;4421;f
+442131;Matériel et outillage industriel et commercial;4;44213;t
+442132;Matériel et outillage agricole;4;44213;t
+442133;Matériel d’emballage récupérable et identifiable;4;44213;t
+442134;Matériel et mobilier de bureau;4;44213;t
+442135;Matériel de transport;4;44213;t
+442136;Immobilisations animales et agricoles;4;44213;t
+442137;Agencements et aménagements du matériel;4;44213;t
+442138;Autres matériels;4;44213;t
+4428;Am ortissem ents;4;442;f
+44281;Amortissements des terrains;4;4428;f
+442811;Amortissements des terrains agricoles et forestiers;4;44281;t
+442814;Amortissements des travaux de mise en valeur des terrains;4;44281;t
+442815;Amortissements des terrains de gisement;4;44281;t
+44282;Amortissements des bâtiments, installations techniques et agencements;4;4428;f
+442821;Amortissements des bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;44282;t
+442822;Amortissements des bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;44282;t
+442823;Amortissements des ouvrages d’infrastructure;4;44282;t
+442824;Amortissements des installations techniques;4;44282;t
+442825;Amortissements des aménagements de bureaux;4;44282;t
+442826;Amortissements des bâtiments industriels, agricoles et commerciaux mis en concession;4;44282;t
+442827;Amortissements des autres installations et agencements;4;44282;t
+44283;Amortissements des matériels;4;4428;f
+442831;Amortissements du matériel et outillage industriel et commercial;4;44283;t
+442832;Amortissements du matériel et outillage agricole;4;44283;t
+442833;Amortissements du matériel d’emballage récupérable et identifiable;4;44283;t
+442834;Amortissements du matériel et mobilier de bureau;4;44283;t
+442835;Amortissements du matériel de transport;4;44283;t
+442836;Amortissements des immobilisations animales et agricoles;4;44283;t
+442837;Amortissements des agencements et aménagements du matériel;4;44283;t
+442838;Amortissements des autres matériels;4;44283;t
+4429;Provisions pour dépréciation;4;442;f
+44291;Provisions des terrains;4;4429;f
+442911;Provisions des terrains agricoles et forestiers;4;44291;t
+442912;Provisions des terrains nus;4;44291;t
+442913;Provisions des terrains bâtis;4;44291;t
+442914;Provisions des travaux de mise en valeur des terrains;4;44291;t
+442915;Provisions des terrains de gisement;4;44291;t
+442916;Provisions des terrains aménagés;4;44291;t
+442917;Provisions des terrains mis en concession;4;44291;t
+442918;Provisions des autres terrains;4;44291;t
+44292;Provisions des bâtiments, installations techniques et agencements;4;4429;f
+442921;Provisions des bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;44292;t
+442922;Provisions des bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;44292;t
+442923;Provisions des ouvrages d’infrastructure;4;44292;t
+442924;Provisions des installations techniques;4;44292;t
+442925;Provisions des aménagements de bureaux;4;44292;t
+442926;Provisions des bâtiments industriels, agricoles et commerciaux mis en concession;4;44292;t
+442927;Provisions des autres installations et agencements;4;44292;t
+44293;Provisions des matériels;4;4429;f
+442931;Provisions du matériel et outillage industriel et commercial;4;44293;t
+442932;Provisions du matériel et outillage agricole;4;44293;t
+442933;Provisions du matériel d’emballage récupérable et identifiable;4;44293;t
+442934;Provisions du matériel et mobilier de bureau;4;44293;t
+442935;Provisions du matériel de transport;4;44293;t
+442936;Provisions des immobilisations animales et agricoles;4;44293;t
+442937;Provisions des agencements et aménagements du matériel;4;44293;t
+442938;Provisions des autres matériels;4;44293;t
+45;IMMOBILISATIONS HORS EXPLOITATION;4;;f
+451;Immobilisations incorporelles;4;45;f
+4511;Fonds commercial;4;451;f
+45111;Droit au bail;4;4511;t
+45112;Autres éléments du fonds commercial;4;4511;t
+4513;Autres immobilisations incorporelles;4;451;t
+4518;Amortissements;4;451;t
+4519;Provisions pour dépréciation;4;451;t
+452;Immobilisations corporelles;4;45;f
+4521;Immobilisations corporelles;4;452;f
+45211;Terrains;4;4521;f
+452111;Terrains agricoles et forestiers;4;45211;t
+452112;Terrains nus;4;45211;t
+452113;Terrains bâtis;4;45211;t
+452114;Travaux de mise en valeur des terrains;4;45211;t
+452115;Terrains de gisement;4;45211;t
+452116;Terrains aménagés;4;45211;t
+452117;Terrains mis en concession;4;45211;t
+452118;Autres terrains;4;45211;t
+45212;Bâtiments, installations techniques et agencements;4;4521;f
+452121;Bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;45212;t
+452122;Bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;45212;t
+452123;Ouvrages d’infrastructure;4;45212;t
+452124;Installations techniques;4;45212;t
+452125;Aménagements de bureaux;4;45212;t
+452126;Bâtiments industriels, agricoles et commerciaux mis en concession;4;45212;t
+452127;Autres installations et agencements;4;45212;t
+45213;Matériel;4;4521;f
+452131;Matériel et outillage industriel et commercial;4;45213;t
+452132;Matériel et outillage agricole;4;45213;t
+452133;Matériel d’emballage récupérable et identifiable;4;45213;t
+452134;Matériel et mobilier de bureau;4;45213;t
+452135;Matériel de transport;4;45213;t
+452136;Immobilisations animales et agricoles;4;45213;t
+452137;Agencements et aménagements du matériel;4;45213;t
+452138;Autres matériels;4;45213;t
+4528;Am ortissem ents;4;452;f
+45281;Amortissements des terrains;4;4528;f
+452811;Amortissements des terrains agricoles et forestiers;4;45281;t
+452814;Amortissements des travaux de mise en valeur des terrains;4;45281;t
+452815;Amortissements des terrains de gisement;4;45281;t
+45282;Amortissements des bâtiments, installations techniques et agencements;4;4528;f
+452821;Amortissements des bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;45282;t
+452822;Amortissements des bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;45282;t
+452823;Amortissements des ouvrages d’infrastructure;4;45282;t
+452824;Amortissements des installations techniques;4;45282;t
+452825;Amortissements des aménagements de bureaux;4;45282;t
+452826;Amortissements des bâtiments industriels, agricoles et commerciaux mis en concession;4;45282;t
+452827;Amortissements des autres installations et agencements;4;45282;t
+45283;Amortissements des matériels;4;4528;f
+452831;Amortissements du matériel et outillage industriel et commercial;4;45283;t
+452832;Amortissements du matériel et outillage agricole;4;45283;t
+452833;Amortissements du matériel d’emballage récupérable et identifiable;4;45283;t
+452834;Amortissements du matériel et mobilier de bureau;4;45283;t
+452835;Amortissements du matériel de transport;4;45283;t
+452836;Amortissements des immobilisations animales et agricoles;4;45283;t
+452837;Amortissements des agencements et aménagements du matériel;4;45283;t
+452838;Amortissements des autres matériels;4;45283;t
+4529;Provisions pour dépréciation;4;452;f
+45291;Provisions des terrains;4;4529;f
+452911;Provisions des terrains agricoles et forestiers;4;45291;t
+452912;Provisions des terrains nus;4;45291;t
+452913;Provisions des terrains bâtis;4;45291;t
+452914;Provisions des travaux de mise en valeur des terrains;4;45291;t
+452915;Provisions des terrains de gisement;4;45291;t
+452916;Provisions des terrains aménagés;4;45291;t
+452917;Provisions des terrains mis en concession;4;45291;t
+452918;Provisions des autres terrains;4;45291;t
+45292;Provisions des bâtiments, installations techniques et agencements;4;4529;f
+452921;Provisions des bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;45292;t
+452922;Provisions des bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;45292;t
+452923;Provisions des ouvrages d’infrastructure;4;45292;t
+452924;Provisions des installations techniques;4;45292;t
+452925;Provisions des aménagements de bureaux;4;45292;t
+452926;Provisions des bâtiments industriels, agricoles et commerciaux mis en concession;4;45292;t
+452927;Provisions des autres installations et agencements;4;45292;t
+45293;Provisions des matériels;4;4529;f
+452931;Provisions du matériel et outillage industriel et commercial;4;45293;t
+452932;Provisions du matériel et outillage agricole;4;45293;t
+452933;Provisions du matériel d’emballage récupérable et identifiable;4;45293;t
+452934;Provisions du matériel et mobilier de bureau;4;45293;t
+452935;Provisions du matériel de transport;4;45293;t
+452936;Provisions des immobilisations animales et agricoles;4;45293;t
+452937;Provisions des agencements et aménagements du matériel;4;45293;t
+452938;Provisions des autres matériels;4;45293;t
+453;Immobilisations incorporelles acquises par réalisation de garantie;4;45;f
+4531;Immobilisations incorporelles acquises par réalisation de garantie;4;453;t
+4538;Amortissements;4;453;t
+4539;Provisions pour dépréciation;4;453;t
+454;Immobilisations corporelles acquises par réalisation de garantie;4;45;f
+4541;Immobilisations corporelles acquises par réalisation de garantie;4;454;f
+45411;Terrains;4;4541;f
+454111;Terrains agricoles et forestiers;4;45411;t
+454112;Terrains nus;4;45411;t
+454113;Terrains bâtis;4;45411;t
+454114;Travaux de mise en valeur des terrains;4;45411;t
+454115;Terrains de gisement;4;45411;t
+454116;Terrains aménagés;4;45411;t
+454117;Terrains mis en concession;4;45411;t
+454118;Autres terrains;4;45411;t
+45412;Bâtiments, installations techniques et agencements;4;4541;f
+454121;Bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;45412;t
+454122;Bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;45412;t
+454123;Ouvrages d’infrastructure;4;45412;t
+454124;Installations techniques;4;45412;t
+454125;Aménagements de bureaux;4;45412;t
+454126;Bâtiments industriels, agricoles et commerciaux mis en concession;4;45412;t
+454127;Autres installations et agencements;4;45412;t
+45413;Matériel;4;4541;f
+454131;Matériel et outillage industriel et commercial;4;45413;t
+454132;Matériel et outillage agricole;4;45413;t
+454133;Matériel d’emballage récupérable et identifiable;4;45413;t
+454134;Matériel et mobilier de bureau;4;45413;t
+454135;Matériel de transport;4;45413;t
+454136;Immobilisations animales et agricoles;4;45413;t
+454137;Agencements et aménagements du matériel;4;45413;t
+454138;Autres matériels;4;45413;t
+4548;Am ortissem ents;4;454;f
+45481;Amortissements des terrains;4;4548;f
+454811;Amortissements des terrains agricoles et forestiers;4;45481;t
+454814;Amortissements des travaux de mise en valeur des terrains;4;45481;t
+454815;Amortissements des terrains de gisement;4;45481;t
+45482;Amortissements des bâtiments, installations techniques et agencements;4;4548;f
+454821;Amortissements des bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;45482;t
+454822;Amortissements des bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;45482;t
+454823;Amortissements des ouvrages d’infrastructure;4;45482;t
+454824;Amortissements des installations techniques;4;45482;t
+454825;Amortissements des aménagements de bureaux;4;45482;t
+454826;Amortissements des bâtiments industriels, agricoles et commerciaux mis en concession;4;45482;t
+454827;Amortissements des autres installations et agencements;4;45482;t
+45483;Amortissements des matériels;4;4548;f
+454831;Amortissements du matériel et outillage industriel et commercial;4;45483;t
+454832;Amortissements du matériel et outillage agricole;4;45483;t
+454833;Amortissements du matériel d’emballage récupérable et identifiable;4;45483;t
+454834;Amortissements du matériel et mobilier de bureau;4;45483;t
+454835;Amortissements du matériel de transport;4;45483;t
+454836;Amortissements des immobilisations animales et agricoles;4;45483;t
+454837;Amortissements des agencements et aménagements du matériel;4;45483;t
+454838;Amortissements des autres matériels;4;45483;t
+4549;Provisions pour dépréciation;4;454;f
+45491;Provisions des terrains;4;4549;f
+454911;Provisions des terrains agricoles et forestiers;4;45491;t
+454912;Provisions des terrains nus;4;45491;t
+454913;Provisions des terrains bâtis;4;45491;t
+454914;Provisions des travaux de mise en valeur des terrains;4;45491;t
+454915;Provisions des terrains de gisement;4;45491;t
+454916;Provisions des terrains aménagés;4;45491;t
+454917;Provisions des terrains mis en concession;4;45491;t
+454918;Provisions des autres terrains;4;45491;t
+45492;Provisions des bâtiments, installations techniques et agencements;4;4549;f
+454921;Provisions des bâtiments industriels, agricoles, administratifs et commerciaux sur sol propre;4;45492;t
+454922;Provisions des bâtiments industriels, agricoles, administratifs et commerciaux sur sol d’autrui;4;45492;t
+454923;Provisions des ouvrages d’infrastructure;4;45492;t
+454924;Provisions des installations techniques;4;45492;t
+454925;Provisions des aménagements de bureaux;4;45492;t
+454926;Provisions des bâtiments industriels, agricoles et commerciaux mis en concession;4;45492;t
+454927;Provisions des autres installations et agencements;4;45492;t
+45493;Provisions des matériels;4;4549;f
+454931;Provisions du matériel et outillage industriel et commercial;4;45493;t
+454932;Provisions du matériel et outillage agricole;4;45493;t
+454933;Provisions du matériel d’emballage récupérable et identifiable;4;45493;t
+454934;Provisions du matériel et mobilier de bureau;4;45493;t
+454935;Provisions du matériel de transport;4;45493;t
+454936;Provisions des immobilisations animales et agricoles;4;45493;t
+454937;Provisions des agencements et aménagements du matériel;4;45493;t
+454938;Provisions des autres matériels;4;45493;t
+46;OPERATIONS DE CREDIT-BAIL ET DE LOCATION AVEC OPTION D'ACHAT;4;;f
+461;Crédit-bail;4;46;f
+4611;Immobilisations en cours;4;461;t
+4612;Crédit-bail mobilier;4;461;t
+4613;Crédit-bail immobilier;4;461;t
+4614;Crédit-bail sur actifs incorporels;4;461;t
+462;Location avec option d'achat;4;46;f
+4621;Immobilisations en cours;4;462;t
+4622;Location avec option d'achat mobilier;4;462;t
+463;Immobilisations en location simple;4;46;t
+464;Immobilisations non louées;4;46;t
+467;Créances rattachées;4;46;t
+468;Amortissements des immobilisations en crédit-bail et en location avec option d’achat;4;46;t
+469;Provisions pour dépréciation des immobilisations en crédit-bail et en location avec option d’achat;4;46;t
+47;OPERATIONS DE LOCATION-VENTE;4;;f
+471;Immobilisations en cours;4;47;t
+472;Location-vente;4;47;t
+473;Immobilisations en location simple;4;47;t
+474;Immobilisations non louées;4;47;t
+477;Créances rattachées;4;47;t
+478;Amortissements des immobilisations en location-vente;4;47;t
+479;Provisions pour dépréciation des immobilisations en location-vente;4;47;t
+49;COMPTES DE CREANCES EN SOUFFRANCE;4;;f
+491;Créances en souffrance de 6 mois au plus;4;49;f
+4916;Créances en souffrance de 6 mois au plus sur opérations de crédit-bail et de location avec option d'achat;4;491;f
+49161;Créances en souffrance de 6 mois au plus sur opérations de crédit-bail;4;4916;f
+491611;Créances en souffrance de 0 à 3 mois au plus sur opérations de crédit-bail;4;49161;t
+491612;Créances en souffrance de plus de 3 mois à 6 mois au plus sur opérations de crédit-bail;4;49161;t
+49162;Créances en souffrance de 6 mois au plus sur opérations de location avec option d'achat;4;4916;f
+491621;Créances en souffrance de 0 à 3 mois au plus sur opérations de location avec option d'achat;4;49162;t
+491622;Créances en souffrance de plus de 3 mois à 6 mois au plus sur opérations de location avec option d'achat;4;49162;t
+4917;Créances en souffrance de 6 mois au plus sur opérations de location-vente;4;491;f
+491711;Créances en souffrance de 0 à 3 mois au plus sur opérations de location-vente;4;4917;t
+491712;Créances en souffrance de plus de 3 mois à 6 mois au plus sur opérations de location-vente;4;4917;t
+492;Créances en souffrance de plus de 6 mois à 12 mois au plus;4;49;f
+4926;Créances en souffrance de plus de 6 mois à 12 mois au plus sur opérations de crédit-bail et de location avec option d'achat;4;492;f
+49261;Créances en souffrance de plus de 6 mois à 12 mois au plus sur opérations de crédit-bail;4;4926;t
+49262;Créances en souffrance de plus de 6 mois à 12 mois au plus sur opérations de location avec option d'achat;4;4926;t
+4927;Créances en souffrance de plus de 6 mois à 12 mois au plus sur opérations de location-vente;4;492;t
+493;Créances en souffrance de plus de 12 mois à 24 mois au plus;4;49;f
+4936;Créances en souffrance de plus de 12 mois à 24 mois au plus sur opérations de crédit-bail et de location avec option d'achat;4;493;f
+49361;Créances en souffrance de plus de 12 mois à 24 mois au plus sur opérations de crédit-bail;4;4936;t
+49362;Créances en souffrance de plus de 12 mois à 24 mois au plus sur opérations de location avec option d'achat;4;4936;t
+4937;Créances en souffrance de plus de 12 mois à 24 mois au plus sur opérations de location-vente;4;493;t
+499;Provisions sur créances en souffrance;4;49;f
+4996;Provisions sur créances en souffrance sur opérations de crédit-bail et de location avec option d'achat;4;499;f
+49961;Provisions sur créances en souffrance de 6 mois au plus;4;4996;f
+499611;Provisions sur créances en souffrance de 0 à 3 mois au plus;4;49961;t
+499612;Provisions sur créances en souffrance de plus de 3 mois à 6 mois au plus;4;49961;t
+49962;Provisions sur créances en souffrance de plus de 6 mois à 12 mois au plus;4;4996;t
+49963;Provisions sur créances en souffrance de plus de 12 mois à 24 mois au plus;4;4996;t
+4997;Provisions sur créances en souffrance sur opérations de location-vente;4;499;f
+49971;Provisions sur créances en souffrance de 6 mois au plus;4;4997;f
+499711;Provisions sur créances en souffrance de 0 à 3 mois au plus;4;49971;t
+499712;Provisions sur créances en souffrance de plus de 3 mois à 6 mois au plus;4;49971;t
+49972;Provisions sur créances en souffrance de plus de 6 mois à 12 mois au plus;4;4997;t
+49973;Provisions sur créances en souffrance de plus de 12 mois à 24 mois au plus;4;4997;t
+50;SUBVENTIONS ET AUTRES FONDS RECUS;5;;f
+501;Subventions d'investissement;5;50;f
+5011;Subventions d'investissement;5;501;f
+50111;Subventions d'investissement reçues de l’Etat;5;5011;t
+50112;Subventions d'investissement reçues d’Organismes internationaux;5;5011;t
+50113;Autres subventions d'investissement;5;5011;t
+5012;Subventions d'investissement virées au compte de résultat;5;501;t
+502;Fonds affectés;5;50;f
+5021;Fonds de garantie;5;502;t
+5022;Fonds d'assurance;5;502;t
+5023;Fonds de bonification;5;502;t
+5024;Fonds de sécurité;5;502;t
+5029;Autres fonds affectés;5;502;t
+503;Fonds de crédit;5;50;t
+51;PROVISIONS POUR RISQUES ET CHARGES;5;;f
+511;Provisions pour charges de retraite;5;51;t
+512;Provisions pour risque d’exécution d’engagement par signature;5;51;t
+519;Autres provisions pour risques et charges;5;51;t
+52;PROVISIONS REGLEMENTEES;5;;f
+521;Provisions pour risques afférents aux opérations de crédits à moyen et long termes;5;52;t
+522;Provision spéciale de réévaluation;5;52;t
+53;EMPRUNTS ET TITRES EMIS SUBORDONNES;5;;f
+532;Emprunts et titres émis subordonnés;5;53;f
+5321;Emprunts et titres émis subordonnés à terme;5;532;f
+53212;Emprunts émis subordonnés à terme;5;5321;t
+53214;Titres émis subordonnés à terme;5;5321;t
+5322;Emprunts et titres émis subordonnés à durée indéterminée;5;532;f
+53222;Emprunts émis subordonnés à durée indéterminée;5;5322;t
+53224;Titres émis subordonnés à durée indéterminée;5;5322;t
+536;Dettes rattachées;5;53;t
+54;FONDS POUR RISQUES FINANCIERS GENERAUX;5;;t
+55;PRIMES LIEES AU CAPITAL ET RESERVES;5;;f
+551;Primes liées au capital;5;55;t
+552;Réserves;5;55;f
+5521;Réserve générale;5;552;t
+5522;Réserves facultatives;5;552;t
+5523;Autres réserves;5;552;f
+55231;Réserves statutaires;5;5523;t
+55232;Autres réserves;5;5523;t
+553;Ecart de réévaluation des immobilisations;5;55;t
+56;FONDS DE DOTATION;5;;t
+57;CAPITAL SOCIAL;5;;f
+571;Capital;5;57;f
+5711;Capital souscrit appelé;5;571;f
+57111;capital souscrit appelé versé;5;5711;t
+57112;capital appelé souscrit non versé;5;5711;t
+5712;Capital souscrit non appelé;5;571;t
+573;Actionnaires, associés ou membres;5;57;f
+5731;Actionnaires, associés ou membres, capital souscrit non appelé;5;573;t
+5732;Actionnaires, associés ou membres, capital souscrit appelé non versé;5;573;t
+58;REPORT A NOUVEAU;5;;t
+59;RESULTAT;5;;f
+591;Excédent ou déficit en instance d'approbation;5;59;t
+592;Excédent ou déficit de l'exercice;5;59;t
+593;Marge;5;59;f
+5931;Marge d’intérêts;5;593;t
+5932;Marge commerciale;5;593;t
+594;Produit financier net ou charge financière nette;5;59;t
+595;Excédent ou déficit d’exploitation;5;59;t
+596;Excédent ou déficit exceptionnel;5;59;t
+60;CHARGES D'EXPLOITATION FINANCIERE;6;;f
+601;Charges sur opérations avec les institutions financières;6;60;f
+6011;Intérêts sur comptes ordinaires chez les institutions financières;6;601;f
+60111;Intérêts sur comptes ordinaires chez l’organe financier;6;6011;t
+60112;Intérêts sur comptes ordinaires chez la Caisse Centrale;6;6011;t
+60113;Intérêts sur comptes ordinaires chez les CCP;6;6011;t
+60114;Intérêts sur comptes ordinaires chez les banques et correspondants;6;6011;t
+60115;Intérêts sur comptes ordinaires chez les établissements financiers;6;6011;t
+60116;Intérêts sur comptes ordinaires chez les SFD;6;6011;t
+60117;Intérêts sur comptes ordinaires chez les autres institutions financières;6;6011;t
+6015;Intérêts sur comptes ordinaires des institutions financières;6;601;f
+60151;Intérêts sur comptes ordinaires de l’organe financier;6;6015;t
+60152;Intérêts sur comptes ordinaires du Trésor Public;6;6015;t
+60153;Intérêts sur comptes ordinaires des CCP;6;6015;t
+60154;Intérêts sur comptes ordinaires des banques et correspondants;6;6015;t
+60155;Intérêts sur comptes ordinaires des établissements financiers;6;6015;t
+60156;Intérêts sur comptes ordinaires des SFD;6;6015;t
+60157;Intérêts sur comptes ordinaires d’autres institutions financières;6;6015;t
+6016;Intérêts sur autres comptes de dépôts des institutions financières;6;601;f
+60161;Intérêts sur dépôts à terme reçus;6;6016;t
+60162;Intérêts sur dépôts de garantie reçus;6;6016;t
+60165;Intérêts sur autres dépôts reçus;6;6016;t
+6017;Intérêts sur comptes d'em prunts;6;601;f
+60175;Intérêts sur emprunts à moins d’un an;6;6017;t
+60178;Intérêts sur emprunts à terme;6;6017;t
+6018;Autres intérêts;6;601;f
+60189;Divers intérêts;6;6018;t
+6019;Commissions;6;601;f
+60191;Cotisations;6;6019;t
+60193;Autres commissions;6;6019;t
+602;Charges sur opérations avec les membres, bénéficiaires ou clients;6;60;f
+6025;Intérêts sur comptes des m em bres, bénéficiaires ou clients;6;602;f
+60251;Intérêts sur comptes ordinaires créditeurs;6;6025;f
+602511;Intérêts sur comptes ordinaires créditeurs;6;60251;t
+602512;Intérêts sur comptes ordinaires sur livrets créditeurs;6;60251;t
+60252;Intérêts sur dépôts à terme reçus;6;6025;t
+60253;Intérêts sur comptes d’épargne à régime spécial;6;6025;t
+60254;Intérêts sur dépôts de garantie reçus;6;6025;t
+60255;Intérêts sur autres dépôts reçus;6;6025;t
+6027;Intérêts sur em prunts et autres sommes dues aux m em bres, bénéficiaires ou clients;6;602;t
+6028;Autres intérêts;6;602;t
+6029;Commissions;6;602;f
+60291;Cotisations;6;6029;t
+60293;Autres commissions;6;6029;t
+603;Charges sur opérations sur titres et sur opérations diverses;6;60;f
+6031;Charges et pertes sur titres de placement;6;603;t
+6038;Charges sur opérations diverses;6;603;t
+6039;Commissions;6;603;t
+604;Charges sur valeurs immobilisées;6;60;f
+6041;Charges sur immobilisations financières;6;604;f
+60411;Frais d'acquisition;6;6041;t
+60412;Etalement de la prime;6;6041;t
+6046;Charges sur opérations de crédit-bail et de location avec option d'achat;6;604;f
+60461;Charges sur crédit-bail;6;6046;f
+604611;Dotations aux amortissements;6;60461;t
+604612;Dotations aux provisions;6;60461;t
+604613;Moins-values de cession;6;60461;t
+604619;Autres charges;6;60461;t
+60462;Charges sur location avec option d'achat;6;6046;f
+604621;Dotations aux amortissements;6;60462;t
+604622;Dotations aux provisions;6;60462;t
+604623;Moins-values de cession;6;60462;t
+604629;Autres charges;6;60462;t
+60463;Charges sur opérations de location simple;6;6046;f
+604631;Dotations aux amortissements;6;60463;t
+604632;Dotations aux provisions;6;60463;t
+604633;Moins-values de cession;6;60463;t
+604639;Autres charges;6;60463;t
+60464;Charges sur immobilisations non louées;6;6046;f
+604641;Dotations aux amortissements;6;60464;t
+604642;Dotations aux provisions;6;60464;t
+604643;Moins-values de cession;6;60464;t
+604649;Autres charges;6;60464;t
+6047;Charges sur opérations de location-vente;6;604;f
+60471;Charges sur immobilisations en cours;6;6047;f
+604712;Dotations aux provisions;6;60471;t
+604713;Moins-values de cession;6;60471;t
+604719;Autres charges;6;60471;t
+60472;Charges sur location-vente;6;6047;f
+604721;Dotations aux amortissements;6;60472;t
+604722;Dotations aux provisions;6;60472;t
+604723;Moins-values de cession;6;60472;t
+604729;Autres charges;6;60472;t
+60473;Charges sur opérations de location simple;6;6047;f
+604731;Dotations aux amortissements;6;60473;t
+604732;Dotations aux provisions;6;60473;t
+604733;Moins-values de cession;6;60473;t
+604739;Autres charges;6;60473;t
+60474;Charges sur immobilisations non louées;6;6047;f
+604741;Dotations aux amortissements;6;60474;t
+604742;Dotations aux provisions;6;60474;t
+604743;Moins-values de cession;6;60474;t
+604749;Autres charges;6;60474;t
+605;Charges sur fonds propres et assimilés;6;60;f
+6053;Charges sur emprunts et titres émis subordonnés;6;605;f
+60532;Charges sur emprunts et titres émis subordonnés;6;6053;f
+605321;Charges sur emprunts et titres émis subordonnés à terme;6;60532;t
+605322;Charges sur emprunts et titres émis subordonnés à durée indéterminée;6;60532;t
+606;Charges sur opérations de change;6;60;f
+6061;Pertes sur opérations de change;6;606;t
+6069;Commissions;6;606;t
+607;Charges sur opérations de hors bilan;6;60;f
+6071;Charges sur engagements de financement reçus;6;607;f
+60712;Charges sur engagements de financement reçus des institutions financières;6;6071;t
+60714;Charges sur engagements de financement reçus des membres, clients ou bénéficiaires;6;6071;t
+6072;Charges sur engagements de garantie reçus;6;607;f
+60722;Charges sur engagements de garantie reçus des institutions financières;6;6072;t
+60724;Charges sur engagements de garantie reçus des membres, bénéficiaires ou clients;6;6072;t
+6073;Charges sur engagements sur titres;6;607;t
+6075;Charges sur autres engagements reçus;6;607;t
+608;Charges sur prestations de services financiers;6;60;f
+6081;Charges sur les moyens de paiement;6;608;t
+6089;Autres charges sur prestations de services financiers;6;608;t
+609;Autres charges d'exploitation financière;6;60;f
+6091;Moins-values sur cession d'éléments d'actif;6;609;t
+6098;Transferts de produits d'exploitation financière;6;609;t
+6099;Diverses charges d'exploitation financière;6;609;t
+61;ACHATS ET VARIATIONS DE STOCKS;6;;f
+611;Achats;6;61;f
+6112;Stocks vendus;6;611;t
+6116;Achats non stockés de matières et fournitures;6;611;f
+61161;Carburant et lubrifiants;6;6116;t
+61162;Autres matières et fournitures;6;6116;f
+611621;Fournitures non stockables - Eau;6;61162;t
+611622;Fournitures non stockables - Electricité;6;61162;t
+611623;Fournitures non stockables - Autres énergies;6;61162;t
+6117;Achats de marchandises;6;611;t
+6118;Frais accessoires d'achat;6;611;t
+6119;Rabais, remises et ristournes obtenus sur achats de marchandises;6;611;t
+612;Variations de stocks;6;61;t
+62;AUTRES CHARGES EXTERNES ET CHARGES DIVERSES D'EXPLOITATION;6;;f
+621;Services extérieurs;6;62;f
+6211;Redevances de crédit-bail;6;621;t
+6212;Loyers;6;621;t
+6213;Charges locatives et de co-propriété;6;621;t
+6214;Entretien et réparations;6;621;t
+6215;Primes d'assurance;6;621;t
+6216;Etudes et recherches;6;621;t
+6217;Frais de formation;6;621;f
+62171;Frais de formation du personnel;6;6217;t
+62172;Frais de formation des membres;6;6217;t
+62173;Frais de formation des élus;6;6217;t
+6218;Divers;6;621;t
+6219;Rabais, remises et ristournes obtenus sur services extérieurs;6;621;t
+622;Autres services extérieurs;6;62;f
+6221;Personnel extérieur à l'institution;6;622;t
+6222;Rémunérations d'intermédiaires et honoraires;6;622;t
+6223;Publicité, publications et relations publiques;6;622;t
+6224;Transports de biens;6;622;t
+6225;Transports collectifs du personnel;6;622;t
+6226;Déplacements, missions et réceptions;6;622;f
+62261;Déplacements;6;6226;t
+62262;Missions;6;6226;t
+62263;Réceptions;6;6226;t
+6227;Frais postaux et frais de communication;6;622;t
+6228;Divers;6;622;t
+6229;Rabais, remises et ristournes obtenus sur autres services extérieurs;6;622;t
+623;Charges diverses d'exploitation;6;62;f
+6231;Redevances pour concessions, brevets, licences, procédés, droits et valeurs similaires;6;623;t
+6232;Indemnités de fonction versées;6;623;t
+6233;Frais de tenue des réunions des organes et des assemblées;6;623;f
+62331;Perdiem;6;6233;t
+62332;Transport;6;6233;t
+62333;Hébergement;6;6233;t
+62334;Téléphone;6;6233;t
+62335;Carburant;6;6233;t
+62339;Autres;6;6233;t
+6235;Moins-values de cession sur immobilisations;6;623;f
+62351;sur immobilisations corporelles et incorporelles;6;6235;t
+62352;sur immobilisations financières;6;6235;t
+6238;Transferts de produits d'exploitation non financière;6;623;f
+62381;Produits rétrocédés;6;6238;t
+62389;Autres transferts de produits;6;6238;t
+6239;Autres charges diverses d'exploitation non financière;6;623;f
+62391;Dons;6;6239;t
+62392;Autres charges diverses d’exploitation;6;6239;t
+63;IMPOTS, TAXES ET VERSEMENTS ASSIMILES;6;;f
+631;Impôts, taxes et versements assimilés sur rémunérations;6;63;f
+6311;Impôts et taxes versés à l'Administration des impôts;6;631;t
+6312;Impôts et taxes versés aux autres organismes;6;631;t
+632;Autres impôts, taxes et prélèvements assimilés versés à l'Administration des impôts;6;63;f
+6321;Impôts directs;6;632;t
+6323;Impôts indirects;6;632;t
+6324;Droits d'enregistrement et de timbre;6;632;t
+6329;Impôts et taxes divers;6;632;t
+633;Autres impôts, taxes et prélèvements assimilés versés aux autres organismes;6;63;t
+64;CHARGES DE PERSONNEL;6;;f
+641;Salaires et traitements;6;64;t
+642;Charges sociales;6;64;t
+643;Rémunérations versées aux stagiaires;6;64;t
+65;DOTATION AU FONDS POUR RISQUES FINANCIERS GENERAUX;6;;t
+66;DOTATIONS AUX AMORTISSEMENTS, AUX PROVISIONS ET PERTES SUR CREANCES IRRECOUVRABLES;6;;f
+661;Dotations aux amortissements des immobilisations;6;66;f
+6611;Dotations aux amortissements des immobilisations d'exploitation;6;661;f
+66111;Dotations aux amortissements des immobilisations incorporelles d'exploitation;6;6611;t
+66112;Dotations aux amortissements des immobilisations corporelles d'exploitation;6;6611;t
+6612;Dotations aux amortissements des immobilisations hors exploitation;6;661;f
+66121;Dotations aux amortissements des immobilisations incorporelles hors exploitation;6;6612;t
+66122;Dotations aux amortissements des immobilisations corporelles hors exploitation;6;6612;t
+662;Dotations aux amortissements des charges à répartir;6;66;t
+663;Dotations aux provisions pour dépréciation des immobilisations;6;66;f
+6631;Dotations aux provisions pour dépréciation des immobilisations en cours;6;663;f
+66311;Dotations aux provisions pour dépréciation des immobilisations incorporelles en cours;6;6631;t
+66312;Dotations aux provisions pour dépréciation des immobilisations corporelles en cours;6;6631;t
+6632;Dotations aux provisions pour dépréciation des immobilisations d'exploitation;6;663;f
+66321;Dotations aux provisions pour dépréciation des immobilisations incorporelles d'exploitation;6;6632;t
+66322;Dotations aux provisions pour dépréciation des immobilisations corporelles d'exploitation;6;6632;t
+6633;Dotations aux provisions pour dépréciation des immobilisations hors exploitation;6;663;f
+66331;Dotations aux provisions pour dépréciation des immobilisations incorporelles hors exploitation;6;6633;t
+66332;Dotations aux provisions pour dépréciation des immobilisations corporelles hors exploitation;6;6633;t
+664;Dotations aux provisions sur créances en souffrance;6;66;f
+6641;Dotations aux provisions sur créances en souffrance de 6 mois au plus;6;664;f
+66411;Dotations aux provisions sur créances en souffrance de 0 à 3 mois au plus;6;6641;t
+66412;Dotations aux provisions sur créances en souffrance de plus de 3 mois à 6 mois au plus;6;6641;t
+6642;Dotations aux provisions sur créances en souffrance de plus de 6 mois à 12 mois au plus;6;664;t
+6643;Dotations aux provisions sur créances en souffrance de plus 12 mois à 24 mois au plus;6;664;t
+666;Dotations aux provisions pour dépréciation des autres éléments d'actif;6;66;t
+667;Dotations aux provisions pour risques et charges;6;66;t
+668;Dotations aux provisions réglementées;6;66;t
+669;Pertes sur créances irrécouvrables;6;66;f
+6691;Pertes sur créances irrécouvrables couvertes par des provisions;6;669;t
+6692;Pertes sur créances irrécouvrables non couvertes par des provisions;6;669;t
+67;CHARGES EXCEPTIONNELLES ET PERTES SUR EXERCICES ANTERIEURS;6;;f
+671;Charges exceptionnelles;6;67;f
+6711;Pertes causées par un cataclysme;6;671;t
+6712;Charges de restructuration;6;671;t
+6713;Pénalités et amendes fiscales et pénales;6;671;t
+6714;Rappels d'impôts autres que l'impôt sur les excédents;6;671;t
+6715;Pertes résultant d'un changement de méthode;6;671;t
+6716;Pertes résultant des écarts sur caisse;6;671;t
+6717;Pertes résultant des écarts sur dépôts;6;671;t
+6718;Pertes résultant des écarts sur crédits;6;671;t
+6719;Autres charges exceptionnelles;6;671;t
+672;Pertes sur exercices antérieurs;6;67;f
+6721;Pertes d'exploitation financière;6;672;t
+6722;Pertes d'exploitation non financière;6;672;t
+6723;Pertes exceptionnelles;6;672;t
+69;IMPOTS SUR LES EXCEDENTS;6;;f
+691;Impôts sur les excédents liés à l’activité d’épargne et de crédit;6;69;t
+692;Impôts sur les excédents liés aux activités autres que l’épargne et le crédit;6;69;t
+70;PRODUITS D'EXPLOITATION FINANCIERE;7;;f
+701;Produits sur opérations avec les institutions financières;7;70;f
+7011;Intérêts sur comptes ordinaires chez les institutions financières;7;701;f
+70111;Intérêts sur comptes ordinaires chez l’organe financier;7;7011;t
+70112;Intérêts sur comptes ordinaires chez la caisse centrale;7;7011;t
+70113;Intérêts sur comptes ordinaires chez les CCP;7;7011;t
+70114;Intérêts sur comptes ordinaires chez les banques et correspondants;7;7011;t
+70115;Intérêts sur comptes ordinaires chez les établissements financiers;7;7011;t
+70116;Intérêts sur comptes ordinaires chez les SFD;7;7011;t
+70117;Intérêts sur comptes ordinaires chez les autres institutions financières;7;7011;t
+7012;Intérêts sur autres comptes de dépôts chez les institutions financières;7;701;f
+70126;Intérêts sur dépôts à terme constitués;7;7012;t
+70127;Intérêts sur dépôts de garantie constitués;7;7012;t
+70128;Intérêts sur autres dépôts constitués;7;7012;t
+7013;Intérêts sur comptes de prêts aux institutions financières;7;701;f
+70131;Intérêts sur prêts à moins d’un an;7;7013;t
+70133;Intérêts sur prêts à terme;7;7013;t
+7015;Intérêts sur comptes ordinaires des institutions financières;7;701;f
+70151;Intérêts sur comptes ordinaires de l’organe financier;7;7015;t
+70152;Intérêts sur comptes ordinaires du Trésor public;7;7015;t
+70153;Intérêts sur comptes ordinaires du Centre des Chèques Postaux;7;7015;t
+70154;Intérêts sur comptes ordinaires des banques et correspondants;7;7015;t
+70155;Intérêts sur comptes ordinaires des établissements financiers;7;7015;t
+70156;Intérêts sur comptes ordinaires des SFD;7;7015;t
+70157;Intérêts sur comptes ordinaires d’autres institutions financières;7;7015;t
+7018;Autres intérêts;7;701;f
+70189;Divers intérêts;7;7018;t
+7019;Commissions;7;701;f
+70191;Cotisations et droits d’adhésion;7;7019;t
+70192;Commissions sur transfert d’argent;7;7019;t
+70193;Autres commissions;7;7019;t
+702;Produits sur opérations avec les membres, bénéficiaires ou clients;7;70;f
+7021;Intérêts sur crédits aux membres, bénéficiaires ou clients;7;702;f
+70212;intérêts sur crédits à court terme;7;7021;t
+70213;Intérêts sur crédits à moyen terme;7;7021;t
+70214;Intérêts sur crédits à long terme;7;7021;t
+7025;Intérêts sur comptes des membres, bénéficiaires ou clients;7;702;f
+70251;Intérêts sur comptes ordinaires;7;7025;f
+702511;Intérêts sur comptes ordinaires;7;70251;t
+7028;Autres intérêts;7;702;f
+70289;Divers intérêts;7;7028;t
+7029;Commissions;7;702;f
+70291;Cotisations et droits d’adhésion;7;7029;t
+70292;Commissions sur transfert d’argent;7;7029;t
+70293;Autres commissions;7;7029;t
+703;Produits sur opérations sur titres et sur opérations diverses;7;70;f
+7031;Produits et profits sur titres de placement;7;703;t
+7038;Produits sur opérations diverses;7;703;t
+7039;Commissions;7;703;t
+704;Produits sur valeurs immobilisées;7;70;f
+7041;Produits sur les immobilisations financières;7;704;f
+70410;Produits et profits sur prêts et titres subordonnés;7;7041;f
+704101;Produits et profits sur prêts et titres subordonnés à terme;7;70410;t
+704102;Produits et profits sur prêts et titres subordonnés à durée indéterminée;7;70410;t
+70412;Dividendes et produits assimilés sur titres de participation;7;7041;t
+70414;Produits et profits sur titres d'investissement;7;7041;t
+7046;Produits sur opérations de crédit-bail et de location avec option d'achat;7;704;f
+70461;Produits sur crédit-bail;7;7046;f
+704611;Loyers;7;70461;t
+704612;Reprises de provisions;7;70461;t
+704613;Plus-values de cession;7;70461;t
+704619;Autres produits;7;70461;t
+70462;Produits sur location avec option d'achat;7;7046;f
+704621;Loyers;7;70462;t
+704622;Reprises de provisions;7;70462;t
+704623;Plus-values de cession;7;70462;t
+704629;Autres produits;7;70462;t
+70463;Produits sur location simple;7;7046;f
+704631;Loyers;7;70463;t
+704632;Reprises de provisions;7;70463;t
+704633;Plus-values de cession;7;70463;t
+704639;Autres produits;7;70463;t
+70464;Produits sur immobilisations non louées;7;7046;f
+704642;Reprises de provisions;7;70464;t
+704643;Plus-values de cession;7;70464;t
+704649;Autres produits;7;70464;t
+7047;Produits sur opérations de location-vente;7;704;f
+70472;Produits sur location-vente;7;7047;f
+704721;Loyers;7;70472;t
+704722;Reprises de provisions;7;70472;t
+704723;Plus-values de cession;7;70472;t
+704729;Autres produits;7;70472;t
+70473;Produits sur location simple;7;7047;f
+704731;Loyers;7;70473;t
+704732;Reprises de provisions;7;70473;t
+704733;Plus-values de cession;7;70473;t
+704739;Autres produits;7;70473;t
+70474;Produits sur immobilisations non louées;7;7047;f
+704742;Reprises de provisions;7;70474;t
+704743;Plus-values de cession;7;70474;t
+704749;Autres produits;7;70474;t
+706;Produits sur opérations de change;7;70;f
+7061;Gains sur opérations de change;7;706;t
+7069;Commissions;7;706;t
+707;Produits sur opérations de hors bilan;7;70;f
+7071;Produits sur engagements de financement donnés;7;707;f
+70711;Produits sur engagements de financement donnés aux institutions financières;7;7071;t
+70713;Produits sur engagements de financement donnés aux membres, bénéficiaires ou clients;7;7071;t
+7072;Produits sur engagements de garantie donnés;7;707;f
+70721;Produits sur engagements de garantie donnés aux institutions financières;7;7072;t
+70723;Produits sur engagements de garantie donnés aux membres, bénéficiaires ou clients;7;7072;t
+7073;Produits sur engagements sur titres;7;707;t
+7075;Produits sur autres engagements donnés;7;707;t
+7076;Produits sur opérations effectuées pour le compte de tiers;7;707;t
+708;Produits sur prestations de services financiers;7;70;f
+7081;Produits sur les moyens de paiement;7;708;t
+7089;Autres produits sur prestations de services financiers;7;708;t
+709;Autres produits d'exploitation financière;7;70;f
+7091;Plus - values sur cession d'éléments d'actif;7;709;t
+7098;Transferts de charges d'exploitation;7;709;t
+7099;Divers produits d'exploitation;7;709;t
+71;VENTES;7;;f
+711;Ventes;7;71;f
+7111;Ventes de marchandises;7;711;t
+7118;Produits accessoires d'achat;7;711;t
+7119;Rabais, remises et ristournes accordés sur ventes de marchandises;7;711;t
+72;PRODUITS DIVERS D'EXPLOITATION;7;;f
+721;Redevances sur concessions, brevets, licences, procédés, droits et valeurs similaires;7;72;t
+722;Indemnités de fonction et rémunérations d'administrateurs, gérants reçues;7;72;t
+725;Plus-values de cession;7;72;f
+7251;sur immobilisations incorporelles et corporelles;7;725;t
+7252;sur immobilisations financières;7;725;t
+727;Revenus des immeubles hors exploitation;7;72;t
+728;Transferts de charges d'exploitation non financière;7;72;f
+7281;Charges refacturées;7;728;t
+7282;Charges à répartir sur plusieurs exercices;7;728;t
+7289;Autres transferts de charges;7;728;t
+729;Autres produits divers d'exploitation;7;72;t
+73;PRODUCTION IMMOBILISEE;7;;f
+731;Immobilisations incorporelles;7;73;t
+732;Immobilisations corporelles;7;73;t
+74;SUBVENTIONS D'EXPLOITATION;7;;t
+75;REPRISES DU FONDS POUR RISQUES FINANCIERS GENERAUX;7;;t
+76;REPRISES D'AMORTISSEMENTS, DE PROVISIONS ET RECUPERATIONS SUR CREANCES IRRECOUVRABLES;7;;f
+761;Reprises d'amortissements des immobilisations;7;76;t
+763;Reprises de provisions sur immobilisations;7;76;f
+7631;Reprises de provisions sur immobilisations en cours;7;763;f
+76311;Reprises de provisions sur immobilisations incorporelles en cours;7;7631;t
+76312;Reprises de provisions sur immobilisations corporelles en cours;7;7631;t
+7632;Reprises de provisions sur immobilisations d'exploitation;7;763;f
+76321;Reprises de provisions sur immobilisations incorporelles d'exploitation;7;7632;t
+76322;Reprises de provisions sur immobilisations corporelles d'exploitation;7;7632;t
+7633;Reprises de provisions sur immobilisations hors exploitation;7;763;f
+76331;Reprises de provisions sur immobilisations incorporelles hors exploitation;7;7633;t
+76332;Reprises de provisions sur immobilisations corporelles hors exploitation;7;7633;t
+764;Reprises de provisions sur créances en souffrance;7;76;f
+7641;Reprises de provisions sur créances en souffrance de 6 mois au plus;7;764;f
+76411;Reprises de provisions sur créances en souffrance de 0 à 3 mois au plus;7;7641;t
+76412;Reprises de provisions sur créances en souffrance de plus de 3 mois à 6 mois au plus;7;7641;t
+7642;Reprises de provisions sur créances en souffrance de plus de 6 mois à 12 mois au plus;7;764;t
+7643;Reprises de provisions sur créances en souffrance de plus de 12 mois à 24 mois au plus;7;764;t
+766;Reprises de provisions pour dépréciation des autres éléments d'actif;7;76;t
+767;Reprises de provisions pour risques et charges;7;76;t
+768;Reprises de provisions réglementées;7;76;t
+769;Récupération sur créances amorties;7;76;t
+77;PRODUITS EXCEPTIONNELS ET PROFITS SUR EXERCICES ANTERIEURS;7;;f
+771;Produits exceptionnels;7;77;f
+7711;Dédits, pénalités et libéralités perçus;7;771;t
+7712;Subventions d'équilibre;7;771;t
+7713;Dégrèvement d'impôts autres que l’impôt sur les excédents;7;771;t
+7714;Quote-part des subventions d'investissement virée au résultat de l'exercice;7;771;t
+7715;Produits résultant d'un changement de méthode d'évaluation;7;771;t
+7716;Produits résultant des écarts sur caisse;7;771;t
+7717;Produits résultant des écarts sur dépôts;7;771;t
+7718;Produits résultant des écarts sur crédits;7;771;t
+7719;Autres produits exceptionnels;7;771;t
+772;Profits sur exercices antérieurs;7;77;f
+7721;Profits d'exploitation financière;7;772;t
+7722;Profits d'exploitation non financière;7;772;t
+7723;Profits exceptionnels;7;772;t
+90;ENGAGEMENTS DE FINANCEMENT;9;;f
+901;Engagements de financement donnés en faveur des institutions financières;9;90;t
+902;Engagements de financement reçus des institutions financières;9;90;t
+903;Engagements de financement donnés en faveur des membres, bénéficiaires ou clients;9;90;t
+904;Engagements de financement reçus des membres, bénéficiaires ou clients;9;90;t
+91;ENGAGEMENTS DE GARANTIE;9;;f
+911;Cautions, avals et autres garanties d'ordre des institutions financières;9;91;f
+9112;Confirmations d'ouverture de crédits documentaires;9;911;t
+9113;Acceptations à payer;9;911;t
+9119;Autres garanties données;9;911;t
+912;Cautions, avals et autres garanties reçus des institutions financières;9;91;f
+9121;Cautions et avals reçus;9;912;t
+9122;Contre-garanties reçues sur les crédits distribués;9;912;t
+9123;Contre-garanties reçues des engagements par signature donnés;9;912;t
+9124;Autres garanties irrévocables et inconditionnelles reçues;9;912;t
+913;Garanties d'ordre des membres, bénéficiaires ou clients;9;91;f
+9132;Obligations cautionnées;9;913;t
+9133;Cautions, avals et autres garanties donnés;9;913;t
+9134;Garanties de remboursement de crédits;9;913;t
+9139;Autres garanties données;9;913;t
+914;Garanties reçues des membres, bénéficiaires ou clients;9;91;f
+9141;Garanties reçues de l'Etat et des organismes assimilés;9;914;t
+9142;Garanties reçues des entreprises d'assurance et de capitalisation;9;914;t
+9149;Autres garanties reçues;9;914;t
+92;ENGAGEMENTS SUR TITRES;9;;f
+921;Titres à livrer;9;92;f
+9211;Interventions à l'émission;9;921;t
+9212;Marché gris;9;921;t
+9219;Autres titres à livrer;9;921;t
+922;Titres à recevoir;9;92;f
+9221;Interventions à l'émission;9;922;t
+9222;Marché gris;9;922;t
+9229;Autres titres à recevoir;9;922;t
+93;ENGAGEMENTS SUR OPERATIONS EN DEVISES;9;;f
+931;Opérations de change au comptant;9;93;f
+9311;Francs CFA achetés non encore reçus;9;931;t
+9312;Devises achetées non encore reçues;9;931;t
+9313;Francs CFA vendus non encore livrés;9;931;t
+9314;Devises vendues non encore livrées;9;931;t
+932;Opérations de change à terme;9;93;f
+9321;Francs CFA à recevoir contre devises à livrer;9;932;t
+9322;Devises à recevoir contre francs CFA à livrer;9;932;t
+9323;Devises à recevoir contre devises à livrer;9;932;t
+9324;Devises à livrer contre devises à recevoir;9;932;t
+933;Opérations de prêts ou d'emprunts en devises;9;93;f
+9331;Devises prêtées non encore livrées;9;933;t
+9332;Devises empruntées non encore reçues;9;933;t
+934;Report/déport non couru;9;93;f
+9341;Report/déport à recevoir;9;934;t
+9342;Report/déport à payer;9;934;t
+935;Intérêts non courus en devises couverts;9;93;f
+9351;Intérêts non courus en devises couverts à recevoir;9;935;t
+9352;Intérêts non courus en devises couverts à payer;9;935;t
+936;Comptes d'ajustement de devises hors bilan;9;93;t
+937;Comptes de position de change hors bilan;9;93;t
+938;Comptes de contre-valeur de position de change hors bilan;9;93;t
+95;AUTRES ENGAGEMENTS;9;;f
+951;Autres engagements donnés;9;95;f
+9513;Loyers à payer;9;951;t
+9519;Engagements divers donnés;9;951;t
+952;Autres engagements reçus;9;95;f
+9522;Valeurs reçues en garantie;9;952;t
+9523;Loyers à percevoir;9;952;t
+9529;Engagements divers reçus;9;952;t
+96;OPERATIONS EFFECTUEES POUR LE COMPTE DE TIERS;9;;f
+961;Opérations d'encaissement;9;96;f
+9611;Valeurs à l'encaissement reçues des membres, bénéficiaires ou clients et non disponibles;9;961;t
+9612;Comptes des membres, bénéficiaires ou clients exigibles après encaissement;9;961;t
+9613;Valeurs à l'encaissement reçues des correspondants et non disponibles;9;961;t
+9614;Comptes des correspondants exigibles après encaissement;9;961;t
+962;Comptes de suivi des engagements consortiaux de financement donnés;9;96;f
+9621;Engagements de financement;9;962;t
+9622;Part de chef de file;9;962;t
+9623;Parts des co-participants;9;962;t
+963;Comptes de suivi des engagements consortiaux de garantie donnés;9;96;f
+9631;Engagements de garantie donnés;9;963;t
+9632;Part de chef de file;9;963;t
+9633;Parts des co-participants;9;963;t
+965;Comptes de suivi des crédits consortiaux distribués;9;96;f
+9651;Crédits consortiaux;9;965;t
+9652;Part de chef de file;9;965;t
+9653;Parts des co-participants;9;965;t
+9659;Echéances impayées;9;965;t
+966;Comptes de suivi des crédits distribués pour le compte de tiers;9;96;f
+9661;Crédits distribués pour le compte de tiers;9;966;t
+9662;Ressources affectées aux crédits distribués pour le compte de tiers;9;966;t
+99;ENGAGEMENTS DOUTEUX;9;;t
