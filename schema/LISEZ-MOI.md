@@ -33,6 +33,7 @@ PostgreSQL 16 (testé), extension `btree_gist`. **296 assertions automatiques pa
 | `24_adhesion_parts.sql` | adhésion des membres (droit d'adhésion), souscription de parts sociales (valeur nominale figée à la souscription), membre en règle ; paramètres `part_valeur_nominale`, `parts_minimum`, `droit_adhesion`, `adhesion_obligatoire` |
 | `25_liaison_tontine_epargne.sql` | mise en relation d'une souscription de tontine (cycle) avec le compte d'épargne classique du même client |
 | `26_epargne_journee_sortie.sql` | annulation d'un dépôt ou retrait par contre-passation, validation globale de la journée d'épargne (réouverture tracée), sortie d'un membre avec remboursement des parts |
+| `27_adhesion_par_compte.sql` | chaque compte d'épargne a sa propre adhésion et sa souscription de parts : ouverture du compte avec adhésion et parts en une opération, adhésion et parts supplémentaires par compte, sortie du compte (parts remboursées, compte clos) ; remplace les fonctions par client des modules 24 et 26 |
 | `mf_schema_complet.sql` | concaténation de tout, générée par `tools/build_schema_complet.sh` |
 
 À la racine de `SFD`, le fichier `mf_schema_complet.sql` est une copie de `tests_virement_credit.sql` (même taille, même contenu) : **le vrai schéma est `schema/mf_schema_complet.sql`**.

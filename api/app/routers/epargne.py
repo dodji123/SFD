@@ -23,6 +23,7 @@ class CompteIn(BaseModel):
     client_id: int
     produit_id: int
     numero: str | None = Field(default=None, max_length=25)  # vide : numérotation automatique
+    nb_parts: int | None = Field(default=None, ge=1, le=10000)  # parts sociales souscrites avec le compte (obligatoire si adhesion_obligatoire)
 
 
 @router.get("")
@@ -41,11 +42,17 @@ def ouvrir(body: CompteIn, user: User = Depends(require("epargne:write"))):
         p = one_row(cur, "SELECT categorie FROM produit_epargne WHERE id = %s AND actif", (body.produit_id,))
         if p is None or p["categorie"] != "classique":
             raise HTTPException(status_code=422, detail="Le produit doit être un produit d'épargne classique")
-        # épargne classique réservée aux membres : adhésion et nombre minimal de parts (paramètre adhesion_obligatoire)
-        if one_row(cur, "SELECT param('adhesion_obligatoire', %s::smallint) AS v", (ag,))["v"] == "oui" and            not one_row(cur, "SELECT membre_en_regle(%s) AS b", (body.client_id,))["b"]:
-            raise HTTPException(status_code=422, detail="Le client doit être membre en règle (adhésion et parts sociales) pour ouvrir un compte d'épargne classique")
-        nid = one_row(cur, "INSERT INTO compte_epargne(agence_id, client_id, produit_id, numero) VALUES (%s, %s, %s, %s) RETURNING id",
-                      (ag, body.client_id, body.produit_id, body.numero))["id"]
+        # chaque compte d'épargne classique a sa propre adhésion et ses parts sociales (paramètre adhesion_obligatoire)
+        obligatoire = one_row(cur, "SELECT param('adhesion_obligatoire', %s::smallint) AS v", (ag,))["v"] == "oui"
+        if body.nb_parts is None and obligatoire:
+            raise HTTPException(status_code=422, detail="Un compte d'épargne classique s'ouvre avec son adhésion et au moins le nombre minimal de parts sociales : indiquer nb_parts")
+        if body.nb_parts is not None:
+            if body.numero is not None:
+                raise HTTPException(status_code=422, detail="Le numéro de compte est attribué automatiquement avec l'adhésion")
+            nid = one_row(cur, "SELECT ouvrir_compte_adherent(%s, %s, %s, current_date, %s) AS id", (body.client_id, body.produit_id, body.nb_parts, user.id))["id"]
+        else:
+            nid = one_row(cur, "INSERT INTO compte_epargne(agence_id, client_id, produit_id, numero) VALUES (%s, %s, %s, %s) RETURNING id",
+                          (ag, body.client_id, body.produit_id, body.numero))["id"]
         return one_row(cur, SELECT_COMPTE + "WHERE ce.id = %s", (nid,))
 
 
@@ -138,7 +145,9 @@ def _mouvement(compte_id: int, type_: Literal["depot", "retrait"], body: Mouveme
     if body.date_operation is not None and body.date_operation > dt.date.today():
         raise HTTPException(status_code=422, detail="La date de l'opération ne peut pas être dans le futur")
     with tx(user.login) as cur:
-        verifier_agence(cur, user, "compte_epargne", compte_id)
+        ag = verifier_agence(cur, user, "compte_epargne", compte_id)
+        if one_row(cur, "SELECT param('adhesion_obligatoire', %s::smallint) AS v", (ag,))["v"] == "oui" and            not one_row(cur, "SELECT membre_en_regle(%s) AS b", (compte_id,))["b"]:
+            raise HTTPException(status_code=422, detail="Ce compte n'a pas d'adhésion en règle (parts sociales) : régulariser avant toute opération")
         mv = one_row(
             cur,
             "INSERT INTO mouvement_epargne(compte_id, type, montant, date_operation, libelle) "

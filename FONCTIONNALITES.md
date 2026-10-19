@@ -104,7 +104,7 @@
 | Multi-agences avec siège et consolidation | A | |
 | Formes juridiques et organes (assemblée, conseil, comité) | E | |
 | Plafond de l'usure et taux effectif global | E | |
-| Parts sociales, dividendes, ristournes | C | Adhésion, droit d'adhésion et souscription de parts avec écran de guichet ; l'épargne classique est réservée aux membres en règle (paramétrable). Non couvert : remboursement des parts à la sortie, dividendes, ristournes, libération échelonnée, écritures de capital |
+| Parts sociales, dividendes, ristournes | C | Chaque compte d'épargne a sa propre adhésion (droit d'adhésion) et sa souscription de parts, ouvertes avec le compte ; écran de guichet ; sortie du compte avec remboursement des parts ; opérations refusées sur un compte sans adhésion en règle (paramétrable). Non couvert : remboursement des parts à la sortie, dividendes, ristournes, libération échelonnée, écritures de capital |
 | Réseaux et faîtières (consolidation d'unions) | C | Consolidation du réseau d'une institution seulement |
 | Finance islamique | E | |
 | Multilingue, langues locales ; hors ligne ; multi-devises | E | Français et franc CFA uniquement |

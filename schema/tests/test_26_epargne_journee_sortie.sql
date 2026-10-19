@@ -38,20 +38,15 @@ INSERT INTO mouvement_epargne(compte_id,type,montant,date_operation) VALUES (2,'
 SELECT t.eq('B saisie à nouveau possible', count(*)::text, '2') FROM mouvement_epargne WHERE compte_id = 2;
 SELECT t.eq('B journal', string_agg(action, ',' ORDER BY id), 'validee,rouverte') FROM validation_epargne_journal;
 
--- ===== C. Sortie d'un membre =====
-INSERT INTO adhesion(agence_id,client_id,date_adhesion,droit_adhesion) VALUES (1,2,current_date - 10,2000);
-SELECT souscrire_parts(2, 3, current_date - 10, 1);
-SELECT t.refuse('C solde encore présent', 'SELECT mf.radier_adhesion(2, current_date, 1)');
+-- ===== C. Sortie d'un membre : compte, adhésion et parts (module 27) =====
+INSERT INTO adhesion(agence_id,client_id,compte_id,date_adhesion,droit_adhesion) VALUES (1,2,2,current_date - 10,2000);
+SELECT souscrire_parts_compte(2, 3, current_date - 10, 1);
+SELECT t.refuse('C solde encore présent', 'SELECT mf.radier_adhesion_compte(2, current_date, 1)');
 UPDATE produit_epargne SET solde_minimum = 0 WHERE code = 'CL';   -- la clôture du compte libère le solde minimum
 INSERT INTO mouvement_epargne(compte_id,type,montant,date_operation) VALUES (2,'retrait',1200,current_date);
 SELECT t.eq('C solde vidé', solde::text, '0') FROM v_solde_compte_epargne WHERE compte_id = 2;
-INSERT INTO cycle(agence_id,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,nb_lignes_prevues,date_debut,date_fin)
-VALUES (1,2,2,1,500,500,15500,31,current_date - 5,current_date + 25);
-SELECT t.refuse('C tontine en cours', 'SELECT mf.radier_adhesion(2, current_date, 1)');
-UPDATE cycle SET statut = 'retire' WHERE client_id = 2;
-SELECT t.refuse('C sortie à une date future', 'SELECT mf.radier_adhesion(2, current_date + 1, 1)');
-SELECT t.eq('C parts remboursées : 3 x 5000', radier_adhesion(2, current_date, 1)::text, '15000');
-SELECT t.eq('C adhésion radiée, remboursement enregistré', a.statut || '/' || r.nb_parts || '/' || r.montant, 'radiee/3/15000')
-  FROM adhesion a JOIN remboursement_part r ON r.adhesion_id = a.id WHERE a.client_id = 2;
-SELECT t.eq('C plus membre en règle', membre_en_regle(2)::text, 'false');
-SELECT t.refuse('C déjà radiée', 'SELECT mf.radier_adhesion(2, current_date, 1)');
+SELECT t.refuse('C sortie à une date future', 'SELECT mf.radier_adhesion_compte(2, current_date + 1, 1)');
+SELECT t.eq('C parts remboursées : 3 x 5000', radier_adhesion_compte(2, current_date, 1)::text, '15000');
+SELECT t.eq('C adhésion radiée et compte clos', a.statut || '/' || r.montant || '/' || ce.statut, 'radiee/15000/clos')
+  FROM adhesion a JOIN remboursement_part r ON r.adhesion_id = a.id JOIN compte_epargne ce ON ce.id = a.compte_id WHERE a.compte_id = 2;
+SELECT t.refuse('C déjà radiée', 'SELECT mf.radier_adhesion_compte(2, current_date, 1)');

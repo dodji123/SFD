@@ -167,14 +167,18 @@ function OuvrirCompte({ client, onClose, onFait }: { client: Detail; onClose: ()
   const produits = useProduitsEpargne('classique')
   const { run, busy } = useAction()
   const [p, setP] = useState('')
+  const [parts, setParts] = useState('1')
   return (
-    <FormModal titre="Ouvrir un compte d'épargne" onClose={onClose} busy={busy} valider="Ouvrir le compte"
-      onSubmit={() => void run(() => api.post('/api/comptes-epargne', { client_id: client.id, produit_id: Number(p) }), 'Compte ouvert', onFait)}>
+    <FormModal titre="Ouvrir un compte d'épargne" onClose={onClose} busy={busy} valider="Ouvrir le compte et l'adhésion"
+      onSubmit={() => void run(() => api.post('/api/comptes-epargne', { client_id: client.id, produit_id: Number(p), nb_parts: Number(parts) }), 'Compte, adhésion et parts enregistrés', onFait)}>
       <Field label="Produit">
         <Select value={p} onChange={(e) => setP(e.target.value)} required>
           <option value="">— choisir —</option>
           {produits.map((x) => <option key={x.id} value={x.id}>{x.libelle} (minimum {xof(x.solde_minimum)})</option>)}
         </Select>
+      </Field>
+      <Field label="Parts sociales à souscrire" hint="Chaque compte a sa propre adhésion : droit d'adhésion et parts selon les paramètres de l'agence">
+        <Input type="number" min={1} value={parts} onChange={(e) => setParts(e.target.value)} required />
       </Field>
     </FormModal>
   )
