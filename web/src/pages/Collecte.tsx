@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { aujourdhui, xof } from '../lib/format'
 import { useAgents, useProduitsEpargne, useZones } from '../lib/hooks'
 import { useSession } from '../lib/session'
+import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
 import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, useAction, useFetch } from '../components/ui'
 
 interface Feuille {
@@ -83,7 +84,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
   // recherche du client dès que le numéro d'ordre, le produit, la zone ou le jour changent ; le curseur passe au montant
   useEffect(() => {
     setTrouve(null); setErreur(null)
-    if (!suffixe || !produit) return
+    if (!estNumero(suffixe) || !produit) return
     let ok = true
     const t = setTimeout(() => {
       api.get<Trouve>('/api/collecte/client-cycle', { suffixe, produit_id: produit, date: jour, ...(zone ? { zone_id: zone } : {}) })
@@ -133,10 +134,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
         </Field>
       </div>
       <div className="row">
-        <Field label="N° client" hint="Numéro d'ordre seul (ex. 5)">
-          <Input ref={refNumero} inputMode="numeric" value={suffixe} placeholder="5" autoComplete="off"
-            onChange={(e) => setSuffixe(e.target.value.replace(/\D/g, ''))} />
-        </Field>
+        <ChampClient valeur={suffixe} onChange={setSuffixe} inputRef={refNumero} />
         <Field label="Numéro de base du client"><Input readOnly value={trouve?.client.numero ?? ''} /></Field>
         <Field label="N° de souscription"><Input readOnly value={c?.numero ?? ''} /></Field>
         <Field label="Nom et prénom"><Input readOnly value={trouve?.client.nom ?? ''} /></Field>
@@ -163,6 +161,7 @@ function TableauJour({ jour, onChange }: { jour: string; onChange: () => void })
   const q = useFetch(() => api.get<Jour>('/api/collecte/jour', { date: jour }), [jour])
   const { run, busy } = useAction()
   const [edit, setEdit] = useState<{ id: number; montant: string } | null>(null)
+  const [filtre, setFiltre] = useState('')
 
   const apres = () => { setEdit(null); q.reload(); onChange() }
   const supprimer = (l: LigneJour) => {
@@ -188,7 +187,8 @@ function TableauJour({ jour, onChange }: { jour: string; onChange: () => void })
             <Kpi label="Total collecté" value={xof(d.total)} />
             <Kpi label="Collectes saisies" value={d.lignes.length} />
           </div>
-          <Table rows={d.lignes} vide="Aucune collecte saisie ce jour" cols={[
+          <FiltreTableau valeur={filtre} onChange={setFiltre} />
+          <Table rows={filtrer(d.lignes, filtre, (l) => [l.client, l.client_numero, l.souscription, l.agent])} vide={filtre ? 'Aucune collecte ne correspond au filtre' : 'Aucune collecte saisie ce jour'} cols={[
             { titre: 'N° client', render: (l) => l.client_numero },
             { titre: 'Client', render: (l) => <strong>{l.client}</strong> },
             { titre: 'Souscription', render: (l) => <>{l.souscription}<div className="muted">{l.produit}</div></> },

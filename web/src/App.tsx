@@ -11,6 +11,8 @@ import Collecte from './pages/Collecte'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
 import Liaison from './pages/Liaison'
+import DepotsBloques from './pages/DepotsBloques'
+import Deblocages from './pages/Deblocages'
 import Compta from './pages/Compta'
 import CreditDetail from './pages/CreditDetail'
 import Credits from './pages/Credits'
@@ -46,6 +48,8 @@ export default function App() {
         <Route path="epargne" element={<Garde perm="epargne:read"><Epargne /></Garde>} />
         <Route path="adhesion" element={<Garde perm="epargne:read"><Adhesion /></Garde>} />
         <Route path="liaison" element={<Garde perm="epargne:read"><Liaison /></Garde>} />
+        <Route path="depots" element={<Garde perm="epargne:read"><DepotsBloques /></Garde>} />
+        <Route path="deblocages" element={<Garde perm="epargne:read"><Deblocages /></Garde>} />
         <Route path="retraits" element={<Garde perm="collecte:read"><Retraits /></Garde>} />
         <Route path="credits" element={<Garde perm="credit:read"><Credits /></Garde>} />
         <Route path="credits/:id" element={<Garde perm="credit:read"><CreditDetail /></Garde>} />

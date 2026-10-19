@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { xof } from '../lib/format'
 import { useRecherche } from '../lib/recherche'
 import { useSession } from '../lib/session'
+import { ChampClient, estNumero } from '../components/ChampClient'
 import { Alert, Badge, Button, Card, Field, Input, Page, Select, Table, useAction } from '../components/ui'
 
 interface Compte { id: number; numero: string; produit: string; solde: number; disponible: number }
@@ -16,15 +17,13 @@ export default function Liaison() {
   const { can } = useSession()
   const [suffixe, setSuffixe] = useState('')
   const refNumero = useRef<HTMLInputElement>(null)
-  const { data: s, erreur, recharger } = useRecherche<Situation>('/api/liaisons/recherche', suffixe ? { suffixe } : null)
+  const { data: s, erreur, recharger } = useRecherche<Situation>('/api/liaisons/recherche', estNumero(suffixe) ? { suffixe } : null)
 
   return (
     <Page title="Tontine et épargne classique" subtitle="Un client a deux comptes : sa souscription de tontine et son compte d'épargne classique. Cette page les met en relation et permet d'alimenter l'un par l'autre">
       <Card title="Client">
         <div className="row">
-          <Field label="N° client" hint="Numéro d'ordre seul (ex. 5)">
-            <Input ref={refNumero} inputMode="numeric" value={suffixe} placeholder="5" autoComplete="off" onChange={(e) => setSuffixe(e.target.value.replace(/\D/g, ''))} />
-          </Field>
+          <ChampClient valeur={suffixe} onChange={setSuffixe} inputRef={refNumero} />
           <Field label="Numéro de base du client"><Input readOnly value={s?.client.numero ?? ''} /></Field>
           <Field label="Nom et prénom"><Input readOnly value={s?.client.nom ?? ''} /></Field>
         </div>

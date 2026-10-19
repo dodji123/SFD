@@ -4,6 +4,7 @@ import { aujourdhui, xof } from '../lib/format'
 import { useProduitsEpargne } from '../lib/hooks'
 import { useRecherche } from '../lib/recherche'
 import { useSession } from '../lib/session'
+import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
 import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, useAction, useFetch } from '../components/ui'
 
 interface CompteMembre {
@@ -21,9 +22,10 @@ export default function Adhesion() {
   const { can, agenceId } = useSession()
   const [jour, setJour] = useState(aujourdhui())
   const [suffixe, setSuffixe] = useState('')
+  const [filtre, setFiltre] = useState('')
   const refNumero = useRef<HTMLInputElement>(null)
   const tableau = useFetch(() => api.get<Jour>('/api/adhesions/jour', { date: jour }), [jour, agenceId])
-  const { data: s, erreur, recharger } = useRecherche<Situation>('/api/adhesions/recherche', suffixe ? { suffixe } : null)
+  const { data: s, erreur, recharger } = useRecherche<Situation>('/api/adhesions/recherche', estNumero(suffixe) ? { suffixe } : null)
   const apres = () => { recharger(); tableau.reload() }
 
   return (
@@ -32,9 +34,7 @@ export default function Adhesion() {
         <Card title="Compte, adhésion et parts">
           <div className="row">
             <Field label="Jour"><Input type="date" max={aujourdhui()} value={jour} onChange={(e) => setJour(e.target.value || aujourdhui())} /></Field>
-            <Field label="N° client" hint="Numéro d'ordre seul (ex. 5)">
-              <Input ref={refNumero} inputMode="numeric" value={suffixe} placeholder="5" autoComplete="off" onChange={(e) => setSuffixe(e.target.value.replace(/\D/g, ''))} />
-            </Field>
+            <ChampClient valeur={suffixe} onChange={setSuffixe} inputRef={refNumero} />
             <Field label="Numéro de base du client"><Input readOnly value={s?.client.numero ?? ''} /></Field>
             <Field label="Nom et prénom"><Input readOnly value={s?.client.nom ?? ''} /></Field>
           </div>
@@ -60,7 +60,8 @@ export default function Adhesion() {
               <Kpi label="Total encaissé" value={xof(d.total)} />
               <Kpi label="Opérations" value={d.lignes.length} />
             </div>
-            <Table rows={d.lignes} vide="Aucune adhésion ni souscription ce jour" cols={[
+            <FiltreTableau valeur={filtre} onChange={setFiltre} />
+            <Table rows={filtrer(d.lignes, filtre, (l) => [l.client, l.client_numero, l.compte, l.reference])} vide={filtre ? 'Aucune ligne ne correspond au filtre' : 'Aucune adhésion ni souscription ce jour'} cols={[
               { titre: 'N° client', render: (l) => l.client_numero },
               { titre: 'Client', render: (l) => <strong>{l.client}</strong> },
               { titre: 'Compte', render: (l) => l.compte ?? '—' },

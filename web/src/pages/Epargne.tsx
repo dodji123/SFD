@@ -4,7 +4,8 @@ import { aujourdhui, xof } from '../lib/format'
 import { useProduitsEpargne } from '../lib/hooks'
 import { useRecherche } from '../lib/recherche'
 import { useSession } from '../lib/session'
-import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, useAction, useFetch } from '../components/ui'
+import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
+import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Trouve {
   client: { id: number; numero: string; nom: string }
@@ -20,33 +21,17 @@ export default function Epargne() {
   const produits = useProduitsEpargne('classique')
   const [jour, setJour] = useState(aujourdhui())
   const [produit, setProduit] = useState('')
-  const [op, setOp] = useState<'depot' | 'retrait'>('depot')
-  const [suffixe, setSuffixe] = useState('')
-  const [montant, setMontant] = useState('')
-  const refNumero = useRef<HTMLInputElement>(null)
-  const refMontant = useRef<HTMLInputElement>(null)
+  const [onglet, setOnglet] = useState<'depot' | 'retrait'>('depot')
+  const [filtre, setFiltre] = useState('')
   const { run, busy } = useAction()
   const tableau = useFetch(() => api.get<Jour>('/api/comptes-epargne/operations', { date: jour }), [jour, agenceId])
-  const { data: trouve, erreur } = useRecherche<Trouve>('/api/comptes-epargne/recherche', suffixe && produit ? { suffixe, produit_id: produit, date: jour } : null)
 
   useEffect(() => { if (!produit && produits.length === 1) setProduit(String(produits[0].id)) }, [produits, produit])
-  useEffect(() => { if (trouve) refMontant.current?.focus() }, [trouve])
-
-  const c = trouve?.compte
-  const m = Number(montant)
-  const insuffisant = op === 'retrait' && !!c && m > c.disponible
-  const pret = !!c && m > 0 && !insuffisant && !busy
-
-  const valider = () => void run(
-    () => api.post(`/api/comptes-epargne/${c!.id}/${op}`, { montant: m, date_operation: jour }),
-    op === 'depot' ? 'Dépôt enregistré' : 'Retrait enregistré',
-    () => { setSuffixe(''); setMontant(''); tableau.reload(); setTimeout(() => refNumero.current?.focus(), 0) },
-  )
 
   return (
     <Page title="Épargne classique" subtitle="Dépôts et retraits au guichet pour les membres titulaires d'un compte d'épargne">
       {can('epargne:write') && (
-        <Card title="Opération de guichet">
+        <Card title="Guichet">
           <div className="row">
             <Field label="Jour"><Input type="date" max={aujourdhui()} value={jour} onChange={(e) => setJour(e.target.value || aujourdhui())} /></Field>
             <Field label="Produit d'épargne">
@@ -55,32 +40,9 @@ export default function Epargne() {
                 {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle}</option>)}
               </Select>
             </Field>
-            <Field label="Opération">
-              <Select value={op} onChange={(e) => setOp(e.target.value as 'depot' | 'retrait')}>
-                <option value="depot">Dépôt</option>
-                <option value="retrait">Retrait</option>
-              </Select>
-            </Field>
           </div>
-          <div className="row">
-            <Field label="N° client" hint="Numéro d'ordre seul (ex. 5)">
-              <Input ref={refNumero} inputMode="numeric" value={suffixe} placeholder="5" autoComplete="off" onChange={(e) => setSuffixe(e.target.value.replace(/\D/g, ''))} />
-            </Field>
-            <Field label="Numéro de base du client"><Input readOnly value={trouve?.client.numero ?? ''} /></Field>
-            <Field label="Nom et prénom"><Input readOnly value={trouve?.client.nom ?? ''} /></Field>
-            <Field label="N° de compte"><Input readOnly value={c?.numero ?? ''} /></Field>
-          </div>
-          <div className="row">
-            <Field label="Solde"><Input readOnly value={c ? xof(c.solde) : ''} /></Field>
-            <Field label="Disponible" hint={c ? `Solde minimum conservé : ${xof(c.solde_minimum)}` : undefined}><Input readOnly value={c ? xof(c.disponible) : ''} /></Field>
-            <Field label={`Montant du ${op === 'depot' ? 'dépôt' : 'retrait'} (F)`}>
-              <Input ref={refMontant} type="number" min={1} value={montant} disabled={!c} aria-label="Montant à saisir"
-                onChange={(e) => setMontant(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pret) valider() }} />
-            </Field>
-            <Button variant="primary" disabled={!pret} onClick={valider}>{op === 'depot' ? 'Valider le dépôt' : 'Valider le retrait'}</Button>
-          </div>
-          {erreur && <Alert tone="warn">{erreur}{erreur.includes('aucun compte') ? ' Ouvrez-lui un compte depuis sa fiche (adhésion et parts sociales requises).' : ''}</Alert>}
-          {insuffisant && c && <Alert tone="bad">Retrait supérieur au solde disponible ({xof(c.disponible)}).</Alert>}
+          <Tabs actif={onglet} onChange={(id) => setOnglet(id as 'depot' | 'retrait')} tabs={[{ id: 'depot', titre: 'Dépôt' }, { id: 'retrait', titre: 'Retrait' }]} />
+          <FormulaireOperation key={`${onglet}-${agenceId}`} op={onglet} jour={jour} produit={produit} onFait={tableau.reload} />
         </Card>
       )}
       <Charge q={tableau}>
@@ -98,7 +60,8 @@ export default function Epargne() {
               <Kpi label="Retraits" value={xof(d.total_retraits)} />
               <Kpi label="Opérations" value={d.lignes.length} />
             </div>
-            <Table rows={d.lignes} vide="Aucune opération ce jour" cols={[
+            <FiltreTableau valeur={filtre} onChange={setFiltre} />
+            <Table rows={filtrer(d.lignes, filtre, (l) => [l.client, l.client_numero, l.compte])} vide={filtre ? 'Aucune opération ne correspond au filtre' : 'Aucune opération ce jour'} cols={[
               { titre: 'N° client', render: (l) => l.client_numero },
               { titre: 'Client', render: (l) => <strong>{l.client}</strong> },
               { titre: 'Compte', render: (l) => <>{l.compte}<div className="muted">{l.produit}</div></> },
@@ -113,5 +76,53 @@ export default function Epargne() {
         )}
       </Charge>
     </Page>
+  )
+}
+
+/** Formulaire d'une opération : le dépôt et le retrait ont chacun leur formulaire (champs et contrôles propres). */
+function FormulaireOperation({ op, jour, produit, onFait }: { op: 'depot' | 'retrait'; jour: string; produit: string; onFait: () => void }) {
+  const depot = op === 'depot'
+  const [suffixe, setSuffixe] = useState('')
+  const [montant, setMontant] = useState('')
+  const [libelle, setLibelle] = useState('')
+  const refNumero = useRef<HTMLInputElement>(null)
+  const refMontant = useRef<HTMLInputElement>(null)
+  const { run, busy } = useAction()
+  const { data: trouve, erreur } = useRecherche<Trouve>('/api/comptes-epargne/recherche', estNumero(suffixe) && produit ? { suffixe, produit_id: produit, date: jour } : null)
+  useEffect(() => { if (trouve) refMontant.current?.focus() }, [trouve])
+
+  const c = trouve?.compte
+  const m = Number(montant)
+  const insuffisant = !depot && !!c && m > c.disponible
+  const pret = !!c && m > 0 && !insuffisant && !busy
+  const valider = () => void run(
+    () => api.post(`/api/comptes-epargne/${c!.id}/${op}`, { montant: m, date_operation: jour, libelle: libelle.trim() || null }),
+    depot ? 'Dépôt enregistré' : 'Retrait enregistré',
+    () => { setSuffixe(''); setMontant(''); setLibelle(''); onFait(); setTimeout(() => refNumero.current?.focus(), 0) },
+  )
+
+  return (
+    <>
+      <div className="row">
+        <ChampClient valeur={suffixe} onChange={setSuffixe} inputRef={refNumero} />
+        <Field label="Numéro de base du client"><Input readOnly value={trouve?.client.numero ?? ''} /></Field>
+        <Field label="Nom et prénom"><Input readOnly value={trouve?.client.nom ?? ''} /></Field>
+        <Field label="N° de compte"><Input readOnly value={c?.numero ?? ''} /></Field>
+      </div>
+      <div className="row">
+        <Field label="Solde"><Input readOnly value={c ? xof(c.solde) : ''} /></Field>
+        {!depot && <Field label="Disponible au retrait" hint={c ? `Solde minimum conservé : ${xof(c.solde_minimum)}, garanties bloquées déduites` : undefined}><Input readOnly value={c ? xof(c.disponible) : ''} /></Field>}
+        <Field label={depot ? 'Montant du dépôt (F)' : 'Montant du retrait (F)'}>
+          <Input ref={refMontant} type="number" min={1} value={montant} disabled={!c} aria-label="Montant à saisir"
+            onChange={(e) => setMontant(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pret) valider() }} />
+        </Field>
+        <Field label={depot ? 'Origine des fonds (facultatif)' : 'Motif du retrait (facultatif)'}>
+          <Input value={libelle} maxLength={120} disabled={!c} onChange={(e) => setLibelle(e.target.value)} />
+        </Field>
+        <Button variant="primary" disabled={!pret} onClick={valider}>{depot ? 'Valider le dépôt' : 'Valider le retrait'}</Button>
+      </div>
+      {erreur && <Alert tone="warn">{erreur}{erreur.includes('aucun compte') ? ' Ouvrez-lui un compte depuis la page Adhésion et parts (adhésion et parts sociales requises).' : ''}</Alert>}
+      {insuffisant && c && <Alert tone="bad">Retrait supérieur au solde disponible ({xof(c.disponible)}).</Alert>}
+    </>
   )
 }

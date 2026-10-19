@@ -28,7 +28,7 @@
 | Comptes d'épargne classiques : dépôt, retrait, solde minimum, garantie bloquée | A | Page de guichet « Épargne classique » (n° d'ordre du client, tableau du jour) ; pas de correction ni de validation de journée pour l'épargne |
 | Virements tontine ↔ épargne | A | |
 | Intérêts de l'épargne, frais de tenue de compte | E | Le taux existe, aucun calcul |
-| Dépôts à terme, épargne bloquée, comptes dormants | E | |
+| Dépôts à terme, épargne bloquée, comptes dormants | C | Dépôt de garantie (bloqué, rattachable à un crédit) et dépôt à terme (taux, échéance, déblocage, rupture anticipée avec pénalité) avec pages de saisie et de déblocage. Non couvert : renouvellement automatique, retenue fiscale, comptes dormants, écritures comptables spécifiques |
 | Cycles de tontine (types 1, 2, 3), livret de 31 lignes, changement de mise, clôture | A | Valeurs de calcul à faire valider par le client |
 | Collecte du jour, versement de fin de tournée, écarts des agents, surplus | A | |
 | Retraits de tontine avec écarts, exécution et régularisation | A | |

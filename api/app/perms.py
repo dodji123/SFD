@@ -27,6 +27,7 @@ PERMS: dict[str, set[str]] = {
     "epargne:read": {ADMIN, DIR, CHEF, CAIS, AGENT, COLL, COMPTA, AUD},
     "epargne:write": {ADMIN, CHEF, CAIS},
     "adhesion:write": {ADMIN, CHEF, CAIS},
+    "depot:debloquer": {ADMIN, CHEF},
     "collecte:read": {ADMIN, DIR, CHEF, CAIS, AGENT, COLL, AUD},
     "collecte:write": {ADMIN, CHEF, AGENT, COLL},
     "collecte:admin": {ADMIN, CHEF},

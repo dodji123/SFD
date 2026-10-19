@@ -141,13 +141,18 @@ class MouvementIn(BaseModel):
     libelle: str | None = None
 
 
+def controle_adhesion(cur, agence_id: int, compte_id: int) -> None:
+    """Quand l'adhésion est obligatoire, le compte doit avoir une adhésion en règle (parts sociales) pour toute opération."""
+    if one_row(cur, "SELECT param('adhesion_obligatoire', %s::smallint) AS v", (agence_id,))["v"] == "oui" and        not one_row(cur, "SELECT membre_en_regle(%s) AS b", (compte_id,))["b"]:
+        raise HTTPException(status_code=422, detail="Ce compte n'a pas d'adhésion en règle (parts sociales) : régulariser avant toute opération")
+
+
 def _mouvement(compte_id: int, type_: Literal["depot", "retrait"], body: MouvementIn, user: User):
     if body.date_operation is not None and body.date_operation > dt.date.today():
         raise HTTPException(status_code=422, detail="La date de l'opération ne peut pas être dans le futur")
     with tx(user.login) as cur:
         ag = verifier_agence(cur, user, "compte_epargne", compte_id)
-        if one_row(cur, "SELECT param('adhesion_obligatoire', %s::smallint) AS v", (ag,))["v"] == "oui" and            not one_row(cur, "SELECT membre_en_regle(%s) AS b", (compte_id,))["b"]:
-            raise HTTPException(status_code=422, detail="Ce compte n'a pas d'adhésion en règle (parts sociales) : régulariser avant toute opération")
+        controle_adhesion(cur, ag, compte_id)
         mv = one_row(
             cur,
             "INSERT INTO mouvement_epargne(compte_id, type, montant, date_operation, libelle) "

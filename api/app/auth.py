@@ -117,7 +117,7 @@ def agence_filter(user: User, agence_id: int | None = None) -> int | None:
 _TABLES_AGENCE = {
     "client", "zone", "agent", "collectrice", "compte_epargne", "cycle", "retrait", "credit", "demande_credit",
     "caisse", "employe", "virement", "ecart_retrait", "surplus", "versement_agent", "piece_comptable", "bulletin_paie",
-    "compte_banque",
+    "compte_banque", "depot_garantie", "depot_terme",
 }
 
 
