@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ..auth import User, agence_filter, agence_scope, require, verifier_agence
 from ..db import all_rows, one_row, tx
 from .collecte import trouver_client
+from .pieces import piece_adhesion, piece_mouvement
 
 router = APIRouter(prefix="/api/comptes-epargne", tags=["epargne"])
 
@@ -53,7 +54,9 @@ def ouvrir(body: CompteIn, user: User = Depends(require("epargne:write"))):
         else:
             nid = one_row(cur, "INSERT INTO compte_epargne(agence_id, client_id, produit_id, numero) VALUES (%s, %s, %s, %s) RETURNING id",
                           (ag, body.client_id, body.produit_id, body.numero))["id"]
-        return one_row(cur, SELECT_COMPTE + "WHERE ce.id = %s", (nid,))
+        compte = one_row(cur, SELECT_COMPTE + "WHERE ce.id = %s", (nid,))
+        compte["piece_id"] = piece_adhesion(cur, user, nid) if body.nb_parts is not None else None
+        return compte
 
 
 @router.get("/recherche")
@@ -160,7 +163,8 @@ def _mouvement(compte_id: int, type_: Literal["depot", "retrait"], body: Mouveme
             (compte_id, type_, body.montant, body.date_operation, body.libelle),
         )
         cpt = one_row(cur, "SELECT v.solde, solde_disponible(v.compte_id) AS disponible FROM v_solde_compte_epargne v WHERE v.compte_id = %s", (compte_id,))
-    return {"mouvement": mv, **cpt}
+        piece_id = piece_mouvement(cur, user, mv["id"])          # pièce justificative remise au client
+    return {"mouvement": mv, **cpt, "piece_id": piece_id}
 
 
 @router.post("/{compte_id}/depot", status_code=201)

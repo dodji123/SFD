@@ -7,7 +7,7 @@ OUT=mf_schema_complet.sql
 {
   echo "-- Schéma complet mf : généré par tools/build_schema_complet.sh (ne pas éditer : modifier les modules)."
   echo "-- Chargement : psql -v ON_ERROR_STOP=1 -f mf_schema_complet.sql   (PostgreSQL 14+, extension btree_gist)"
-  for f in 0[0-5]_*.sql 07_*.sql 08_*.sql 09_*.sql [12][0-9]_*.sql; do
+  for f in 0[0-5]_*.sql 07_*.sql 08_*.sql 09_*.sql [123][0-9]_*.sql; do
     [ -e "$f" ] || continue
     printf '\n-- =====================================================================\n-- MODULE %s\n-- =====================================================================\n' "$f"
     cat "$f"

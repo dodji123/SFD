@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { dateHeure, libellesRole } from '../lib/format'
 import { useSession } from '../lib/session'
+import InstitutionAdmin from './InstitutionAdmin'
 import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Modal, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Utilisateur { id: number; login: string; nom: string; role: string; agence_id: number | null; actif: boolean; derniere_connexion: string | null; verrouille_jusqua: string | null }
@@ -17,6 +18,7 @@ export default function Admin() {
     ...(can('users:manage') ? [{ id: 'utilisateurs', titre: 'Utilisateurs' }] : []),
     ...(can('params:read') ? [{ id: 'parametres', titre: 'Paramètres' }] : []),
     ...(can('ref:write') ? [{ id: 'referentiels', titre: 'Référentiels' }] : []),
+    ...(can('ref:read') ? [{ id: 'institution', titre: 'Institution et en-tête' }] : []),
     ...(can('audit:read') ? [{ id: 'audit', titre: "Piste d'audit" }] : []),
   ]
   const [onglet, setOnglet] = useState(onglets[0]?.id ?? '')
@@ -26,6 +28,7 @@ export default function Admin() {
       {onglet === 'utilisateurs' && <Utilisateurs />}
       {onglet === 'parametres' && <Parametres />}
       {onglet === 'referentiels' && <Referentiels />}
+      {onglet === 'institution' && <InstitutionAdmin />}
       {onglet === 'audit' && <AuditLog />}
     </Page>
   )

@@ -5,6 +5,7 @@ import { useProduitsEpargne } from '../lib/hooks'
 import { useRecherche } from '../lib/recherche'
 import { useSession } from '../lib/session'
 import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
+import { useAffichagePiece } from '../components/Piece'
 import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, useAction, useFetch } from '../components/ui'
 
 interface CompteMembre {
@@ -27,6 +28,7 @@ export default function Adhesion() {
   const tableau = useFetch(() => api.get<Jour>('/api/adhesions/jour', { date: jour }), [jour, agenceId])
   const { data: s, erreur, recharger } = useRecherche<Situation>('/api/adhesions/recherche', estNumero(suffixe) ? { suffixe } : null)
   const apres = () => { recharger(); tableau.reload() }
+  const pieceCompte = useAffichagePiece()
 
   return (
     <Page title="Adhésion et parts sociales" subtitle="Chaque compte d'épargne a sa propre adhésion et sa souscription de parts : un client qui ouvre un second compte adhère à nouveau pour ce compte">
@@ -48,7 +50,7 @@ export default function Adhesion() {
                 <Kpi label="Comptes du client" value={s.comptes.length} />
               </div>
               {s.comptes.map((c) => <CompteCarte key={c.id} c={c} s={s} jour={jour} onFait={apres} peutSortir={can('collecte:admin')} />)}
-              <NouveauCompte s={s} onFait={() => { setSuffixe(''); tableau.reload(); setTimeout(() => refNumero.current?.focus(), 0) }} />
+              <NouveauCompte s={s} onPiece={pieceCompte.ouvrir} onFait={() => { setSuffixe(''); tableau.reload(); setTimeout(() => refNumero.current?.focus(), 0) }} />
             </>
           )}
         </Card>
@@ -72,12 +74,14 @@ export default function Adhesion() {
           </Card>
         )}
       </Charge>
+      {pieceCompte.modal}
     </Page>
   )
 }
 
 function CompteCarte({ c, s, jour, onFait, peutSortir }: { c: CompteMembre; s: Situation; jour: string; onFait: () => void; peutSortir: boolean }) {
   const { run, busy } = useAction()
+  const piece = useAffichagePiece()
   const [nb, setNb] = useState(String(Math.max(s.parts_minimum - (c.nb_parts ?? 0), 1)))
   const n = Number(nb)
   const radiee = c.adhesion_statut === 'radiee'
@@ -94,7 +98,7 @@ function CompteCarte({ c, s, jour, onFait, peutSortir }: { c: CompteMembre; s: S
       {!c.adhesion_numero && c.statut !== 'clos' && (
         <div className="row">
           <Alert tone="info">Ce compte n'a pas d'adhésion. Droit d'adhésion à encaisser : {xof(s.droit_adhesion)}.</Alert>
-          <Button variant="primary" disabled={busy} onClick={() => void run(() => api.post('/api/adhesions', { compte_id: c.id, date: jour }), 'Adhésion enregistrée', onFait)}>Enregistrer l'adhésion</Button>
+          <Button variant="primary" disabled={busy} onClick={() => void run(async () => { const r = await api.post<{ piece_id: number | null }>('/api/adhesions', { compte_id: c.id, date: jour }); piece.ouvrir(r.piece_id) }, 'Adhésion enregistrée', onFait)}>Enregistrer l'adhésion</Button>
         </div>
       )}
       {c.adhesion_numero && !radiee && (
@@ -102,16 +106,17 @@ function CompteCarte({ c, s, jour, onFait, peutSortir }: { c: CompteMembre; s: S
           <Field label="Parts à souscrire" hint={`Montant : ${xof(n > 0 ? n * s.valeur_part : 0)}`}>
             <Input type="number" min={1} value={nb} aria-label={`Nombre de parts ${c.numero}`} onChange={(e) => setNb(e.target.value)} />
           </Field>
-          <Button variant="primary" disabled={busy || !(n > 0)} onClick={() => void run(() => api.post('/api/adhesions/parts', { compte_id: c.id, nb_parts: n, date: jour }), 'Parts souscrites', onFait)}>Valider la souscription</Button>
+          <Button variant="primary" disabled={busy || !(n > 0)} onClick={() => void run(async () => { const r = await api.post<{ piece_id: number | null }>('/api/adhesions/parts', { compte_id: c.id, nb_parts: n, date: jour }); piece.ouvrir(r.piece_id) }, 'Parts souscrites', onFait)}>Valider la souscription</Button>
           {peutSortir && <Button variant="danger" disabled={busy}
             onClick={() => { if (window.confirm(`Sortie du compte ${c.numero} : ${xof(c.capital_souscrit ?? 0)} de parts seront remboursés, l'adhésion radiée et le compte clos. Continuer ?`)) void run(() => api.post('/api/adhesions/sortie', { compte_id: c.id, date: jour }), 'Parts remboursées, compte clos', onFait) }}>Sortie du compte</Button>}
         </div>
       )}
+      {piece.modal}
     </div>
   )
 }
 
-function NouveauCompte({ s, onFait }: { s: Situation; onFait: () => void }) {
+function NouveauCompte({ s, onFait, onPiece }: { s: Situation; onFait: () => void; onPiece: (id: number | null) => void }) {
   const produits = useProduitsEpargne('classique')
   const { run, busy } = useAction()
   const [produit, setProduit] = useState('')
@@ -131,7 +136,7 @@ function NouveauCompte({ s, onFait }: { s: Situation; onFait: () => void }) {
           <Input type="number" min={s.parts_minimum} value={nb} aria-label="Parts du nouveau compte" onChange={(e) => setNb(e.target.value)} />
         </Field>
         <Button variant="primary" disabled={busy || !produit || n < s.parts_minimum}
-          onClick={() => void run(() => api.post('/api/comptes-epargne', { client_id: s.client.id, produit_id: Number(produit), nb_parts: n }), "Compte ouvert avec son adhésion", onFait)}>Ouvrir le compte</Button>
+          onClick={() => void run(async () => { const r = await api.post<{ piece_id: number | null }>('/api/comptes-epargne', { client_id: s.client.id, produit_id: Number(produit), nb_parts: n }); onPiece(r.piece_id) }, "Compte ouvert avec son adhésion", onFait)}>Ouvrir le compte</Button>
       </div>
     </div>
   )

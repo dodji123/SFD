@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { aujourdhui, date as fdate, xof } from '../lib/format'
 import { useSession } from '../lib/session'
+import { FiltreTableau, filtrer } from '../components/ChampClient'
+import { useAffichagePiece } from '../components/Piece'
 import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Modal, Page, Select, Statut, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Ecart { id: number; sens: string; montant: number; statut: string; montant_livret: number; montant_machine: number; details: { date_ecart: string; montant: number; agent_id: number; surplus_utilise: number; perte: number }[] | null }
@@ -17,7 +19,11 @@ const NATURES: Record<string, string> = { retrait_client: 'Retrait client', vire
 const A_TRAITER = ['demande', 'ecart_en_traitement', 'fonds_disponibles']
 
 export default function Retraits() {
-  const { agenceId } = useSession()
+  const { agenceId, can } = useSession()
+  const [filtreNom, setFiltreNom] = useState('')
+  const [selection, setSelection] = useState<number[]>([])
+  const piece = useAffichagePiece()
+  const { run: runPiece, busy: busyPiece } = useAction()
   const [onglet, setOnglet] = useState('a_traiter')
   const q = useFetch(() => api.get<Retrait[]>('/api/retraits', { limit: 300 }), [agenceId])
   const [detail, setDetail] = useState<Retrait | null>(null)
@@ -25,13 +31,21 @@ export default function Retraits() {
   const fin = () => { setAction(null); setDetail(null); q.reload() }
   return (
     <Page title="Retraits et écarts" subtitle="Constat, traitement des écarts livret / machine, puis exécution">
-      <Tabs actif={onglet} onChange={setOnglet} tabs={[{ id: 'a_traiter', titre: 'À traiter' }, { id: 'executes', titre: 'Exécutés' }]} />
-      <Card flush>
+      <Tabs actif={onglet} onChange={(id) => { setOnglet(id); setSelection([]) }} tabs={[{ id: 'a_traiter', titre: 'À traiter' }, { id: 'executes', titre: 'Exécutés' }]} />
+      <Card flush actions={onglet === 'executes' && can('retrait:execute') && (
+        <Button small variant="primary" disabled={busyPiece || selection.length === 0}
+          onClick={() => void runPiece(async () => { const r = await api.post<{ id: number }>('/api/pieces/retraits-tontine', { retrait_ids: selection }); piece.ouvrir(r.id); setSelection([]) }, 'Pièce de retrait générée')}>
+          Pièce de retrait ({selection.length} cycle{selection.length > 1 ? 's' : ''})</Button>
+      )}>
+        <FiltreTableau valeur={filtreNom} onChange={setFiltreNom} />
         <Charge q={q}>
           {(rows) => {
-            const filtre = rows.filter((r) => r.nature !== 'regularisation' && (onglet === 'a_traiter' ? A_TRAITER.includes(r.statut) : r.statut === 'execute'))
+            const filtre = filtrer(rows.filter((r) => r.nature !== 'regularisation' && (onglet === 'a_traiter' ? A_TRAITER.includes(r.statut) : r.statut === 'execute')), filtreNom, (r) => [r.client, r.cycle])
             return (
               <Table rows={filtre} onRowClick={(r) => api.get<Retrait>(`/api/retraits/${r.id}`).then(setDetail)} vide={onglet === 'a_traiter' ? 'Aucun retrait en attente' : 'Aucun retrait exécuté'} cols={[
+                ...(onglet === 'executes' && can('retrait:execute') ? [{ titre: '', render: (r: Retrait) => (['retrait_client', 'virement_vers_epargne'].includes(r.nature)
+                  ? <input type="checkbox" aria-label={`Retenir ${r.client} ${r.cycle}`} checked={selection.includes(r.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => setSelection(e.target.checked ? [...selection, r.id] : selection.filter((x) => x !== r.id))} />
+                  : null) }] : []),
                 { titre: 'Client', render: (r) => <><strong>{r.client}</strong><div className="muted">{r.cycle}</div></> },
                 { titre: 'Nature', render: (r) => NATURES[r.nature] ?? r.nature },
                 { titre: 'Net machine', num: true, render: (r) => xof(r.montant) },
@@ -45,6 +59,7 @@ export default function Retraits() {
           }}
         </Charge>
       </Card>
+      {piece.modal}
       {detail && !action && <Detail r={detail} onClose={() => setDetail(null)} />}
       {action?.type === 'ecart' && <DeclarerEcart r={action.r} onClose={() => setAction(null)} onFait={fin} />}
       {action?.type === 'executer' && <Executer r={action.r} onClose={() => setAction(null)} onFait={fin} />}

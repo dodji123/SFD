@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { date as fdate, xof } from '../lib/format'
 import { useSession } from '../lib/session'
 import { FiltreTableau, filtrer } from '../components/ChampClient'
+import { useAffichagePiece } from '../components/Piece'
 import { Alert, Badge, Button, Card, Charge, Kpi, Page, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Garantie { id: number; numero: string; client_numero: string; client: string; compte: string; montant: number; motif: string | null; credit: string | null; credit_statut: string | null; date_depot: string }
@@ -17,7 +18,9 @@ export default function Deblocages() {
   const [onglet, setOnglet] = useState<'garanties' | 'termes' | 'credits'>('garanties')
   const [filtre, setFiltre] = useState('')
   const { run, busy } = useAction()
+  const piece = useAffichagePiece()
   const peut = can('depot:debloquer')
+  const poster = (url: string) => async () => { const r = await api.post<{ piece_id: number | null }>(url, {}); piece.ouvrir(r.piece_id) }
 
   return (
     <Page title="Déblocages" subtitle="Libération des dépôts de garantie, versement des dépôts à terme (échéance ou rupture anticipée) et crédits approuvés en attente">
@@ -44,7 +47,7 @@ export default function Deblocages() {
                   { titre: 'Montant', num: true, render: (g) => xof(g.montant) },
                   { titre: '', render: (g) => peut
                     ? <Button small variant="primary" disabled={busy || (g.credit !== null && g.credit_statut !== 'solde')}
-                        onClick={() => { if (window.confirm(`Libérer le dépôt de garantie de ${xof(g.montant)} de ${g.client} ? La somme redevient disponible sur le compte ${g.compte}.`)) void run(() => api.post(`/api/depots/garanties/${g.id}/liberer`, {}), 'Dépôt de garantie libéré', q.reload) }}>Débloquer</Button>
+                        onClick={() => { if (window.confirm(`Libérer le dépôt de garantie de ${xof(g.montant)} de ${g.client} ? La somme redevient disponible sur le compte ${g.compte}.`)) void run(poster(`/api/depots/garanties/${g.id}/liberer`), 'Dépôt de garantie libéré', q.reload) }}>Débloquer</Button>
                     : null },
                 ]} />
               )}
@@ -58,9 +61,9 @@ export default function Deblocages() {
                   { titre: 'Intérêts prévus', num: true, render: (t) => xof(t.interets_prevus) },
                   { titre: '', render: (t) => !peut ? null : t.echu
                     ? <Button small variant="primary" disabled={busy}
-                        onClick={() => { if (window.confirm(`Débloquer ${t.numero} : ${xof(t.montant)} de capital et ${xof(t.interets_prevus)} d'intérêts seront versés sur le compte ${t.compte}.`)) void run(() => api.post(`/api/depots/terme/${t.id}/debloquer`, {}), 'Dépôt à terme débloqué', q.reload) }}>Débloquer</Button>
+                        onClick={() => { if (window.confirm(`Débloquer ${t.numero} : ${xof(t.montant)} de capital et ${xof(t.interets_prevus)} d'intérêts seront versés sur le compte ${t.compte}.`)) void run(poster(`/api/depots/terme/${t.id}/debloquer`), 'Dépôt à terme débloqué', q.reload) }}>Débloquer</Button>
                     : <Button small variant="danger" disabled={busy}
-                        onClick={() => { if (window.confirm(`Rupture anticipée de ${t.numero} avant le ${fdate(t.date_echeance)} : le capital de ${xof(t.montant)} est rendu, les intérêts courus sont diminués de la pénalité. Continuer ?`)) void run(() => api.post(`/api/depots/terme/${t.id}/rompre`, {}), 'Rupture anticipée enregistrée', q.reload) }}>Rupture anticipée</Button> },
+                        onClick={() => { if (window.confirm(`Rupture anticipée de ${t.numero} avant le ${fdate(t.date_echeance)} : le capital de ${xof(t.montant)} est rendu, les intérêts courus sont diminués de la pénalité. Continuer ?`)) void run(poster(`/api/depots/terme/${t.id}/rompre`), 'Rupture anticipée enregistrée', q.reload) }}>Rupture anticipée</Button> },
                 ]} />
               )}
               {onglet === 'credits' && (
@@ -78,6 +81,7 @@ export default function Deblocages() {
           </>
         )}
       </Charge>
+      {piece.modal}
     </Page>
   )
 }

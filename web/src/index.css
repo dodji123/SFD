@@ -185,6 +185,11 @@ table.t th.num, table.t td.num { text-align: right; }
   .content { padding: 0; max-width: none; }
   .card { box-shadow: none; break-inside: avoid; }
 }
+@media print {
+  body:has(.piece-doc) * { visibility: hidden !important; }
+  body:has(.piece-doc) .piece-doc, body:has(.piece-doc) .piece-doc * { visibility: visible !important; }
+  body:has(.piece-doc) .piece-doc { position: fixed; left: 0; top: 0; width: 100%; border: none !important; }
+}
 
 /* ---- adaptation mobile ---- */
 @media (max-width: 900px) {

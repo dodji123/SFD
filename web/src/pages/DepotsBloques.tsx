@@ -5,6 +5,7 @@ import { useProduitsEpargne } from '../lib/hooks'
 import { useRecherche } from '../lib/recherche'
 import { useSession } from '../lib/session'
 import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
+import { useAffichagePiece } from '../components/Piece'
 import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Trouve {
@@ -81,6 +82,7 @@ function FormGarantie({ jour, produit }: { jour: string; produit: string }) {
   const refNumero = useRef<HTMLInputElement>(null)
   const refMontant = useRef<HTMLInputElement>(null)
   const { run, busy } = useAction()
+  const piece = useAffichagePiece()
   const { data: trouve, erreur } = useRecherche<Trouve>('/api/comptes-epargne/recherche', estNumero(suffixe) && produit ? { suffixe, produit_id: produit, date: jour } : null)
   const credits = useFetch(() => (trouve ? api.get<CreditLigne[]>('/api/credits', { client_id: trouve.client.id }) : Promise.resolve([] as CreditLigne[])), [trouve?.client.id])
   useEffect(() => { if (trouve) refMontant.current?.focus() }, [trouve])
@@ -102,9 +104,10 @@ function FormGarantie({ jour, produit }: { jour: string; produit: string }) {
         </Field>
         <Field label="Motif (facultatif)"><Input value={motif} maxLength={200} disabled={!trouve} onChange={(e) => setMotif(e.target.value)} /></Field>
         <Button variant="primary" disabled={!pret}
-          onClick={() => void run(() => api.post('/api/depots/garanties', { compte_id: trouve!.compte.id, montant: m, motif: motif.trim() || null, credit_id: credit ? Number(credit) : null, date: jour }),
+          onClick={() => void run(async () => { const r = await api.post<{ piece_id: number | null }>('/api/depots/garanties', { compte_id: trouve!.compte.id, montant: m, motif: motif.trim() || null, credit_id: credit ? Number(credit) : null, date: jour }); piece.ouvrir(r.piece_id) },
             'Dépôt de garantie enregistré et bloqué', () => { setSuffixe(''); setMontant(''); setMotif(''); setCredit(''); window.dispatchEvent(new Event('depots-maj')); setTimeout(() => refNumero.current?.focus(), 0) })}>Valider le dépôt</Button>
       </div>
+      {piece.modal}
     </>
   )
 }
@@ -117,6 +120,7 @@ function FormTerme({ jour, produit }: { jour: string; produit: string }) {
   const refNumero = useRef<HTMLInputElement>(null)
   const refMontant = useRef<HTMLInputElement>(null)
   const { run, busy } = useAction()
+  const piece = useAffichagePiece()
   const params = useFetch(() => api.get<Parametres>('/api/depots/parametres'), [])
   const { data: trouve, erreur } = useRecherche<Trouve>('/api/comptes-epargne/recherche', estNumero(suffixe) && produit ? { suffixe, produit_id: produit, date: jour } : null)
   useEffect(() => { if (trouve) refMontant.current?.focus() }, [trouve])
@@ -148,12 +152,13 @@ function FormTerme({ jour, produit }: { jour: string; produit: string }) {
         <Field label="Échéance"><Input readOnly value={d > 0 ? fdate(ajouterMois(jour, d)) : ''} /></Field>
         <Field label="Intérêts à l'échéance"><Input readOnly value={interets ? xof(interets) : ''} /></Field>
         <Button variant="primary" disabled={!pret}
-          onClick={() => void run(() => api.post('/api/depots/terme', { compte_id: c!.id, montant: m, duree_mois: d, taux_annuel: taux === '' ? null : t / 100, date: jour }),
+          onClick={() => void run(async () => { const r = await api.post<{ piece_id: number | null }>('/api/depots/terme', { compte_id: c!.id, montant: m, duree_mois: d, taux_annuel: taux === '' ? null : t / 100, date: jour }); piece.ouvrir(r.piece_id) },
             'Dépôt à terme enregistré', () => { setSuffixe(''); setMontant(''); setDuree(''); setTaux(''); window.dispatchEvent(new Event('depots-maj')); setTimeout(() => refNumero.current?.focus(), 0) })}>Valider le placement</Button>
       </div>
       {horsMin && p && <Alert tone="bad">Montant inférieur au minimum d'un dépôt à terme ({xof(p.montant_min)}).</Alert>}
       {courte && p && <Alert tone="bad">Durée inférieure au minimum ({p.duree_min_mois} mois).</Alert>}
       {trop && c && <Alert tone="bad">Montant supérieur au disponible du compte ({xof(c.disponible)}).</Alert>}
+      {piece.modal}
     </>
   )
 }

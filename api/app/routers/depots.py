@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ..auth import User, agence_scope, require, verifier_agence
 from ..db import all_rows, one_row, tx
 from .epargne import controle_adhesion
+from .pieces import piece_garantie, piece_terme
 
 router = APIRouter(prefix="/api/depots", tags=["depots"])
 
@@ -47,7 +48,7 @@ def deposer_garantie(body: GarantieIn, user: User = Depends(require("epargne:wri
         controle_adhesion(cur, ag, body.compte_id)
         did = one_row(cur, "SELECT deposer_garantie(%s, %s, COALESCE(%s, current_date), %s, %s, %s) AS id",
                       (body.compte_id, body.montant, body.date, body.motif, body.credit_id, user.id))["id"]
-        return one_row(cur, GARANTIE + "WHERE d.id = %s", (did,))
+        return {**one_row(cur, GARANTIE + "WHERE d.id = %s", (did,)), "piece_id": piece_garantie(cur, user, did)}
 
 
 @router.get("/garanties")
@@ -68,7 +69,7 @@ def liberer_garantie(depot_id: int, body: LiberationIn, user: User = Depends(req
     with tx(user.login) as cur:
         verifier_agence(cur, user, "depot_garantie", depot_id)
         cur.execute("SELECT liberer_depot_garantie(%s, COALESCE(%s, current_date), %s)", (depot_id, body.date, user.id))
-        return one_row(cur, GARANTIE + "WHERE d.id = %s", (depot_id,))
+        return {**one_row(cur, GARANTIE + "WHERE d.id = %s", (depot_id,)), "piece_id": piece_garantie(cur, user, depot_id, True)}
 
 
 # ---------------------------------------------------------------- dépôt à terme
@@ -95,7 +96,7 @@ def placer_terme(body: TermeIn, user: User = Depends(require("epargne:write"))):
         controle_adhesion(cur, ag, body.compte_id)
         did = one_row(cur, "SELECT placer_depot_terme(%s, %s, %s, COALESCE(%s, current_date), %s, %s) AS id",
                       (body.compte_id, body.montant, body.duree_mois, body.date, body.taux_annuel, user.id))["id"]
-        return one_row(cur, TERME + "WHERE d.id = %s", (did,))
+        return {**one_row(cur, TERME + "WHERE d.id = %s", (did,)), "piece_id": piece_terme(cur, user, did)}
 
 
 @router.get("/terme")
@@ -113,7 +114,7 @@ def debloquer_terme(depot_id: int, body: LiberationIn, user: User = Depends(requ
     with tx(user.login) as cur:
         verifier_agence(cur, user, "depot_terme", depot_id)
         cur.execute("SELECT debloquer_depot_terme(%s, COALESCE(%s, current_date), %s)", (depot_id, body.date, user.id))
-        return one_row(cur, TERME + "WHERE d.id = %s", (depot_id,))
+        return {**one_row(cur, TERME + "WHERE d.id = %s", (depot_id,)), "piece_id": piece_terme(cur, user, depot_id, True)}
 
 
 @router.post("/terme/{depot_id}/rompre")
@@ -122,7 +123,7 @@ def rompre_terme(depot_id: int, body: LiberationIn, user: User = Depends(require
     with tx(user.login) as cur:
         verifier_agence(cur, user, "depot_terme", depot_id)
         cur.execute("SELECT rompre_depot_terme(%s, COALESCE(%s, current_date), %s)", (depot_id, body.date, user.id))
-        return one_row(cur, TERME + "WHERE d.id = %s", (depot_id,))
+        return {**one_row(cur, TERME + "WHERE d.id = %s", (depot_id,)), "piece_id": piece_terme(cur, user, depot_id, True)}
 
 
 @router.get("/deblocages")

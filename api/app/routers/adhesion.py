@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from ..auth import User, agence_scope, require, verifier_agence
 from ..db import all_rows, one_row, tx
 from .collecte import SITUATION, trouver_client
+from .pieces import piece_adhesion
 from .epargne import SELECT_COMPTE
 
 router = APIRouter(prefix="/api", tags=["adhesion"])
@@ -57,7 +58,7 @@ def adherer(body: AdhererIn, user: User = Depends(require("adhesion:write"))):
     with tx(user.login) as cur:
         verifier_agence(cur, user, "compte_epargne", body.compte_id)
         cur.execute("SELECT adherer_compte(%s, COALESCE(%s, current_date), %s)", (body.compte_id, body.date, user.id))
-        return _situation_compte(cur, body.compte_id)
+        return {**_situation_compte(cur, body.compte_id), "piece_id": piece_adhesion(cur, user, body.compte_id)}
 
 
 class PartsIn(BaseModel):
@@ -71,7 +72,7 @@ def souscrire(body: PartsIn, user: User = Depends(require("adhesion:write"))):
     with tx(user.login) as cur:
         verifier_agence(cur, user, "compte_epargne", body.compte_id)
         cur.execute("SELECT souscrire_parts_compte(%s, %s, COALESCE(%s, current_date), %s)", (body.compte_id, body.nb_parts, body.date, user.id))
-        return _situation_compte(cur, body.compte_id)
+        return {**_situation_compte(cur, body.compte_id), "piece_id": piece_adhesion(cur, user, body.compte_id)}
 
 
 class SortieIn(BaseModel):

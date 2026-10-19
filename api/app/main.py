@@ -15,6 +15,8 @@ from .routers import collecte as r_collecte
 from .routers import compta as r_compta
 from .routers import credits as r_credits
 from .routers import depots as r_depots
+from .routers import institution as r_institution
+from .routers import pieces as r_pieces
 from .routers import epargne as r_epargne
 from .routers import rapports as r_rapports
 from .routers import espace as r_espace
@@ -30,7 +32,7 @@ from .routers import transferts as r_transferts
 from .routers import tresorerie as r_tresorerie
 from .routers import utilisateurs as r_utilisateurs
 
-ROUTERS = [r_auth.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_adhesion.router, r_depots.router,
+ROUTERS = [r_auth.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_adhesion.router, r_depots.router, r_pieces.router, r_institution.router,
            r_caisse.router, r_retraits.router, r_credits.router, r_rapports.router, r_compta.router, r_admin.router, r_rh.router, r_tresorerie.router, r_transferts.router, r_etats.router, r_kyc.router, r_espace.router, r_espace.admin_router, r_reglementaire.router, r_provisions.router, r_rapprochement.router]
 
 

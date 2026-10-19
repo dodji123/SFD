@@ -24,7 +24,7 @@ SCHEMA_DIR = pathlib.Path(__file__).resolve().parents[2] / "schema"
 
 def modules() -> list[pathlib.Path]:
     out: list[pathlib.Path] = []
-    for pat in ("0[0-5]_*.sql", "07_*.sql", "08_*.sql", "09_*.sql", "[12][0-9]_*.sql"):
+    for pat in ("0[0-5]_*.sql", "07_*.sql", "08_*.sql", "09_*.sql", "[123][0-9]_*.sql"):
         out += [pathlib.Path(p) for p in sorted(glob.glob(str(SCHEMA_DIR / pat)))]
     return out
 

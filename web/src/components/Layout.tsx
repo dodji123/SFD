@@ -17,6 +17,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/liaison', titre: 'Tontine ↔ épargne', perm: 'epargne:read' },
     { to: '/depots', titre: 'Dépôts garantie et terme', perm: 'epargne:read' },
     { to: '/deblocages', titre: 'Déblocages', perm: 'epargne:read' },
+    { to: '/pieces', titre: 'Pièces justificatives', perm: 'epargne:read' },
   ] },
   { titre: 'Crédit et caisse', items: [
     { to: '/credits', titre: 'Crédits', perm: 'credit:read' },

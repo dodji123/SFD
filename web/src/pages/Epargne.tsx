@@ -5,6 +5,7 @@ import { useProduitsEpargne } from '../lib/hooks'
 import { useRecherche } from '../lib/recherche'
 import { useSession } from '../lib/session'
 import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
+import { useAffichagePiece } from '../components/Piece'
 import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Trouve {
@@ -88,6 +89,7 @@ function FormulaireOperation({ op, jour, produit, onFait }: { op: 'depot' | 'ret
   const refNumero = useRef<HTMLInputElement>(null)
   const refMontant = useRef<HTMLInputElement>(null)
   const { run, busy } = useAction()
+  const piece = useAffichagePiece()
   const { data: trouve, erreur } = useRecherche<Trouve>('/api/comptes-epargne/recherche', estNumero(suffixe) && produit ? { suffixe, produit_id: produit, date: jour } : null)
   useEffect(() => { if (trouve) refMontant.current?.focus() }, [trouve])
 
@@ -96,7 +98,7 @@ function FormulaireOperation({ op, jour, produit, onFait }: { op: 'depot' | 'ret
   const insuffisant = !depot && !!c && m > c.disponible
   const pret = !!c && m > 0 && !insuffisant && !busy
   const valider = () => void run(
-    () => api.post(`/api/comptes-epargne/${c!.id}/${op}`, { montant: m, date_operation: jour, libelle: libelle.trim() || null }),
+    async () => { const r = await api.post<{ piece_id: number | null }>(`/api/comptes-epargne/${c!.id}/${op}`, { montant: m, date_operation: jour, libelle: libelle.trim() || null }); piece.ouvrir(r.piece_id) },
     depot ? 'Dépôt enregistré' : 'Retrait enregistré',
     () => { setSuffixe(''); setMontant(''); setLibelle(''); onFait(); setTimeout(() => refNumero.current?.focus(), 0) },
   )
@@ -123,6 +125,7 @@ function FormulaireOperation({ op, jour, produit, onFait }: { op: 'depot' | 'ret
       </div>
       {erreur && <Alert tone="warn">{erreur}{erreur.includes('aucun compte') ? ' Ouvrez-lui un compte depuis la page Adhésion et parts (adhésion et parts sociales requises).' : ''}</Alert>}
       {insuffisant && c && <Alert tone="bad">Retrait supérieur au solde disponible ({xof(c.disponible)}).</Alert>}
+      {piece.modal}
     </>
   )
 }
