@@ -37,6 +37,8 @@ PostgreSQL 16 (testé), extension `btree_gist`. **296 assertions automatiques pa
 | `28_depots_garantie_terme.sql` | dépôt de garantie (encaissé et bloqué, rattachable à un crédit, libéré par déblocage), dépôt à terme (taux, durée, échéance, intérêts, déblocage ou rupture anticipée avec pénalité) ; le solde disponible déduit les dépôts de garantie bloqués |
 | `29_pieces_justificatives.sql` | pièces justificatives numérotées et immuables des opérations de guichet (une par opération, sauf le dépôt de tontine) ; les retraits de plusieurs cycles de tontine d'un client se compilent sur une seule pièce |
 | `30_institution_entete.sql` | fiche unique de l'institution (raison sociale, agrément, adresse, contacts, logo, pied de page) et coordonnées de chaque agence : en-tête des pièces justificatives |
+| `31_analyse_capacite.sql` | analyse de capacité de remboursement d'une demande de crédit : revenus, charges, dettes en cours, taux d'endettement, couverture de l'échéance, mise journalière, montant conseillé ; seuils `endettement_max_pct` et `couverture_min` ; gelée après la décision (indicative, ne bloque pas) |
+| `32_analyse_capacite_politique.sql` | politique de crédit paramétrable (pondérations et seuils du score, plafonds par cycle, garanties minimales) et colonnes de l'analyse : cycle, caution, historique, garanties avec décote, ventes mois par mois, scénarios, groupe solidaire, score et avis |
 | `mf_schema_complet.sql` | concaténation de tout, générée par `tools/build_schema_complet.sh` |
 
 À la racine de `SFD`, le fichier `mf_schema_complet.sql` est une copie de `tests_virement_credit.sql` (même taille, même contenu) : **le vrai schéma est `schema/mf_schema_complet.sql`**.

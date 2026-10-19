@@ -8902,3 +8902,102 @@ ALTER TABLE agence ADD COLUMN adresse text;
 ALTER TABLE agence ADD COLUMN ville text;
 ALTER TABLE agence ADD COLUMN telephone varchar(40);
 ALTER TABLE agence ADD COLUMN email text;
+
+-- =====================================================================
+-- MODULE 31_analyse_capacite.sql
+-- =====================================================================
+-- =====================================================================
+-- 31_analyse_capacite.sql
+-- Analyse de capacité de remboursement d'une demande de crédit : revenus, charges (activité, ménage, dettes en cours),
+-- nouvelle échéance, taux d'endettement, couverture de l'échéance, mise journalière, montant maximal conseillé.
+--   Le calcul se fait dans l'API (fonctions testées) ; cette table conserve les saisies et le résultat au moment de l'analyse,
+--   pour que la décision s'appuie sur ce qui a été vu. Une analyse par demande, modifiable tant que la demande est « demandée ».
+--   L'analyse est indicative : elle n'empêche pas une approbation (règles du brief, section 3, inchangées).
+-- Paramètres : endettement_max_pct (part maximale des revenus consacrée aux remboursements), couverture_min (revenu disponible
+--   divisé par l'échéance mensuelle).
+-- Dépend de : 00, 08, 10 (audit).
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(agence_id, cle, valeur, description) VALUES
+  (NULL, 'endettement_max_pct', '33', 'taux d''endettement maximal (% des revenus) : (échéance du nouveau crédit + dettes en cours) / revenus'),
+  (NULL, 'couverture_min', '1.5', 'couverture minimale de l''échéance : revenu disponible / échéance mensuelle')
+ON CONFLICT DO NOTHING;
+
+CREATE TABLE analyse_capacite (
+  id               serial PRIMARY KEY,
+  agence_id        smallint NOT NULL REFERENCES agence(id),
+  demande_id       integer NOT NULL UNIQUE REFERENCES demande_credit(id),
+  client_id        integer NOT NULL REFERENCES client(id),
+  secteur          varchar(20),
+  anciennete_mois  integer NOT NULL DEFAULT 0 CHECK (anciennete_mois >= 0),
+  jours_activite   smallint NOT NULL DEFAULT 26 CHECK (jours_activite BETWEEN 1 AND 31),
+  ventes_mensuelles numeric(14,0) NOT NULL DEFAULT 0 CHECK (ventes_mensuelles >= 0),
+  achats_mensuels  numeric(14,0) NOT NULL DEFAULT 0 CHECK (achats_mensuels >= 0),
+  autres_revenus   numeric(14,0) NOT NULL DEFAULT 0 CHECK (autres_revenus >= 0),
+  charges          jsonb NOT NULL DEFAULT '[]'::jsonb,       -- [{libelle, categorie (activite|menage|dette), montant, periode}]
+  resultat         jsonb NOT NULL,                            -- calcul figé : revenus, charges, échéance, taux d'endettement, couverture...
+  taux_endettement numeric(8,4),                              -- fraction (0.257 = 25,7 %), NULL si revenus nuls
+  couverture       numeric(10,3),
+  conforme         boolean NOT NULL,                          -- respecte endettement maximal et couverture minimale
+  utilisateur_id   integer REFERENCES utilisateur(id),
+  cree_le          timestamptz NOT NULL DEFAULT now(),
+  modifie_le       timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX analyse_capacite_client ON analyse_capacite (client_id);
+CREATE TRIGGER audit_analyse_capacite AFTER INSERT OR UPDATE OR DELETE ON analyse_capacite FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- Une analyse ne se modifie plus une fois la demande décidée
+CREATE FUNCTION trg_analyse_capacite_gel() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_statut text;
+BEGIN
+  SELECT statut INTO v_statut FROM mf.demande_credit WHERE id = COALESCE(NEW.demande_id, OLD.demande_id);
+  IF v_statut IS DISTINCT FROM 'demandee' THEN
+    RAISE EXCEPTION 'la demande est déjà décidée (%) : l''analyse de capacité ne se modifie plus', v_statut;
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END $$;
+CREATE TRIGGER analyse_capacite_gel BEFORE INSERT OR UPDATE OR DELETE ON analyse_capacite FOR EACH ROW EXECUTE FUNCTION trg_analyse_capacite_gel();
+
+-- =====================================================================
+-- MODULE 32_analyse_capacite_politique.sql
+-- =====================================================================
+-- =====================================================================
+-- 32_analyse_capacite_politique.sql
+-- Compléments de l'analyse de capacité (module 31) : politique de crédit paramétrable et données du dossier.
+--   Paramètres (surchargeables par agence) : couverture minimale par les garanties, poids des cinq critères du score
+--   (capacité, endettement, garanties et caution, ancienneté, historique), seuils de l'avis (favorable, sous conditions, risqué)
+--   et plafonds de crédit par cycle (0 = sans plafond). Les valeurs de départ sont des repères, à remplacer par celles de l'institution.
+--   Colonnes de l'analyse : cycle, caution, historique, garanties avec décote, ventes mois par mois (activité saisonnière),
+--   scénarios comparés, membres d'un groupe solidaire, score et avis.
+-- Dépend de : 31.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(agence_id, cle, valeur, description) VALUES
+  (NULL, 'garantie_min_pct', '100', 'garanties retenues (après décote) exigées, en % du crédit'),
+  (NULL, 'score_poids_capacite', '35', 'poids du critère capacité de paiement dans le score (les cinq poids sont ramenés à 100)'),
+  (NULL, 'score_poids_endettement', '20', 'poids du critère endettement dans le score'),
+  (NULL, 'score_poids_garanties', '15', 'poids du critère garanties et caution dans le score'),
+  (NULL, 'score_poids_anciennete', '15', 'poids du critère ancienneté de l''activité dans le score'),
+  (NULL, 'score_poids_historique', '15', 'poids du critère historique de crédit dans le score'),
+  (NULL, 'score_seuil_favorable', '75', 'score minimal (sur 100) de l''avis « Favorable »'),
+  (NULL, 'score_seuil_conditions', '55', 'score minimal de l''avis « Sous conditions »'),
+  (NULL, 'score_seuil_risque', '35', 'score minimal de l''avis « Risqué » (en dessous : « Défavorable »)'),
+  (NULL, 'plafond_cycle_1', '300000', 'plafond de crédit du 1er cycle (F, 0 = sans plafond)'),
+  (NULL, 'plafond_cycle_2', '500000', 'plafond de crédit du 2e cycle (F)'),
+  (NULL, 'plafond_cycle_3', '800000', 'plafond de crédit du 3e cycle (F)'),
+  (NULL, 'plafond_cycle_4', '1200000', 'plafond de crédit du 4e cycle (F)'),
+  (NULL, 'plafond_cycle_5', '2000000', 'plafond de crédit du 5e cycle et suivants (F)')
+ON CONFLICT DO NOTHING;
+
+ALTER TABLE analyse_capacite ADD COLUMN cycle smallint NOT NULL DEFAULT 1 CHECK (cycle BETWEEN 1 AND 5);
+ALTER TABLE analyse_capacite ADD COLUMN caution varchar(10) NOT NULL DEFAULT 'perso' CHECK (caution IN ('aucune','perso','groupe'));
+ALTER TABLE analyse_capacite ADD COLUMN historique varchar(10) NOT NULL DEFAULT 'bon' CHECK (historique IN ('nouveau','bon','mineur','grave'));
+ALTER TABLE analyse_capacite ADD COLUMN garanties jsonb NOT NULL DEFAULT '[]'::jsonb;        -- [{libelle, type, valeur, decote}]
+ALTER TABLE analyse_capacite ADD COLUMN ventes_par_mois jsonb CHECK (ventes_par_mois IS NULL OR jsonb_array_length(ventes_par_mois) = 12);
+ALTER TABLE analyse_capacite ADD COLUMN scenarios jsonb NOT NULL DEFAULT '[]'::jsonb;        -- [{libelle, montant, nb_echeances, taux, methode, differe}]
+ALTER TABLE analyse_capacite ADD COLUMN groupe jsonb NOT NULL DEFAULT '[]'::jsonb;           -- [{nom, montant, disponible}]
+ALTER TABLE analyse_capacite ADD COLUMN score numeric(5,1);
+ALTER TABLE analyse_capacite ADD COLUMN avis varchar(20);

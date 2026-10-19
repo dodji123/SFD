@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { aujourdhui, date as fdate, xof } from '../lib/format'
 import { useSession } from '../lib/session'
+import { AnalyseCapacite, ResumeAnalyse } from '../components/AnalyseCapacite'
 import { Alert, Button, Card, Charge, Field, FormModal, Input, Page, Select, Statut, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Demande {
@@ -35,7 +36,7 @@ function Demandes() {
   const { can } = useSession()
   const [statut, setStatut] = useState('')
   const q = useFetch(() => api.get<Demande[]>('/api/demandes-credit', { statut }), [statut])
-  const [modale, setModale] = useState<null | { type: 'decision' | 'debloquer'; d: Demande }>(null)
+  const [modale, setModale] = useState<null | { type: 'decision' | 'debloquer' | 'analyse'; d: Demande }>(null)
   const fin = () => { setModale(null); q.reload() }
   return (
     <Card flush>
@@ -61,6 +62,7 @@ function Demandes() {
             { titre: 'Statut', render: (d) => <Statut s={d.statut} /> },
             { titre: '', render: (d) => (
               <span className="actions">
+                {can('credit:read') && ['demandee', 'approuvee', 'refusee', 'debloquee'].includes(d.statut) && <Button small onClick={() => setModale({ type: 'analyse', d })}>Analyse</Button>}
                 {d.statut === 'demandee' && can('credit:approve') && <Button small variant="primary" onClick={() => setModale({ type: 'decision', d })}>Décider</Button>}
                 {d.statut === 'approuvee' && can('credit:disburse') && <Button small variant="primary" onClick={() => setModale({ type: 'debloquer', d })}>Débloquer</Button>}
               </span>
@@ -68,6 +70,7 @@ function Demandes() {
           ]} />
         )}
       </Charge>
+      {modale?.type === 'analyse' && <AnalyseCapacite demande={modale.d} onClose={() => setModale(null)} />}
       {modale?.type === 'decision' && <Decision d={modale.d} onClose={() => setModale(null)} onFait={fin} />}
       {modale?.type === 'debloquer' && <Deblocage d={modale.d} onClose={() => setModale(null)} onFait={fin} />}
     </Card>
@@ -82,6 +85,7 @@ function Decision({ d, onClose, onFait }: { d: Demande; onClose: () => void; onF
     <FormModal titre={`Décision — ${d.client}`} onClose={onClose} busy={busy} valider="Approuver" onSubmit={() => decider(true)}>
       <div style={{ gridColumn: '1 / -1' }}>
         <Alert tone="info">{xof(d.montant)} sur {d.nb_echeances} échéances à {Math.round(d.taux * 1000) / 10} % — garantie négociée : {xof(d.garantie_montant)}.</Alert>
+        <ResumeAnalyse demandeId={d.id} />
       </div>
       <Field label="Commentaire"><Input value={com} onChange={(e) => setCom(e.target.value)} /></Field>
       <div className="actions" style={{ alignSelf: 'end' }}><Button variant="danger" disabled={busy} onClick={() => decider(false)}>Refuser la demande</Button></div>
