@@ -327,6 +327,9 @@ def _detail_seance(cur, user: User, seance_id: int, tout_voir: bool = False) -> 
     )
     s["quorum_atteint"] = one_row(cur, "SELECT seance_quorum(%s) AS q", (seance_id,))["q"]
     dossiers = all_rows(cur, DOSSIER_SQL + "WHERE sd.seance_id = %s ORDER BY sd.id", (seance_id,))
+    # un comité de réseau ou central examine des dossiers de plusieurs agences : un non-membre ne voit que ceux de son périmètre
+    if not user.siege and _membre(cur, c["id"], user.id) is None and not _anime(cur, user, c):
+        dossiers = [d for d in dossiers if user.peut_agence(d["agence_id"])]
     for d in dossiers:
         votes = all_rows(cur, "SELECT v.utilisateur_id, u.nom, v.vote, v.motif, v.vote_le FROM seance_vote v JOIN utilisateur u ON u.id = v.utilisateur_id "
                               "WHERE v.dossier_id = %s ORDER BY u.nom", (d["id"],))

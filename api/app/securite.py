@@ -87,8 +87,10 @@ def hacher_jeton(jeton: str) -> str:
 
 def envoyer_message(cur, user_id: int, canal: str, destinataire: str, objet: str, corps: str) -> None:
     """Dépose le message dans la file sortante ; en mode « console », il est aussi journalisé (développement)."""
+    # hors développement, le lien secret n'est jamais conservé en base : seul le destinataire le reçoit
+    conserve = corps if settings.mail_mode == "console" else re.sub(r"jeton=[\w-]+", "jeton=[masqué]", corps)
     cur.execute("INSERT INTO message_personnel(utilisateur_id, canal, destinataire, objet, corps) VALUES (%s, %s, %s, %s, %s)",
-                (user_id, canal, destinataire, objet, corps))
+                (user_id, canal, destinataire, objet, conserve))
     if settings.mail_mode == "console":
         log.warning("MESSAGE [%s -> %s] %s\n%s", canal, destinataire, objet, corps)
     elif settings.mail_mode == "smtp" and canal == "email":

@@ -44,6 +44,8 @@ ROUTERS = [r_auth.router, r_utilisateurs.router, r_referentiels.router, r_epargn
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.env == "prod" and settings.mail_mode == "console":
+        raise RuntimeError("SFD_MAIL_MODE=console est interdit en production (les liens de récupération seraient journalisés)")
     settings.secret()  # échoue au démarrage si le secret JWT manque hors développement
     init_pool()
     yield

@@ -70,6 +70,11 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'crédit % inconnu', p_credit; END IF;
   IF c.statut <> 'en_retard' THEN RAISE EXCEPTION 'Le crédit % n''est pas en retard (statut %)', c.numero, c.statut; END IF;
   SELECT capital_restant INTO v_du FROM mf.v_credit_situation WHERE credit_id = p_credit;
+  IF p_agent IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM mf.utilisateur u WHERE u.id = p_agent AND u.actif
+          AND (mf.agences_utilisateur(u.id) IS NULL OR c.agence_id::int = ANY (mf.agences_utilisateur(u.id)))) THEN
+    RAISE EXCEPTION 'L''agent de recouvrement doit être un utilisateur actif de l''agence du crédit';
+  END IF;
   INSERT INTO mf.dossier_recouvrement(agence_id, credit_id, ouvert_par, agent_id, montant_du_ouverture, note)
   VALUES (c.agence_id, p_credit, p_utilisateur, COALESCE(p_agent, p_utilisateur), v_du, p_note) RETURNING id INTO v_id;
   RETURN v_id;
@@ -113,8 +118,9 @@ BEGIN
     RAISE EXCEPTION 'Passage en perte impossible : le dossier est au stade « % » (mise en demeure obligatoire)', d.statut;
   END IF;
   IF length(btrim(COALESCE(p_motif, ''))) < 10 THEN RAISE EXCEPTION 'Le motif du passage en perte est obligatoire (10 caractères)'; END IF;
-  IF p_utilisateur IS NOT DISTINCT FROM d.agent_id THEN
-    RAISE EXCEPTION 'Séparation des tâches : l''agent de recouvrement ne peut pas approuver le passage en perte';
+  IF p_utilisateur IS NOT DISTINCT FROM d.agent_id OR p_utilisateur IS NOT DISTINCT FROM d.ouvert_par
+     OR EXISTS (SELECT 1 FROM mf.action_recouvrement WHERE dossier_id = d.id AND utilisateur_id = p_utilisateur) THEN
+    RAISE EXCEPTION 'Séparation des tâches : celui qui a ouvert le dossier, l''agent de recouvrement ou un intervenant ne peut pas approuver le passage en perte';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM mf.action_recouvrement WHERE dossier_id = d.id AND type = 'visite') THEN
     RAISE EXCEPTION 'Une visite du client est obligatoire avant le passage en perte';

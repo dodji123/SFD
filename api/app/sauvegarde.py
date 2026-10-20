@@ -45,9 +45,10 @@ def sauvegarder(dossier: str) -> dict:
     """Écrit un dump complet dans `dossier`, calcule son empreinte SHA-256 et l'enregistre au registre."""
     hote, port, user, base = _cible()
     rep = pathlib.Path(dossier)
-    rep.mkdir(parents=True, exist_ok=True)
+    rep.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(rep, 0o700)           # un dump contient toutes les données : lisible par son propriétaire seulement
     fichier = rep / f"{base}_{dt.datetime.now():%Y%m%d_%H%M%S}.sql"
-    with open(fichier, "wb") as f:
+    with os.fdopen(os.open(fichier, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
         r = subprocess.run(_commande("pg_dump", _args_connexion(user, base, hote, port, ["--no-owner"])), stdout=f, stderr=subprocess.PIPE, env=_env())
     if r.returncode != 0 or fichier.stat().st_size == 0:
         fichier.unlink(missing_ok=True)
