@@ -77,6 +77,9 @@ def main(argv: list[str] | None = None) -> None:
     pl.add_argument("--date", type=dt.date.fromisoformat, help="AAAA-MM-JJ (défaut : aujourd'hui)")
     pl.add_argument("--agence-code", help="limiter à une agence")
     pl.add_argument("--forcer", action="store_true", help="rejouer aussi les tâches déjà réussies pour cette date")
+    sv = sub.add_parser("sauvegarder", help="sauvegarde complète de la base, enregistrée au registre (cron / tâche planifiée)")
+    sv.add_argument("--dossier", required=True)
+    sv.add_argument("--tester", action="store_true", help="tester aussitôt la restauration sur une base temporaire")
     u =sub.add_parser("creer-utilisateur")
     u.add_argument("--login", required=True)
     u.add_argument("--nom", required=True)
@@ -100,6 +103,19 @@ def main(argv: list[str] | None = None) -> None:
             sys.exit(str(e))
         if any(r.statut == "echec" for r in res):
             sys.exit(1)
+    elif a.cmd == "sauvegarder":
+        from .sauvegarde import sauvegarder, tester_restauration
+
+        try:
+            res = sauvegarder(a.dossier)
+            print("sauvegarde :", res["fichier"], res["empreinte"])
+            if a.tester:
+                t = tester_restauration(res["id"])
+                print("test de restauration :", t["resultat"], "-", t["commentaire"])
+                if t["resultat"] != "reussi":
+                    sys.exit(1)
+        except RuntimeError as e:
+            sys.exit(str(e))
     elif a.cmd == "donnees-demo":
         if settings.env == "prod":
             sys.exit("Données de démonstration refusées en production.")

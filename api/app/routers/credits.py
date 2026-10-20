@@ -119,6 +119,9 @@ class DeblocageIn(BaseModel):
 def debloquer(demande_id: int, body: DeblocageIn, user: User = Depends(require("credit:disburse"))):
     with tx(user.login) as cur:
         ag = verifier_agence(cur, user, "demande_credit", demande_id)
+        sep = one_row(cur, "SELECT COALESCE(param('separation_decaissement', %s::smallint), '0') = '1' AS actif, validateur_id FROM demande_credit WHERE id = %s", (ag, demande_id))
+        if sep["actif"] and sep["validateur_id"] == user.id:
+            raise HTTPException(status_code=403, detail="Séparation des tâches : la personne qui a approuvé ce crédit ne peut pas le décaisser")
         if body.session_id is not None and verifier_session(cur, user, body.session_id) != ag:
             raise HTTPException(status_code=422, detail="La session de caisse appartient à une autre agence")
         cid = one_row(cur, "SELECT debloquer_credit(%s, COALESCE(%s, current_date), %s, %s, %s) AS id",
@@ -179,7 +182,7 @@ def rembourser_especes(echeance_id: int, body: RemboursementIn, user: User = Dep
     """Paiement partiel accepté ; les échéances se règlent dans l'ordre ; imputation capital, intérêts, pénalités."""
     with tx(user.login) as cur:
         e = one_row(cur, "SELECT e.credit_id, c.agence_id FROM echeance e JOIN credit c ON c.id = e.credit_id WHERE e.id = %s", (echeance_id,))
-        if e is None or (user.agence_id is not None and e["agence_id"] != user.agence_id):
+        if e is None or not user.peut_agence(e["agence_id"]):
             raise HTTPException(status_code=404, detail="Introuvable")
         if verifier_session(cur, user, body.session_id) != e["agence_id"]:
             raise HTTPException(status_code=422, detail="La session de caisse appartient à une autre agence")

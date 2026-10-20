@@ -7,8 +7,11 @@ export interface Utilisateur {
   nom: string
   role: string
   agence_id: number | null
+  reseau_id: number | null
   agent_id: number | null
   collectrice_id: number | null
+  doit_changer_mdp: boolean
+  agences: number[] | null
 }
 export interface Agence { id: number; code: string; libelle: string; siege?: boolean }
 
@@ -21,6 +24,7 @@ interface Ctx {
   can: (p: string) => boolean
   login: (login: string, mdp: string) => Promise<void>
   logout: () => void
+  rafraichir: () => Promise<void>
   choisirAgence: (id: number) => void
 }
 
@@ -43,8 +47,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const charger = useCallback(async () => {
-    const [moi, p, ag] = await Promise.all([
-      api.get<Utilisateur>('/api/auth/me'),
+    const moi = await api.get<Utilisateur>('/api/auth/me')
+    if (moi.doit_changer_mdp) {              // mot de passe temporaire : seul le changement est possible
+      setUser(moi)
+      return
+    }
+    const [p, ag] = await Promise.all([
       api.get<{ permissions: string[] }>('/api/moi/permissions'),
       api.get<Agence[]>('/api/agences'),
     ])
@@ -55,11 +63,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       session.setAgence(null)               // l'API impose déjà l'agence de l'utilisateur
       setAgenceId(moi.agence_id)
     } else {
-      const choix = session.getAgence() ?? ag.find((a) => a.siege)?.id ?? ag[0]?.id ?? null
+      // siège : toutes les agences ; réseau : celles du réseau (la liste renvoyée par l'API est déjà filtrée)
+      const memorisee = session.getAgence()
+      const choix = (memorisee && ag.some((a) => a.id === memorisee) ? memorisee : null) ?? ag.find((a) => a.siege)?.id ?? ag[0]?.id ?? null
       session.setAgence(choix)
       setAgenceId(choix)
     }
   }, [])
+
+  // inactivité : déconnexion après la durée de session du personnel (15 minutes sans action)
+  useEffect(() => {
+    if (!user) return
+    const MAX = 15 * 60 * 1000
+    let dernier = Date.now()
+    const marque = () => { dernier = Date.now() }
+    const evts = ['click', 'keydown', 'mousemove', 'touchstart'] as const
+    evts.forEach((e) => window.addEventListener(e, marque, { passive: true }))
+    const t = window.setInterval(() => { if (Date.now() - dernier > MAX) logout() }, 15000)
+    return () => { evts.forEach((e) => window.removeEventListener(e, marque)); window.clearInterval(t) }
+  }, [user, logout])
 
   useEffect(() => {
     session.onUnauthorized(logout)
@@ -76,6 +98,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [charger],
   )
+  const rafraichir = useCallback(async () => { await charger() }, [charger])
 
   const choisirAgence = useCallback((id: number) => {
     session.setAgence(id)
@@ -83,8 +106,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<Ctx>(
-    () => ({ user, perms, agences, agenceId, chargement, can: (p) => perms.has(p), login, logout, choisirAgence }),
-    [user, perms, agences, agenceId, chargement, login, logout, choisirAgence],
+    () => ({ user, perms, agences, agenceId, chargement, can: (p) => perms.has(p), login, logout, rafraichir, choisirAgence }),
+    [user, perms, agences, agenceId, chargement, login, logout, rafraichir, choisirAgence],
   )
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>
 }

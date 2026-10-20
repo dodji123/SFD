@@ -20,7 +20,7 @@ SESSION = (
 def verifier_session(cur, user: User, session_id: int) -> int:
     """Retourne l'agence de la session, ou 404 si elle n'existe pas ou est d'une autre agence."""
     r = one_row(cur, "SELECT k.agence_id FROM session_caisse s JOIN caisse k ON k.id = s.caisse_id WHERE s.id = %s", (session_id,))
-    if r is None or (user.agence_id is not None and r["agence_id"] != user.agence_id):
+    if r is None or not user.peut_agence(r["agence_id"]):
         raise HTTPException(status_code=404, detail="Introuvable")
     return r["agence_id"]
 

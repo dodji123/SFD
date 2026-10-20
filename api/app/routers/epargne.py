@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..auth import User, agence_filter, agence_scope, require, verifier_agence
+from ..controles import compte_dormant, controler_seuil_retrait
 from ..db import all_rows, one_row, tx
 from .collecte import trouver_client
 from .pieces import piece_adhesion, piece_mouvement
@@ -103,7 +104,7 @@ def annuler_operation(mouvement_id: int, user: User = Depends(require("epargne:w
     """Annule un dépôt ou un retrait par contre-passation (jamais de suppression)."""
     with tx(user.login) as cur:
         m = one_row(cur, "SELECT ce.agence_id FROM mouvement_epargne m JOIN compte_epargne ce ON ce.id = m.compte_id WHERE m.id = %s", (mouvement_id,))
-        if m is None or (user.agence_id is not None and m["agence_id"] != user.agence_id):
+        if m is None or not user.peut_agence(m["agence_id"]):
             raise HTTPException(status_code=404, detail="Introuvable")
         cid = one_row(cur, "SELECT annuler_mouvement_epargne(%s, %s) AS id", (mouvement_id, user.id))["id"]
     return {"contre_passation_id": cid}
@@ -131,6 +132,22 @@ def rouvrir_journee(body: JourneeEpargneIn, user: User = Depends(require("collec
     return operations_du_jour(body.date, ag, user)
 
 
+@router.get("/dormants")
+def comptes_dormants(agence_id: int | None = None, user: User = Depends(require("epargne:read"))):
+    """Comptes sans mouvement depuis le seuil de dormance (à relancer ou à clôturer)."""
+    ag = agence_filter(user, agence_id)
+    with tx() as cur:
+        return all_rows(cur, "SELECT * FROM v_compte_dormant WHERE (%s::int IS NULL OR agence_id = %s) ORDER BY jours_inactif DESC LIMIT 500", (ag, ag))
+
+
+@router.post("/{compte_id}/dormant")
+def traiter_dormant(compte_id: int, action: Literal["clore", "bloquer"], user: User = Depends(require("epargne:dormant"))):
+    """Clôture (solde nul) ou blocage (solde non nul) d'un compte dormant."""
+    with tx(user.login) as cur:
+        verifier_agence(cur, user, "compte_epargne", compte_id)
+        return {"statut": one_row(cur, "SELECT traiter_compte_dormant(%s, %s) AS s", (compte_id, action))["s"]}
+
+
 @router.get("/{compte_id}")
 def detail(compte_id: int, user: User = Depends(require("epargne:read"))):
     with tx() as cur:
@@ -142,6 +159,7 @@ class MouvementIn(BaseModel):
     montant: int = Field(gt=0)
     date_operation: dt.date | None = None
     libelle: str | None = None
+    procuration_id: int | None = None      # retrait effectué par un mandataire
 
 
 def controle_adhesion(cur, agence_id: int, compte_id: int) -> None:
@@ -156,11 +174,19 @@ def _mouvement(compte_id: int, type_: Literal["depot", "retrait"], body: Mouveme
     with tx(user.login) as cur:
         ag = verifier_agence(cur, user, "compte_epargne", compte_id)
         controle_adhesion(cur, ag, compte_id)
+        if type_ == "retrait":
+            client_id = one_row(cur, "SELECT client_id FROM compte_epargne WHERE id = %s", (compte_id,))["client_id"]
+            dispo = one_row(cur, "SELECT solde_disponible(%s) AS d", (compte_id,))["d"]
+            if body.montant <= dispo:      # un retrait supérieur au disponible est refusé par la base (422) avant tout autre contrôle
+                controler_seuil_retrait(cur, user, client_id, ag, body.montant, body.date_operation)
+            dormant = compte_dormant(cur, compte_id)
+            if dormant and user.role == "caissier":
+                raise HTTPException(status_code=403, detail=f"Compte dormant (aucun mouvement depuis {dormant['jours_inactif']} jours) : le chef d'agence doit autoriser ce retrait")
         mv = one_row(
             cur,
-            "INSERT INTO mouvement_epargne(compte_id, type, montant, date_operation, libelle) "
-            "VALUES (%s, %s, %s, COALESCE(%s, current_date), %s) RETURNING *",
-            (compte_id, type_, body.montant, body.date_operation, body.libelle),
+            "INSERT INTO mouvement_epargne(compte_id, type, montant, date_operation, libelle, procuration_id) "
+            "VALUES (%s, %s, %s, COALESCE(%s, current_date), %s, %s) RETURNING *",
+            (compte_id, type_, body.montant, body.date_operation, body.libelle, body.procuration_id),
         )
         cpt = one_row(cur, "SELECT v.solde, solde_disponible(v.compte_id) AS disponible FROM v_solde_compte_epargne v WHERE v.compte_id = %s", (compte_id,))
         piece_id = piece_mouvement(cur, user, mv["id"])          # pièce justificative remise au client

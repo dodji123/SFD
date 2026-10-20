@@ -8,6 +8,9 @@ import Caisse from './pages/Caisse'
 import ClientDetail from './pages/ClientDetail'
 import Clients from './pages/Clients'
 import Collecte from './pages/Collecte'
+import Comites from './pages/Comites'
+import Recouvrement from './pages/Recouvrement'
+import ProcurationsCheques from './pages/ProcurationsCheques'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
 import Liaison from './pages/Liaison'
@@ -24,6 +27,7 @@ import Conformite from './pages/Conformite'
 import EspaceClient from './pages/EspaceClient'
 import Etats from './pages/Etats'
 import Login from './pages/Login'
+import { ChangementObligatoire, Reinitialiser } from './pages/MotDePasse'
 import Provisions from './pages/Provisions'
 import Rapports from './pages/Rapports'
 import Retraits from './pages/Retraits'
@@ -35,8 +39,10 @@ export default function App() {
   const { pathname } = useLocation()
   // l'espace client est indépendant de la session du personnel (autre jeton, autre écran)
   if (pathname === '/espace' || pathname.startsWith('/espace/')) return <EspaceClient />
+  if (pathname === '/reinitialiser') return <Reinitialiser />
   if (chargement) return <Spinner />
   if (!user) return <Login />
+  if (user.doit_changer_mdp) return <ChangementObligatoire />
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -55,6 +61,9 @@ export default function App() {
         <Route path="retraits" element={<Garde perm="collecte:read"><Retraits /></Garde>} />
         <Route path="credits" element={<Garde perm="credit:read"><Credits /></Garde>} />
         <Route path="credits/:id" element={<Garde perm="credit:read"><CreditDetail /></Garde>} />
+        <Route path="comites" element={<Garde perm="comite:read"><Comites /></Garde>} />
+        <Route path="recouvrement" element={<Garde perm="recouvrement:read"><Recouvrement /></Garde>} />
+        <Route path="procurations" element={<Garde perm={['procuration:write', 'cheque:read']}><ProcurationsCheques /></Garde>} />
         <Route path="caisse" element={<Garde perm="caisse:read"><Caisse /></Garde>} />
         <Route path="tresorerie" element={<Garde perm="tresorerie:read"><Tresorerie /></Garde>} />
         <Route path="rapports" element={<Garde perm="rapports:read"><Rapports /></Garde>} />

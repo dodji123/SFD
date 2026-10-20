@@ -10,6 +10,21 @@ from .cli import connect
 DEMO_PASSWORD = os.environ.get("SFD_DEMO_PASSWORD", "Demo-Passe-2026!")
 
 
+def reseau_et_comite(cur, lom: int, h: str) -> None:
+    """Réseau « Sud » (agence de Lomé), son coordinateur, et le comité de crédit de Lomé avec ses membres."""
+    cur.execute("INSERT INTO reseau(code, libelle) VALUES ('SUD', 'Réseau Sud') RETURNING id")
+    reseau = cur.fetchone()[0]
+    cur.execute("UPDATE agence SET reseau_id = %s WHERE id = %s", (reseau, lom))
+    cur.execute("INSERT INTO utilisateur(login, nom, role, reseau_id, mot_de_passe_hash, email) "
+                "VALUES ('coord.sud', 'Coordinateur du réseau Sud', 'coordinateur', %s, %s, 'coord.sud@demo.tg')", (reseau, h))
+    cur.execute("INSERT INTO comite_credit(code, libelle, agence_id, montant_min, montant_max, quorum) "
+                "VALUES ('LOM', 'Comité de crédit de Lomé', %s, 0, 1000000, 3) RETURNING id", (lom,))
+    comite = cur.fetchone()[0]
+    for login, fonction in (("chef.lom", "president"), ("caissier.lom", "secretaire"), ("agent.lom", "membre"), ("rh.lom", "membre")):
+        cur.execute("INSERT INTO comite_membre(comite_id, utilisateur_id, fonction) SELECT %s, id, %s FROM utilisateur WHERE login = %s",
+                    (comite, fonction, login))
+
+
 def charger() -> None:
     conn = connect()
     conn.autocommit = False
@@ -40,8 +55,9 @@ def charger() -> None:
         ("chef.lom", "Chef d'agence Lomé", "chef_agence", lom, None), ("caissier.lom", "Caissier Lomé", "caissier", lom, None),
         ("agent.lom", "Ama Koffi", "agent", lom, agents[0]), ("rh.lom", "RH Lomé", "rh", lom, None),
     ]:
-        cur.execute("INSERT INTO utilisateur(login, nom, role, agence_id, agent_id, mot_de_passe_hash) VALUES (%s,%s,%s::role_utilisateur,%s,%s,%s)",
-                    (login, nom, role, ag, ag_id, h))
+        cur.execute("INSERT INTO utilisateur(login, nom, role, agence_id, agent_id, mot_de_passe_hash, email) VALUES (%s,%s,%s::role_utilisateur,%s,%s,%s,%s)",
+                    (login, nom, role, ag, ag_id, h, f"{login}@demo.tg"))
+    reseau_et_comite(cur, lom, h)
 
     cur.execute("INSERT INTO produit_epargne(code, libelle, categorie, type_cycle) VALUES ('TON1','Tontine normale','collecte',1),('TON3','Tontine libre','collecte',3) RETURNING id")
     ton1, ton3 = [r[0] for r in cur.fetchall()]
@@ -94,6 +110,6 @@ def charger() -> None:
     cur.execute("SELECT maj_statuts_credit(%s::smallint, %s)", (lom, today))
     conn.commit()
     print("données de démonstration chargées. Comptes :")
-    for login in ("admin", "directeur", "comptable", "auditeur", "chef.lom", "caissier.lom", "agent.lom", "rh.lom"):
+    for login in ("admin", "directeur", "comptable", "auditeur", "chef.lom", "caissier.lom", "agent.lom", "rh.lom", "coord.sud"):
         print(f"  {login}")
     print("Mot de passe : valeur de SFD_DEMO_PASSWORD (par défaut Demo-Passe-2026!)")

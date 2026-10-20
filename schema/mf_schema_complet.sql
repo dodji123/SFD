@@ -9001,3 +9001,1193 @@ ALTER TABLE analyse_capacite ADD COLUMN scenarios jsonb NOT NULL DEFAULT '[]'::j
 ALTER TABLE analyse_capacite ADD COLUMN groupe jsonb NOT NULL DEFAULT '[]'::jsonb;           -- [{nom, montant, disponible}]
 ALTER TABLE analyse_capacite ADD COLUMN score numeric(5,1);
 ALTER TABLE analyse_capacite ADD COLUMN avis varchar(20);
+
+-- =====================================================================
+-- MODULE 33_reseaux.sql
+-- =====================================================================
+-- =====================================================================
+-- 33_reseaux.sql
+-- Réseaux d'agences : un réseau regroupe plusieurs agences. Un utilisateur a un périmètre :
+--   agence (agence_id)  |  réseau (reseau_id, plusieurs agences)  |  siège (ni l'un ni l'autre : tout).
+-- Nouveau rôle « coordinateur » (direction d'un réseau). Sa contrainte est posée dans le module 34
+-- (une valeur d'enum ajoutée ne peut pas être utilisée dans la transaction qui l'ajoute).
+-- Dépend de : 00, 11.
+-- =====================================================================
+SET search_path = mf, public;
+
+ALTER TYPE role_utilisateur ADD VALUE IF NOT EXISTS 'coordinateur';
+
+CREATE TABLE reseau (
+  id       smallserial PRIMARY KEY,
+  code     varchar(10) NOT NULL UNIQUE,
+  libelle  text NOT NULL,
+  actif    boolean NOT NULL DEFAULT true,
+  cree_le  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE agence      ADD COLUMN reseau_id smallint REFERENCES reseau(id);
+ALTER TABLE utilisateur ADD COLUMN reseau_id smallint REFERENCES reseau(id);
+
+-- un périmètre à la fois : agence OU réseau (jamais les deux)
+ALTER TABLE utilisateur ADD CONSTRAINT utilisateur_perimetre_unique
+  CHECK (agence_id IS NULL OR reseau_id IS NULL);
+
+-- l'ancienne règle « sans agence => siège » doit tolérer un utilisateur de réseau
+ALTER TABLE utilisateur DROP CONSTRAINT utilisateur_agence_selon_role;
+ALTER TABLE utilisateur ADD CONSTRAINT utilisateur_agence_selon_role
+  CHECK (agence_id IS NOT NULL OR reseau_id IS NOT NULL OR role IN ('admin','directeur','comptable','auditeur'));
+
+CREATE INDEX agence_reseau_idx ON agence(reseau_id);
+
+-- Agences accessibles à un utilisateur ; NULL = toutes (siège).
+CREATE FUNCTION agences_utilisateur(p_user integer) RETURNS integer[]
+LANGUAGE sql STABLE AS $$
+  SELECT CASE
+           WHEN u.agence_id IS NOT NULL THEN ARRAY[u.agence_id::int]
+           WHEN u.reseau_id IS NOT NULL THEN COALESCE((SELECT array_agg(a.id::int ORDER BY a.id) FROM agence a WHERE a.reseau_id = u.reseau_id), ARRAY[]::int[])
+           ELSE NULL
+         END
+  FROM utilisateur u WHERE u.id = p_user
+$$;
+
+-- Garde-fou : un utilisateur de réseau ne peut pas désigner un réseau inactif.
+CREATE FUNCTION trg_utilisateur_reseau() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.reseau_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM reseau WHERE id = NEW.reseau_id AND actif) THEN
+    RAISE EXCEPTION 'Réseau inactif ou inconnu';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER utilisateur_reseau BEFORE INSERT OR UPDATE OF reseau_id ON utilisateur
+  FOR EACH ROW EXECUTE FUNCTION trg_utilisateur_reseau();
+
+CREATE TRIGGER audit_reseau AFTER INSERT OR UPDATE OR DELETE ON reseau
+  FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 34_securite_comptes.sql
+-- =====================================================================
+-- =====================================================================
+-- 34_securite_comptes.sql
+-- Sécurité des comptes du personnel (guide du contrôle interne : DICP, mot de passe temporaire,
+-- journal des accès, alertes d'opérations inhabituelles, sauvegardes testées).
+--   * contact (email, téléphone) pour la récupération du mot de passe
+--   * mot de passe temporaire : doit_changer_mdp ; ancienneté : mdp_change_le
+--   * historique des hachés (interdiction de réutiliser les derniers mots de passe)
+--   * jetons de récupération à usage unique (seul le haché SHA-256 est conservé)
+--   * journal des connexions, alertes de sécurité, messages sortants du personnel
+--   * registre des sauvegardes et de leurs tests de restauration
+--   * rôle « coordinateur » : périmètre réseau obligatoire
+-- Dépend de : 00, 11, 33.
+-- =====================================================================
+SET search_path = mf, public;
+
+ALTER TABLE utilisateur
+  ADD COLUMN email             varchar(200),
+  ADD COLUMN telephone         varchar(30),
+  ADD COLUMN doit_changer_mdp  boolean NOT NULL DEFAULT false,
+  ADD COLUMN mdp_change_le     timestamptz NOT NULL DEFAULT now();
+
+-- un coordinateur dirige un réseau : périmètre réseau obligatoire (rôle ajouté au module 33)
+ALTER TABLE utilisateur ADD CONSTRAINT utilisateur_coordinateur_reseau
+  CHECK (role <> 'coordinateur' OR (reseau_id IS NOT NULL AND agence_id IS NULL));
+
+-- Historique des mots de passe : alimenté automatiquement, quel que soit le chemin de modification.
+CREATE TABLE historique_mdp (
+  id              bigserial PRIMARY KEY,
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  hash            text NOT NULL,
+  cree_le         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX historique_mdp_user ON historique_mdp(utilisateur_id, cree_le DESC);
+
+CREATE FUNCTION trg_utilisateur_mdp() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.mot_de_passe_hash IS NOT NULL
+     AND (TG_OP = 'INSERT' OR NEW.mot_de_passe_hash IS DISTINCT FROM OLD.mot_de_passe_hash) THEN
+    NEW.mdp_change_le := now();
+    -- l'historique est écrit après coup (la ligne doit exister pour la clé étrangère)
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER utilisateur_mdp_avant BEFORE INSERT OR UPDATE OF mot_de_passe_hash ON utilisateur
+  FOR EACH ROW EXECUTE FUNCTION trg_utilisateur_mdp();
+
+CREATE FUNCTION trg_utilisateur_mdp_histo() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.mot_de_passe_hash IS NOT NULL
+     AND (TG_OP = 'INSERT' OR NEW.mot_de_passe_hash IS DISTINCT FROM OLD.mot_de_passe_hash) THEN
+    INSERT INTO historique_mdp(utilisateur_id, hash) VALUES (NEW.id, NEW.mot_de_passe_hash);
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER utilisateur_mdp_apres AFTER INSERT OR UPDATE OF mot_de_passe_hash ON utilisateur
+  FOR EACH ROW EXECUTE FUNCTION trg_utilisateur_mdp_histo();
+
+-- Jetons de récupération : à usage unique, durée limitée, haché seulement.
+CREATE TABLE jeton_reinit_mdp (
+  id              bigserial PRIMARY KEY,
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  jeton_hash      char(64) NOT NULL UNIQUE,
+  expire_le       timestamptz NOT NULL,
+  utilise_le      timestamptz,
+  ip              varchar(60),
+  cree_le         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX jeton_reinit_user ON jeton_reinit_mdp(utilisateur_id, cree_le DESC);
+
+-- Journal des connexions (succès, échecs, verrouillages, récupérations, déconnexions)
+CREATE TABLE journal_connexion (
+  id              bigserial PRIMARY KEY,
+  horodatage      timestamptz NOT NULL DEFAULT now(),
+  login           varchar(60) NOT NULL,
+  utilisateur_id  integer REFERENCES utilisateur(id),
+  evenement       varchar(20) NOT NULL CHECK (evenement IN
+                    ('succes','echec','verrouille','mdp_oublie','mdp_reinitialise','mdp_change','mdp_reinit_admin','hors_heures')),
+  ip              varchar(60),
+  detail          text
+);
+CREATE INDEX journal_connexion_date ON journal_connexion(horodatage DESC);
+CREATE INDEX journal_connexion_user ON journal_connexion(utilisateur_id, horodatage DESC);
+
+-- Alertes de sécurité (opérations inhabituelles) à traiter par la direction / le contrôle interne
+CREATE TABLE alerte_securite (
+  id              bigserial PRIMARY KEY,
+  horodatage      timestamptz NOT NULL DEFAULT now(),
+  type            varchar(30) NOT NULL CHECK (type IN
+                    ('verrouillage','connexion_hors_heures','mdp_reinit_admin','retraits_fractionnes','operation_inhabituelle','sauvegarde_ancienne','autre')),
+  gravite         varchar(10) NOT NULL DEFAULT 'moyenne' CHECK (gravite IN ('faible','moyenne','elevee')),
+  utilisateur_id  integer REFERENCES utilisateur(id),
+  agence_id       smallint REFERENCES agence(id),
+  detail          text NOT NULL,
+  traitee_le      timestamptz,
+  traitee_par     integer REFERENCES utilisateur(id),
+  commentaire     text,
+  CHECK ((traitee_le IS NULL) = (traitee_par IS NULL))
+);
+CREATE INDEX alerte_securite_ouvertes ON alerte_securite(horodatage DESC) WHERE traitee_le IS NULL;
+
+-- Messages sortants du personnel (lien de récupération, avis de sécurité) : en développement, simple journal.
+CREATE TABLE message_personnel (
+  id              bigserial PRIMARY KEY,
+  utilisateur_id  integer REFERENCES utilisateur(id),
+  canal           varchar(10) NOT NULL DEFAULT 'email' CHECK (canal IN ('email','sms')),
+  destinataire    varchar(200),
+  objet           text NOT NULL,
+  corps           text NOT NULL,
+  statut          varchar(10) NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente','envoye','echec','ignore')),
+  cree_le         timestamptz NOT NULL DEFAULT now(),
+  envoye_le       timestamptz
+);
+
+-- Registre des sauvegardes : une sauvegarde n'est fiable qu'une fois sa restauration testée.
+CREATE TABLE sauvegarde (
+  id               serial PRIMARY KEY,
+  effectuee_le     timestamptz NOT NULL,
+  type             varchar(15) NOT NULL CHECK (type IN ('complete','incrementale','journal')),
+  support          text NOT NULL,                       -- ex. « disque externe coffre », « serveur distant »
+  emplacement      text,
+  taille_mo        numeric(12,2) CHECK (taille_mo IS NULL OR taille_mo >= 0),
+  empreinte        varchar(128),                        -- somme de contrôle du fichier
+  effectuee_par    integer REFERENCES utilisateur(id),
+  test_restaure_le timestamptz,
+  test_par         integer REFERENCES utilisateur(id),
+  test_resultat    varchar(10) CHECK (test_resultat IN ('reussi','echec')),
+  test_commentaire text,
+  CHECK ((test_restaure_le IS NULL) = (test_resultat IS NULL)),
+  CHECK (test_restaure_le IS NULL OR test_restaure_le >= effectuee_le)
+);
+
+-- Un test de restauration est fait par une autre personne que celle qui a sauvegardé (séparation des tâches).
+CREATE FUNCTION trg_sauvegarde_test() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.test_par IS NOT NULL AND NEW.test_par = NEW.effectuee_par THEN
+    RAISE EXCEPTION 'Le test de restauration doit être fait par une autre personne que l''auteur de la sauvegarde';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER sauvegarde_test BEFORE INSERT OR UPDATE ON sauvegarde
+  FOR EACH ROW EXECUTE FUNCTION trg_sauvegarde_test();
+
+-- Dernière sauvegarde dont la restauration a été testée avec succès
+CREATE VIEW v_sauvegarde_fiable AS
+  SELECT max(effectuee_le) AS derniere_fiable
+  FROM sauvegarde WHERE test_resultat = 'reussi';
+
+-- Piste d'audit des alertes et sauvegardes (les tables à secrets — hachés, jetons — ne sont pas auditées)
+CREATE TRIGGER audit_alerte_securite AFTER INSERT OR UPDATE OR DELETE ON alerte_securite
+  FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_sauvegarde AFTER INSERT OR UPDATE OR DELETE ON sauvegarde
+  FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 35_comite_credit.sql
+-- =====================================================================
+-- =====================================================================
+-- 35_comite_credit.sql
+-- Procédure du comité de gestion du crédit (guide du contrôle interne, fiches crédit et 6.16) :
+--   * comités par niveau (agence / réseau / siège), compétence par montant, quorum
+--   * membres et fonctions (président, secrétaire, membre), voix délibérative ou consultative
+--   * délégations individuelles de décision (plafond par crédit et par période)
+--   * séances : convocation (délai minimal), ordre du jour, présences, ouverture, clôture, PV signé
+--   * dossiers examinés : rapporteur, analyse individuelle, visite et contre-visite selon le montant
+--   * votes motivés (acceptation / ajournement / rejet / abstention), récusation, voix prépondérante
+--   * décision : quorum + majorité des membres présents ; applique la décision à la demande de crédit
+--   * paramètre comite_credit_obligatoire : quand il vaut 1, une demande ne se décide plus qu'en comité
+--     ou par délégation (approuver_demande est durcie)
+-- Dépend de : 00, 08, 11, 31, 33, 34.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('comite_credit_obligatoire', '0', '1 = toute décision de crédit passe par le comité de crédit ou une délégation (0 = ancien fonctionnement)'),
+  ('comite_delai_convocation_h', '24', 'Délai minimal (heures) entre la convocation et la séance du comité de crédit (provisoire)'),
+  ('credit_visite_seuil', '500000', 'Montant à partir duquel une visite préalable du client est obligatoire (provisoire)'),
+  ('credit_contre_visite_seuil', '2000000', 'Montant à partir duquel une contre-visite par une autre personne est obligatoire (provisoire)');
+
+-- ---------------------------------------------------------------------
+-- Comités
+-- ---------------------------------------------------------------------
+CREATE TABLE comite_credit (
+  id           smallserial PRIMARY KEY,
+  code         varchar(10) NOT NULL UNIQUE,
+  libelle      text NOT NULL,
+  agence_id    smallint REFERENCES agence(id),     -- comité d'agence
+  reseau_id    smallint REFERENCES reseau(id),     -- comité de réseau ; ni l'un ni l'autre : comité central
+  montant_min  numeric(14,0) NOT NULL DEFAULT 0 CHECK (montant_min >= 0),
+  montant_max  numeric(14,0),                      -- NULL = sans plafond
+  quorum       smallint NOT NULL DEFAULT 3 CHECK (quorum >= 1),
+  actif        boolean NOT NULL DEFAULT true,
+  cree_le      timestamptz NOT NULL DEFAULT now(),
+  CHECK (agence_id IS NULL OR reseau_id IS NULL),
+  CHECK (montant_max IS NULL OR montant_max >= montant_min)
+);
+
+CREATE TABLE comite_membre (
+  id              serial PRIMARY KEY,
+  comite_id       smallint NOT NULL REFERENCES comite_credit(id),
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  fonction        varchar(10) NOT NULL DEFAULT 'membre' CHECK (fonction IN ('president','secretaire','membre')),
+  avec_voix       boolean NOT NULL DEFAULT true,   -- false : voix consultative
+  depuis          date NOT NULL DEFAULT current_date,
+  jusqua          date,
+  UNIQUE (comite_id, utilisateur_id),
+  CHECK (jusqua IS NULL OR jusqua >= depuis)
+);
+CREATE UNIQUE INDEX comite_un_president ON comite_membre(comite_id) WHERE fonction = 'president' AND jusqua IS NULL;
+CREATE UNIQUE INDEX comite_un_secretaire ON comite_membre(comite_id) WHERE fonction = 'secretaire' AND jusqua IS NULL;
+
+-- ---------------------------------------------------------------------
+-- Délégations individuelles
+-- ---------------------------------------------------------------------
+CREATE TABLE delegation_credit (
+  id                   serial PRIMARY KEY,
+  utilisateur_id       integer NOT NULL REFERENCES utilisateur(id),
+  montant_max_credit   numeric(14,0) NOT NULL CHECK (montant_max_credit > 0),
+  montant_max_periode  numeric(14,0) CHECK (montant_max_periode IS NULL OR montant_max_periode >= montant_max_credit),
+  periode              varchar(10) NOT NULL DEFAULT 'mois' CHECK (periode IN ('mois','trimestre','annee')),
+  debut                date NOT NULL DEFAULT current_date,
+  fin                  date,
+  motif                text NOT NULL CHECK (length(btrim(motif)) >= 5),
+  accordee_par         integer NOT NULL REFERENCES utilisateur(id),
+  cree_le              timestamptz NOT NULL DEFAULT now(),
+  CHECK (fin IS NULL OR fin >= debut),
+  CHECK (accordee_par <> utilisateur_id)           -- on ne s'auto-délègue pas
+);
+
+-- Début de la période en cours pour une délégation
+CREATE FUNCTION debut_periode(p_periode text, p_date date) RETURNS date LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE p_periode WHEN 'mois' THEN date_trunc('month', p_date)::date
+                        WHEN 'trimestre' THEN date_trunc('quarter', p_date)::date
+                        ELSE date_trunc('year', p_date)::date END
+$$;
+
+-- La délégation d'un utilisateur couvre-t-elle ce montant dans cette agence ?
+CREATE FUNCTION delegation_couvre(p_user integer, p_agence smallint, p_montant numeric, p_date date DEFAULT current_date)
+RETURNS boolean LANGUAGE plpgsql STABLE AS $$
+DECLARE d mf.delegation_credit; v_cumul numeric; v_ag integer[];
+BEGIN
+  IF p_user IS NULL THEN RETURN false; END IF;
+  v_ag := mf.agences_utilisateur(p_user);
+  IF v_ag IS NOT NULL AND NOT (p_agence = ANY (v_ag)) THEN RETURN false; END IF;
+  FOR d IN SELECT * FROM mf.delegation_credit
+            WHERE utilisateur_id = p_user AND debut <= p_date AND (fin IS NULL OR fin >= p_date)
+              AND montant_max_credit >= p_montant LOOP
+    IF d.montant_max_periode IS NULL THEN RETURN true; END IF;
+    -- le cumul ne compte que les décisions prises seul (celles d'un comité n'engagent pas la délégation personnelle)
+    SELECT COALESCE(sum(montant), 0) INTO v_cumul FROM mf.demande_credit dc
+     WHERE dc.validateur_id = p_user AND dc.statut IN ('approuvee','debloquee')
+       AND dc.date_decision >= mf.debut_periode(d.periode, p_date)
+       AND NOT EXISTS (SELECT 1 FROM mf.seance_dossier sd WHERE sd.demande_id = dc.id AND sd.decision = 'acceptation');
+    IF v_cumul + p_montant <= d.montant_max_periode THEN RETURN true; END IF;
+  END LOOP;
+  RETURN false;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- Séances
+-- ---------------------------------------------------------------------
+CREATE TABLE seance_comite (
+  id                  serial PRIMARY KEY,
+  numero              varchar(30) NOT NULL UNIQUE,         -- posé par le déclencheur à partir de l'id
+  comite_id           smallint NOT NULL REFERENCES comite_credit(id),
+  date_seance         timestamptz NOT NULL,
+  lieu                text,
+  ordre_du_jour       text,
+  statut              varchar(10) NOT NULL DEFAULT 'preparee' CHECK (statut IN ('preparee','convoquee','ouverte','close','annulee')),
+  convoquee_le        timestamptz,
+  convoquee_par       integer REFERENCES utilisateur(id),
+  ouverte_le          timestamptz,
+  close_le            timestamptz,
+  pv_signe_president  timestamptz,
+  pv_signe_secretaire timestamptz,
+  cree_par            integer REFERENCES utilisateur(id),
+  cree_le             timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE FUNCTION trg_seance_numero() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.numero IS NULL OR NEW.numero = '' THEN
+    NEW.numero := 'CC-' || (SELECT code FROM mf.comite_credit WHERE id = NEW.comite_id) || '-'
+                  || to_char(NEW.date_seance, 'YYYY') || '-' || lpad(NEW.id::text, 5, '0');
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER seance_numero BEFORE INSERT ON seance_comite FOR EACH ROW EXECUTE FUNCTION trg_seance_numero();
+
+CREATE TABLE seance_presence (
+  seance_id       integer NOT NULL REFERENCES seance_comite(id),
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  present         boolean,                          -- NULL = pas encore pointé
+  motif_absence   text,
+  PRIMARY KEY (seance_id, utilisateur_id)
+);
+
+-- ---------------------------------------------------------------------
+-- Dossiers examinés, votes, récusations
+-- ---------------------------------------------------------------------
+CREATE TABLE seance_dossier (
+  id                   serial PRIMARY KEY,
+  seance_id            integer NOT NULL REFERENCES seance_comite(id),
+  demande_id           integer NOT NULL REFERENCES demande_credit(id),
+  rapporteur_id        integer REFERENCES utilisateur(id),
+  montant_demande      numeric(14,0),                -- montant demandé à l'inscription (la demande peut être réduite par la décision)
+  analyse_individuelle text,                         -- synthèse de l'instruction présentée au comité
+  visite_le            date,
+  visite_par           integer REFERENCES utilisateur(id),
+  contre_visite_le     date,
+  contre_visite_par    integer REFERENCES utilisateur(id),
+  decision             varchar(12) CHECK (decision IN ('acceptation','ajournement','rejet')),
+  motif                text,
+  montant_accorde      numeric(14,0) CHECK (montant_accorde IS NULL OR montant_accorde > 0),
+  conditions           text,                         -- conditions suspensives
+  decide_le            timestamptz,
+  UNIQUE (seance_id, demande_id),
+  CHECK ((visite_le IS NULL) = (visite_par IS NULL)),
+  CHECK ((contre_visite_le IS NULL) = (contre_visite_par IS NULL)),
+  CHECK (contre_visite_par IS NULL OR contre_visite_par IS DISTINCT FROM visite_par),
+  CHECK ((decision IS NULL) = (decide_le IS NULL))
+);
+-- un dossier n'est inscrit qu'à une seule séance non décidée à la fois
+CREATE UNIQUE INDEX seance_dossier_en_cours ON seance_dossier(demande_id) WHERE decision IS NULL;
+
+CREATE TABLE seance_vote (
+  dossier_id      integer NOT NULL REFERENCES seance_dossier(id),
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  vote            varchar(12) NOT NULL CHECK (vote IN ('acceptation','ajournement','rejet','abstention')),
+  motif           text,
+  vote_le         timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (dossier_id, utilisateur_id),
+  CHECK (vote = 'abstention' OR length(btrim(COALESCE(motif, ''))) >= 5)
+);
+
+CREATE TABLE seance_recusation (
+  dossier_id      integer NOT NULL REFERENCES seance_dossier(id),
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  motif           text NOT NULL CHECK (length(btrim(motif)) >= 5),   -- conflit d'intérêts déclaré
+  PRIMARY KEY (dossier_id, utilisateur_id)
+);
+
+-- ---------------------------------------------------------------------
+-- Garde-fous
+-- ---------------------------------------------------------------------
+CREATE FUNCTION comite_membre_actif(p_comite integer, p_user integer, p_date date DEFAULT current_date)
+RETURNS mf.comite_membre LANGUAGE sql STABLE AS $$
+  SELECT m FROM mf.comite_membre m
+   WHERE m.comite_id = p_comite AND m.utilisateur_id = p_user AND m.depuis <= p_date AND (m.jusqua IS NULL OR m.jusqua >= p_date)
+$$;
+
+-- Une séance close est figée ; une séance annulée aussi.
+CREATE FUNCTION seance_modifiable(p_seance integer) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT statut IN ('preparee','convoquee','ouverte') FROM mf.seance_comite WHERE id = p_seance
+$$;
+
+CREATE FUNCTION trg_seance_figee() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v_seance integer;
+BEGIN
+  IF TG_TABLE_NAME IN ('seance_presence', 'seance_dossier') THEN
+    v_seance := CASE WHEN TG_OP = 'DELETE' THEN OLD.seance_id ELSE NEW.seance_id END;
+  ELSE
+    SELECT seance_id INTO v_seance FROM mf.seance_dossier
+     WHERE id = CASE WHEN TG_OP = 'DELETE' THEN OLD.dossier_id ELSE NEW.dossier_id END;
+  END IF;
+  IF NOT mf.seance_modifiable(v_seance) THEN
+    RAISE EXCEPTION 'La séance est close ou annulée : le procès-verbal ne peut plus être modifié';
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END $$;
+CREATE TRIGGER seance_presence_figee BEFORE INSERT OR UPDATE OR DELETE ON seance_presence FOR EACH ROW EXECUTE FUNCTION trg_seance_figee();
+CREATE TRIGGER seance_dossier_figee BEFORE INSERT OR UPDATE OR DELETE ON seance_dossier FOR EACH ROW EXECUTE FUNCTION trg_seance_figee();
+CREATE TRIGGER seance_vote_figee BEFORE INSERT OR UPDATE OR DELETE ON seance_vote FOR EACH ROW EXECUTE FUNCTION trg_seance_figee();
+CREATE TRIGGER seance_recusation_figee BEFORE INSERT OR UPDATE OR DELETE ON seance_recusation FOR EACH ROW EXECUTE FUNCTION trg_seance_figee();
+
+CREATE FUNCTION trg_seance_figee_seance() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.statut IN ('close','annulee') THEN
+    RAISE EXCEPTION 'La séance % est figée (statut %) : elle ne peut plus être modifiée', OLD.numero, OLD.statut;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER seance_figee BEFORE UPDATE OR DELETE ON seance_comite FOR EACH ROW EXECUTE FUNCTION trg_seance_figee_seance();
+
+-- Inscription d'un dossier : la demande doit être en attente et relever de la compétence du comité.
+CREATE FUNCTION trg_seance_dossier_inscription() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE d mf.demande_credit; c mf.comite_credit; v_reseau smallint;
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.demande_id = OLD.demande_id AND NEW.seance_id = OLD.seance_id THEN RETURN NEW; END IF;
+  SELECT * INTO d FROM mf.demande_credit WHERE id = NEW.demande_id;
+  SELECT c2.* INTO c FROM mf.comite_credit c2 JOIN mf.seance_comite s ON s.comite_id = c2.id WHERE s.id = NEW.seance_id;
+  IF d.statut <> 'demandee' THEN
+    RAISE EXCEPTION 'La demande % n''est plus en attente de décision (statut %)', d.numero, d.statut;
+  END IF;
+  NEW.montant_demande := d.montant;
+  IF d.montant < c.montant_min OR (c.montant_max IS NOT NULL AND d.montant > c.montant_max) THEN
+    RAISE EXCEPTION 'La demande % (% ) ne relève pas de la compétence du comité % (de % à %)',
+      d.numero, d.montant, c.code, c.montant_min, COALESCE(c.montant_max::text, 'sans plafond');
+  END IF;
+  IF c.agence_id IS NOT NULL AND c.agence_id <> d.agence_id THEN
+    RAISE EXCEPTION 'La demande % est d''une autre agence que celle du comité %', d.numero, c.code;
+  END IF;
+  IF c.reseau_id IS NOT NULL THEN
+    SELECT reseau_id INTO v_reseau FROM mf.agence WHERE id = d.agence_id;
+    IF v_reseau IS DISTINCT FROM c.reseau_id THEN
+      RAISE EXCEPTION 'La demande % est d''un autre réseau que celui du comité %', d.numero, c.code;
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER seance_dossier_inscription BEFORE INSERT OR UPDATE ON seance_dossier FOR EACH ROW EXECUTE FUNCTION trg_seance_dossier_inscription();
+
+-- Les décisions ne s'écrivent que par decider_dossier() ; une visite exige une personne distincte pour la contre-visite.
+CREATE FUNCTION trg_seance_dossier_decision() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (NEW.decision IS DISTINCT FROM OLD.decision) AND COALESCE(current_setting('mf.comite_decision', true), '') <> NEW.id::text THEN
+    RAISE EXCEPTION 'La décision d''un dossier ne s''enregistre que par la procédure de décision du comité';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER seance_dossier_decision BEFORE UPDATE ON seance_dossier FOR EACH ROW EXECUTE FUNCTION trg_seance_dossier_decision();
+
+-- Vote : séance ouverte, votant membre actif avec voix, présent, non récusé, dossier non décidé.
+CREATE FUNCTION trg_seance_vote_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE s mf.seance_comite; dos mf.seance_dossier; m mf.comite_membre;
+BEGIN
+  SELECT * INTO dos FROM mf.seance_dossier WHERE id = NEW.dossier_id;
+  SELECT * INTO s FROM mf.seance_comite WHERE id = dos.seance_id;
+  IF s.statut <> 'ouverte' THEN RAISE EXCEPTION 'On ne vote que pendant une séance ouverte'; END IF;
+  IF dos.decision IS NOT NULL THEN RAISE EXCEPTION 'Le dossier est déjà décidé'; END IF;
+  m := mf.comite_membre_actif(s.comite_id, NEW.utilisateur_id, s.date_seance::date);
+  IF m.id IS NULL THEN RAISE EXCEPTION 'Seuls les membres du comité votent'; END IF;
+  IF NOT m.avec_voix THEN RAISE EXCEPTION 'Ce membre n''a que voix consultative'; END IF;
+  IF NOT COALESCE((SELECT present FROM mf.seance_presence WHERE seance_id = s.id AND utilisateur_id = NEW.utilisateur_id), false) THEN
+    RAISE EXCEPTION 'Un membre absent ne vote pas';
+  END IF;
+  IF EXISTS (SELECT 1 FROM mf.seance_recusation WHERE dossier_id = NEW.dossier_id AND utilisateur_id = NEW.utilisateur_id) THEN
+    RAISE EXCEPTION 'Membre récusé pour ce dossier (conflit d''intérêts)';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER seance_vote_regles BEFORE INSERT OR UPDATE ON seance_vote FOR EACH ROW EXECUTE FUNCTION trg_seance_vote_regles();
+
+-- Un membre qui a déjà voté ne peut plus être récusé (la récusation précède le vote).
+CREATE FUNCTION trg_seance_recusation_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM mf.seance_vote WHERE dossier_id = NEW.dossier_id AND utilisateur_id = NEW.utilisateur_id) THEN
+    RAISE EXCEPTION 'Ce membre a déjà voté : la récusation doit précéder le vote';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER seance_recusation_regles BEFORE INSERT ON seance_recusation FOR EACH ROW EXECUTE FUNCTION trg_seance_recusation_regles();
+
+-- ---------------------------------------------------------------------
+-- Procédure : convoquer, pointer, ouvrir, décider, signer, clore
+-- ---------------------------------------------------------------------
+-- Convocation : ordre du jour, au moins un dossier, délai minimal, effectif suffisant. Crée la liste de présence.
+CREATE FUNCTION convoquer_seance(p_seance integer, p_utilisateur integer DEFAULT NULL) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE s mf.seance_comite; c mf.comite_credit; v_delai numeric; v_ag smallint; v_membres integer;
+BEGIN
+  SELECT * INTO s FROM mf.seance_comite WHERE id = p_seance FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'séance % inconnue', p_seance; END IF;
+  IF s.statut <> 'preparee' THEN RAISE EXCEPTION 'La séance % n''est plus à convoquer (statut %)', s.numero, s.statut; END IF;
+  SELECT * INTO c FROM mf.comite_credit WHERE id = s.comite_id;
+  IF NOT c.actif THEN RAISE EXCEPTION 'Le comité % est inactif', c.code; END IF;
+  IF btrim(COALESCE(s.ordre_du_jour, '')) = '' THEN RAISE EXCEPTION 'L''ordre du jour est obligatoire pour convoquer'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM mf.seance_dossier WHERE seance_id = p_seance) THEN
+    RAISE EXCEPTION 'Aucun dossier inscrit à l''ordre du jour';
+  END IF;
+  v_ag := c.agence_id;
+  v_delai := COALESCE(mf.param_num('comite_delai_convocation_h', v_ag), 24);
+  IF s.date_seance < now() + make_interval(secs => (v_delai * 3600)::int) THEN
+    RAISE EXCEPTION 'Délai de convocation insuffisant : % heure(s) au minimum avant la séance', v_delai;
+  END IF;
+  SELECT count(*) INTO v_membres FROM mf.comite_membre m
+   WHERE m.comite_id = s.comite_id AND m.avec_voix AND m.depuis <= s.date_seance::date AND (m.jusqua IS NULL OR m.jusqua >= s.date_seance::date);
+  IF v_membres < c.quorum THEN
+    RAISE EXCEPTION 'Le comité n''a que % membre(s) avec voix pour un quorum de %', v_membres, c.quorum;
+  END IF;
+  INSERT INTO mf.seance_presence(seance_id, utilisateur_id)
+    SELECT p_seance, m.utilisateur_id FROM mf.comite_membre m
+     WHERE m.comite_id = s.comite_id AND m.depuis <= s.date_seance::date AND (m.jusqua IS NULL OR m.jusqua >= s.date_seance::date)
+    ON CONFLICT DO NOTHING;
+  UPDATE mf.seance_comite SET statut = 'convoquee', convoquee_le = now(), convoquee_par = p_utilisateur WHERE id = p_seance;
+END $$;
+
+CREATE FUNCTION pointer_presence(p_seance integer, p_utilisateur integer, p_present boolean, p_motif text DEFAULT NULL) RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE mf.seance_presence SET present = p_present, motif_absence = CASE WHEN p_present THEN NULL ELSE p_motif END
+   WHERE seance_id = p_seance AND utilisateur_id = p_utilisateur;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Cet utilisateur n''est pas convoqué à la séance'; END IF;
+END $$;
+
+-- Quorum d'une séance : présents avec voix >= quorum du comité ET majorité des membres avec voix.
+CREATE FUNCTION seance_quorum(p_seance integer) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT COALESCE((
+    SELECT count(*) FILTER (WHERE p.present AND m.avec_voix) >= c.quorum
+       AND count(*) FILTER (WHERE p.present AND m.avec_voix) * 2 > count(*) FILTER (WHERE m.avec_voix)
+    FROM mf.seance_comite s
+    JOIN mf.comite_credit c ON c.id = s.comite_id
+    JOIN mf.seance_presence p ON p.seance_id = s.id
+    JOIN mf.comite_membre m ON m.comite_id = s.comite_id AND m.utilisateur_id = p.utilisateur_id
+    WHERE s.id = p_seance
+    GROUP BY c.quorum
+  ), false)
+$$;
+
+CREATE FUNCTION ouvrir_seance(p_seance integer) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE s mf.seance_comite;
+BEGIN
+  SELECT * INTO s FROM mf.seance_comite WHERE id = p_seance FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'séance % inconnue', p_seance; END IF;
+  IF s.statut <> 'convoquee' THEN RAISE EXCEPTION 'La séance % doit être convoquée avant son ouverture', s.numero; END IF;
+  IF EXISTS (SELECT 1 FROM mf.seance_presence WHERE seance_id = p_seance AND present IS NULL) THEN
+    RAISE EXCEPTION 'La liste de présence n''est pas complète';
+  END IF;
+  IF NOT mf.seance_quorum(p_seance) THEN
+    RAISE EXCEPTION 'Quorum non atteint : la séance ne peut pas s''ouvrir';
+  END IF;
+  UPDATE mf.seance_comite SET statut = 'ouverte', ouverte_le = now() WHERE id = p_seance;
+END $$;
+
+-- Décision d'un dossier. Voix de chacun requise ; acceptation / rejet à la majorité absolue des suffrages
+-- exprimés (hors abstentions) ; égalité : voix prépondérante du président si elle va dans ce sens ; sinon ajournement.
+CREATE FUNCTION decider_dossier(p_dossier integer, p_motif text, p_montant_accorde numeric DEFAULT NULL,
+                                p_conditions text DEFAULT NULL, p_utilisateur integer DEFAULT NULL) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE dos mf.seance_dossier; s mf.seance_comite; d mf.demande_credit; c mf.comite_credit;
+        v_pour int; v_contre int; v_ajourne int; v_abst int; v_attendus int; v_vote_pres text; v_decision text;
+        v_seuil_v numeric; v_seuil_cv numeric; v_pres integer; v_montant numeric; v_resp integer; v_votants integer[];
+BEGIN
+  SELECT * INTO dos FROM mf.seance_dossier WHERE id = p_dossier FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'dossier % inconnu', p_dossier; END IF;
+  SELECT * INTO s FROM mf.seance_comite WHERE id = dos.seance_id;
+  SELECT * INTO c FROM mf.comite_credit WHERE id = s.comite_id;
+  SELECT * INTO d FROM mf.demande_credit WHERE id = dos.demande_id FOR UPDATE;
+  IF s.statut <> 'ouverte' THEN RAISE EXCEPTION 'La séance n''est pas ouverte'; END IF;
+  IF dos.decision IS NOT NULL THEN RAISE EXCEPTION 'Dossier déjà décidé'; END IF;
+  IF btrim(COALESCE(p_motif, '')) = '' OR length(btrim(p_motif)) < 10 THEN
+    RAISE EXCEPTION 'La décision doit être motivée (10 caractères au moins)';
+  END IF;
+  IF NOT mf.seance_quorum(s.id) THEN RAISE EXCEPTION 'Quorum perdu : décision impossible'; END IF;
+  IF btrim(COALESCE(dos.analyse_individuelle, '')) = '' THEN
+    RAISE EXCEPTION 'L''analyse individuelle du dossier doit être présentée avant la décision';
+  END IF;
+
+  -- visite et contre-visite selon le montant (seuils par agence)
+  v_seuil_v  := COALESCE(mf.param_num('credit_visite_seuil', d.agence_id), 500000);
+  v_seuil_cv := COALESCE(mf.param_num('credit_contre_visite_seuil', d.agence_id), 2000000);
+  IF d.montant >= v_seuil_v AND dos.visite_le IS NULL THEN
+    RAISE EXCEPTION 'Visite préalable obligatoire à partir de % (montant demandé %)', v_seuil_v, d.montant;
+  END IF;
+  IF d.montant >= v_seuil_cv AND dos.contre_visite_le IS NULL THEN
+    RAISE EXCEPTION 'Contre-visite obligatoire à partir de % (montant demandé %)', v_seuil_cv, d.montant;
+  END IF;
+
+  -- votants attendus : présents avec voix, non récusés
+  SELECT array_agg(p.utilisateur_id) INTO v_votants FROM mf.seance_presence p
+      JOIN mf.comite_membre m ON m.comite_id = s.comite_id AND m.utilisateur_id = p.utilisateur_id
+     WHERE p.seance_id = s.id AND p.present AND m.avec_voix
+       AND NOT EXISTS (SELECT 1 FROM mf.seance_recusation r WHERE r.dossier_id = p_dossier AND r.utilisateur_id = p.utilisateur_id);
+  v_attendus := COALESCE(array_length(v_votants, 1), 0);
+  IF v_attendus = 0 THEN RAISE EXCEPTION 'Aucun votant éligible pour ce dossier'; END IF;
+  IF EXISTS (SELECT 1 FROM unnest(v_votants) AS v(uid) WHERE NOT EXISTS
+               (SELECT 1 FROM mf.seance_vote x WHERE x.dossier_id = p_dossier AND x.utilisateur_id = v.uid)) THEN
+    RAISE EXCEPTION 'Tous les membres éligibles n''ont pas encore voté';
+  END IF;
+
+  SELECT count(*) FILTER (WHERE vote = 'acceptation'), count(*) FILTER (WHERE vote = 'rejet'),
+         count(*) FILTER (WHERE vote = 'ajournement'), count(*) FILTER (WHERE vote = 'abstention')
+    INTO v_pour, v_contre, v_ajourne, v_abst
+    FROM mf.seance_vote WHERE dossier_id = p_dossier;
+  SELECT m.utilisateur_id INTO v_pres FROM mf.comite_membre m WHERE m.comite_id = s.comite_id AND m.fonction = 'president' AND m.jusqua IS NULL;
+  SELECT vote INTO v_vote_pres FROM mf.seance_vote WHERE dossier_id = p_dossier AND utilisateur_id = v_pres;
+
+  IF v_pour > v_contre + v_ajourne THEN v_decision := 'acceptation';
+  ELSIF v_contre > v_pour + v_ajourne THEN v_decision := 'rejet';
+  ELSIF v_pour = v_contre + v_ajourne AND v_pour > 0 AND v_vote_pres = 'acceptation' THEN v_decision := 'acceptation';
+  ELSIF v_contre = v_pour + v_ajourne AND v_contre > 0 AND v_vote_pres = 'rejet' THEN v_decision := 'rejet';
+  ELSE v_decision := 'ajournement';
+  END IF;
+
+  v_montant := COALESCE(p_montant_accorde, d.montant);
+  IF v_decision = 'acceptation' AND (v_montant <= 0 OR v_montant > d.montant) THEN
+    RAISE EXCEPTION 'Le montant accordé (%) ne peut dépasser le montant demandé (%)', v_montant, d.montant;
+  END IF;
+
+  PERFORM set_config('mf.comite_decision', p_dossier::text, true);
+  UPDATE mf.seance_dossier
+     SET decision = v_decision, motif = p_motif, decide_le = now(), conditions = p_conditions,
+         montant_accorde = CASE WHEN v_decision = 'acceptation' THEN v_montant END
+   WHERE id = p_dossier;
+
+  -- application à la demande de crédit (le président de séance est le validateur)
+  v_resp := COALESCE(v_pres, p_utilisateur);
+  IF v_decision = 'acceptation' THEN
+    IF v_montant < d.montant THEN
+      UPDATE mf.demande_credit SET montant = v_montant WHERE id = d.id;
+    END IF;
+    PERFORM mf.approuver_demande(d.id, v_resp, true,
+      'Comité ' || c.code || ' — séance ' || s.numero || ' : ' || p_motif);
+  ELSIF v_decision = 'rejet' THEN
+    PERFORM mf.approuver_demande(d.id, v_resp, false,
+      'Comité ' || c.code || ' — séance ' || s.numero || ' : ' || p_motif);
+  ELSE
+    UPDATE mf.demande_credit SET commentaire = 'Ajourné par le comité ' || c.code || ' (' || s.numero || ') : ' || p_motif WHERE id = d.id;
+  END IF;
+  PERFORM set_config('mf.comite_decision', '', true);
+  RETURN v_decision;
+END $$;
+
+-- Signature du procès-verbal par le président et par le secrétaire de séance
+CREATE FUNCTION signer_pv(p_seance integer, p_utilisateur integer) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE s mf.seance_comite; m mf.comite_membre;
+BEGIN
+  SELECT * INTO s FROM mf.seance_comite WHERE id = p_seance FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'séance % inconnue', p_seance; END IF;
+  IF s.statut <> 'ouverte' THEN RAISE EXCEPTION 'Le procès-verbal se signe pendant la séance ouverte, avant la clôture'; END IF;
+  IF EXISTS (SELECT 1 FROM mf.seance_dossier WHERE seance_id = p_seance AND decision IS NULL) THEN
+    RAISE EXCEPTION 'Des dossiers inscrits n''ont pas été décidés';
+  END IF;
+  m := mf.comite_membre_actif(s.comite_id, p_utilisateur, s.date_seance::date);
+  IF m.id IS NULL OR m.fonction NOT IN ('president','secretaire') THEN
+    RAISE EXCEPTION 'Seuls le président et le secrétaire signent le procès-verbal';
+  END IF;
+  IF NOT COALESCE((SELECT present FROM mf.seance_presence WHERE seance_id = p_seance AND utilisateur_id = p_utilisateur), false) THEN
+    RAISE EXCEPTION 'Le signataire doit avoir été présent';
+  END IF;
+  IF m.fonction = 'president' THEN
+    UPDATE mf.seance_comite SET pv_signe_president = now() WHERE id = p_seance;
+  ELSE
+    UPDATE mf.seance_comite SET pv_signe_secretaire = now() WHERE id = p_seance;
+  END IF;
+  RETURN m.fonction;
+END $$;
+
+CREATE FUNCTION cloturer_seance(p_seance integer) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE s mf.seance_comite;
+BEGIN
+  SELECT * INTO s FROM mf.seance_comite WHERE id = p_seance FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'séance % inconnue', p_seance; END IF;
+  IF s.statut <> 'ouverte' THEN RAISE EXCEPTION 'La séance % n''est pas ouverte', s.numero; END IF;
+  IF EXISTS (SELECT 1 FROM mf.seance_dossier WHERE seance_id = p_seance AND decision IS NULL) THEN
+    RAISE EXCEPTION 'Des dossiers inscrits n''ont pas été décidés';
+  END IF;
+  IF s.pv_signe_president IS NULL OR s.pv_signe_secretaire IS NULL THEN
+    RAISE EXCEPTION 'Le procès-verbal doit être signé par le président et par le secrétaire';
+  END IF;
+  UPDATE mf.seance_comite SET statut = 'close', close_le = now() WHERE id = p_seance;
+END $$;
+
+CREATE FUNCTION annuler_seance(p_seance integer, p_motif text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF length(btrim(COALESCE(p_motif, ''))) < 5 THEN RAISE EXCEPTION 'Le motif d''annulation est obligatoire'; END IF;
+  UPDATE mf.seance_comite SET statut = 'annulee', ordre_du_jour = COALESCE(ordre_du_jour, '') || E'\nANNULÉE : ' || p_motif
+   WHERE id = p_seance AND statut IN ('preparee','convoquee','ouverte');
+  IF NOT FOUND THEN RAISE EXCEPTION 'Séance introuvable ou déjà close'; END IF;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- Durcissement de la décision directe : en mode « comité obligatoire », seule la décision de comité
+-- ou une délégation couvrant le montant permet d'approuver ou de refuser une demande.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION approuver_demande(p_demande integer, p_validateur integer DEFAULT NULL,
+                                             p_approuve boolean DEFAULT true, p_commentaire text DEFAULT NULL,
+                                             p_date date DEFAULT current_date) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE d mf.demande_credit;
+BEGIN
+  SELECT * INTO d FROM mf.demande_credit WHERE id = p_demande FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'demande % inconnue', p_demande; END IF;
+  IF d.statut <> 'demandee' THEN RAISE EXCEPTION 'demande % déjà traitée (statut %)', d.numero, d.statut; END IF;
+  IF p_approuve AND p_validateur IS NULL AND d.montant > mf.param_num('seuil_validation_credit', d.agence_id) THEN
+    RAISE EXCEPTION 'la demande % dépasse le seuil de validation : un validateur est obligatoire', d.numero;
+  END IF;
+  IF COALESCE(mf.param('comite_credit_obligatoire', d.agence_id), '0') = '1'
+     AND COALESCE(current_setting('mf.comite_decision', true), '') = ''
+     AND NOT mf.delegation_couvre(p_validateur, d.agence_id, d.montant, p_date) THEN
+    RAISE EXCEPTION 'La demande % doit être décidée par le comité de crédit (ou par une délégation couvrant % )', d.numero, d.montant;
+  END IF;
+  UPDATE mf.demande_credit
+     SET statut = CASE WHEN p_approuve THEN 'approuvee' ELSE 'refusee' END,
+         validateur_id = p_validateur, commentaire = p_commentaire, date_decision = p_date
+   WHERE id = p_demande;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- Analyse globale d'une séance (montants, répartition des décisions, portefeuille des agences concernées)
+-- ---------------------------------------------------------------------
+CREATE VIEW v_seance_analyse_globale AS
+SELECT s.id AS seance_id, s.numero,
+       count(sd.id)                                                        AS nb_dossiers,
+       COALESCE(sum(COALESCE(sd.montant_demande, d.montant)), 0)           AS total_demande,
+       COALESCE(sum(sd.montant_accorde) FILTER (WHERE sd.decision = 'acceptation'), 0) AS total_accorde,
+       count(sd.id) FILTER (WHERE sd.decision = 'acceptation')             AS nb_acceptes,
+       count(sd.id) FILTER (WHERE sd.decision = 'ajournement')             AS nb_ajournes,
+       count(sd.id) FILTER (WHERE sd.decision = 'rejet')                   AS nb_rejetes,
+       count(sd.id) FILTER (WHERE sd.decision IS NULL)                     AS nb_en_attente,
+       COALESCE((SELECT sum(v.capital_restant) FROM mf.v_credit_situation v JOIN mf.credit c ON c.id = v.credit_id
+                  WHERE c.agence_id IN (SELECT DISTINCT d2.agence_id FROM mf.seance_dossier sd2 JOIN mf.demande_credit d2 ON d2.id = sd2.demande_id WHERE sd2.seance_id = s.id)), 0)
+         AS encours_agences_concernees
+FROM mf.seance_comite s
+LEFT JOIN mf.seance_dossier sd ON sd.seance_id = s.id
+LEFT JOIN mf.demande_credit d ON d.id = sd.demande_id
+GROUP BY s.id, s.numero;
+
+-- Piste d'audit
+CREATE TRIGGER audit_comite_credit AFTER INSERT OR UPDATE OR DELETE ON comite_credit FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_comite_membre AFTER INSERT OR UPDATE OR DELETE ON comite_membre FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_delegation_credit AFTER INSERT OR UPDATE OR DELETE ON delegation_credit FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_seance_comite AFTER INSERT OR UPDATE OR DELETE ON seance_comite FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_seance_dossier AFTER INSERT OR UPDATE OR DELETE ON seance_dossier FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_seance_vote AFTER INSERT OR UPDATE OR DELETE ON seance_vote FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 36_controles_internes.sql
+-- =====================================================================
+-- =====================================================================
+-- 36_controles_internes.sql
+-- Contrôles issus du guide méthodologique du contrôle interne :
+--   * seuils de retrait par niveau (caissier / chef d'agence / direction) avec détection du fractionnement
+--     (plusieurs retraits du même client le même jour pour rester sous le seuil)
+--   * comptes dormants (aucun mouvement depuis N jours)
+--   * séparation des tâches approbation / décaissement d'un crédit (paramètre, désactivé par défaut)
+--   * journal des connexions en ajout seul (preuve)
+-- Dépend de : 00, 01, 18, 34.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('retrait_seuil_caissier', '500000', 'Retrait maximal qu''un caissier exécute seul, cumul journalier du client compris ; au-delà : chef d''agence (provisoire)'),
+  ('retrait_seuil_chef', '5000000', 'Retrait maximal qu''un chef d''agence exécute seul ; au-delà : direction (provisoire)'),
+  ('dormance_jours', '365', 'Jours sans mouvement après lesquels un compte d''épargne est dit dormant (provisoire)'),
+  ('separation_decaissement', '0', '1 = la personne qui décaisse un crédit ne peut pas être celle qui l''a approuvé');
+
+-- Retraits d'un client à une date : retraits d'épargne classique + retraits de tontine exécutés
+CREATE FUNCTION retraits_du_jour(p_client integer, p_date date DEFAULT current_date) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT COALESCE((SELECT sum(m.montant) FROM mf.mouvement_epargne m JOIN mf.compte_epargne c ON c.id = m.compte_id
+                    WHERE c.client_id = p_client AND m.type = 'retrait' AND m.date_operation = p_date), 0)
+       + COALESCE((SELECT sum(r.montant) FROM mf.retrait r JOIN mf.cycle cy ON cy.id = r.cycle_id
+                    WHERE cy.client_id = p_client AND r.nature = 'retrait_client' AND r.statut = 'execute' AND r.date_operation = p_date), 0)
+$$;
+
+-- Plafond d'autonomie d'un rôle (NULL = sans plafond : direction, administrateur, coordinateur)
+CREATE FUNCTION seuil_retrait(p_role text, p_agence smallint) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT CASE p_role
+           WHEN 'caissier' THEN mf.param_num('retrait_seuil_caissier', p_agence)
+           WHEN 'chef_agence' THEN mf.param_num('retrait_seuil_chef', p_agence)
+           WHEN 'agent' THEN 0
+           WHEN 'collectrice' THEN 0
+           ELSE NULL
+         END
+$$;
+
+-- Verdict : 'ok', 'seuil' (le montant seul dépasse le plafond) ou 'fractionnement' (le cumul du jour le dépasse)
+CREATE FUNCTION controle_seuil_retrait(p_role text, p_client integer, p_agence smallint, p_montant numeric,
+                                       p_date date DEFAULT current_date)
+RETURNS TABLE(statut text, seuil numeric, cumul numeric)
+LANGUAGE plpgsql STABLE AS $$
+DECLARE v_seuil numeric; v_cumul numeric;
+BEGIN
+  v_seuil := mf.seuil_retrait(p_role, p_agence);
+  IF v_seuil IS NULL THEN
+    RETURN QUERY SELECT 'ok'::text, NULL::numeric, 0::numeric;
+    RETURN;
+  END IF;
+  v_cumul := mf.retraits_du_jour(p_client, p_date);
+  IF p_montant > v_seuil THEN
+    RETURN QUERY SELECT 'seuil'::text, v_seuil, v_cumul;
+  ELSIF v_cumul + p_montant > v_seuil THEN
+    RETURN QUERY SELECT 'fractionnement'::text, v_seuil, v_cumul;
+  ELSE
+    RETURN QUERY SELECT 'ok'::text, v_seuil, v_cumul;
+  END IF;
+END $$;
+
+-- Comptes dormants : aucun mouvement depuis le nombre de jours paramétré (par agence)
+CREATE VIEW v_compte_dormant AS
+SELECT c.id AS compte_id, c.agence_id, c.client_id, c.numero, cl.nom AS client,
+       COALESCE(max(m.date_operation), c.ouvert_le) AS dernier_mouvement,
+       (current_date - COALESCE(max(m.date_operation), c.ouvert_le))::integer AS jours_inactif,
+       COALESCE(s.solde, 0) AS solde
+FROM mf.compte_epargne c
+JOIN mf.client cl ON cl.id = c.client_id
+LEFT JOIN mf.mouvement_epargne m ON m.compte_id = c.id
+LEFT JOIN mf.v_solde_compte_epargne s ON s.compte_id = c.id
+WHERE c.statut = 'actif'
+GROUP BY c.id, cl.nom, s.solde
+HAVING (current_date - COALESCE(max(m.date_operation), c.ouvert_le)) >= COALESCE(mf.param_num('dormance_jours', c.agence_id), 365);
+
+-- Journal des connexions : ajout seul (preuve conservable), comme le journal d'audit
+CREATE TRIGGER journal_connexion_ajout_seul BEFORE UPDATE OR DELETE ON journal_connexion
+  FOR EACH ROW EXECUTE FUNCTION trg_ajout_seul();
+CREATE TRIGGER journal_connexion_pas_de_vidage BEFORE TRUNCATE ON journal_connexion
+  FOR EACH STATEMENT EXECUTE FUNCTION trg_ajout_seul();
+
+-- =====================================================================
+-- MODULE 37_recouvrement.sql
+-- =====================================================================
+-- =====================================================================
+-- 37_recouvrement.sql
+-- Recouvrement (guide du contrôle interne, fiche 6.15) : d'abord à l'amiable (relances, visites), puis mise en demeure,
+-- avals et réalisation des garanties ; passage en perte seulement après toutes les étapes, une visite du client et un
+-- retard minimal, par une personne autre que l'agent de recouvrement. Rééchelonnement = nouveau dossier de crédit.
+-- Dépend de : 03, 08, 11, 35.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('perte_min_retard_jours', '365', 'Retard minimal (jours) avant passage en perte d''un crédit (provisoire)');
+
+CREATE TABLE dossier_recouvrement (
+  id                   serial PRIMARY KEY,
+  agence_id            smallint NOT NULL REFERENCES agence(id),
+  credit_id            integer NOT NULL REFERENCES credit(id),
+  ouvert_le            date NOT NULL DEFAULT current_date,
+  ouvert_par           integer REFERENCES utilisateur(id),
+  agent_id             integer REFERENCES utilisateur(id),            -- agent de recouvrement
+  statut               varchar(20) NOT NULL DEFAULT 'amiable'
+                       CHECK (statut IN ('amiable','mise_en_demeure','garanties','regle','perte')),
+  montant_du_ouverture numeric(14,0) NOT NULL CHECK (montant_du_ouverture >= 0),
+  note                 text,
+  cloture_le           date,
+  cloture_motif        text,
+  CHECK ((statut IN ('regle','perte')) = (cloture_le IS NOT NULL))
+);
+CREATE UNIQUE INDEX dossier_recouvrement_un_ouvert ON dossier_recouvrement(credit_id) WHERE statut NOT IN ('regle','perte');
+
+CREATE TABLE action_recouvrement (
+  id              serial PRIMARY KEY,
+  dossier_id      integer NOT NULL REFERENCES dossier_recouvrement(id),
+  date_action     date NOT NULL DEFAULT current_date,
+  type            varchar(25) NOT NULL CHECK (type IN
+                    ('relance','appel','visite','accord_amiable','mise_en_demeure','mise_en_demeure_aval','saisie_salaire','vente_garantie')),
+  resultat        text,
+  montant_promis  numeric(14,0) CHECK (montant_promis IS NULL OR montant_promis > 0),
+  date_promesse   date,
+  valeur_estimee  numeric(14,0) CHECK (valeur_estimee IS NULL OR valeur_estimee > 0),   -- évaluation avant vente d'une garantie
+  utilisateur_id  integer REFERENCES utilisateur(id),
+  cree_le         timestamptz NOT NULL DEFAULT now(),
+  CHECK (type <> 'vente_garantie' OR valeur_estimee IS NOT NULL),
+  CHECK (type <> 'accord_amiable' OR (montant_promis IS NOT NULL AND date_promesse IS NOT NULL))
+);
+
+-- Radiation enregistrée (le crédit reste inchangé : le passage en charges comptable n'est pas automatisé)
+CREATE TABLE radiation_credit (
+  id              serial PRIMARY KEY,
+  credit_id       integer NOT NULL UNIQUE REFERENCES credit(id),
+  dossier_id      integer NOT NULL REFERENCES dossier_recouvrement(id),
+  date_radiation  date NOT NULL DEFAULT current_date,
+  capital_restant numeric(14,0) NOT NULL,
+  motif           text NOT NULL,
+  approuvee_par   integer REFERENCES utilisateur(id)
+);
+
+-- Jours de retard d'un crédit : plus ancienne échéance impayée
+CREATE FUNCTION jours_retard_credit(p_credit integer, p_date date DEFAULT current_date) RETURNS integer
+LANGUAGE sql STABLE AS $$
+  SELECT COALESCE(max(p_date - e.date_prevue), 0)::integer FROM mf.echeance e
+   WHERE e.credit_id = p_credit AND e.statut <> 'payee' AND e.date_prevue < p_date
+$$;
+
+CREATE FUNCTION ouvrir_dossier_recouvrement(p_credit integer, p_utilisateur integer DEFAULT NULL, p_agent integer DEFAULT NULL,
+                                            p_note text DEFAULT NULL) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE c mf.credit; v_du numeric; v_id integer;
+BEGIN
+  SELECT * INTO c FROM mf.credit WHERE id = p_credit FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'crédit % inconnu', p_credit; END IF;
+  IF c.statut <> 'en_retard' THEN RAISE EXCEPTION 'Le crédit % n''est pas en retard (statut %)', c.numero, c.statut; END IF;
+  SELECT capital_restant INTO v_du FROM mf.v_credit_situation WHERE credit_id = p_credit;
+  INSERT INTO mf.dossier_recouvrement(agence_id, credit_id, ouvert_par, agent_id, montant_du_ouverture, note)
+  VALUES (c.agence_id, p_credit, p_utilisateur, COALESCE(p_agent, p_utilisateur), v_du, p_note) RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+-- Règles de l'enchaînement des actions
+CREATE FUNCTION trg_action_recouvrement() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE d mf.dossier_recouvrement; v_amiable boolean; v_med boolean;
+BEGIN
+  SELECT * INTO d FROM mf.dossier_recouvrement WHERE id = NEW.dossier_id FOR UPDATE;
+  IF d.statut IN ('regle','perte') THEN RAISE EXCEPTION 'Le dossier de recouvrement est clos (%)', d.statut; END IF;
+  SELECT EXISTS (SELECT 1 FROM mf.action_recouvrement WHERE dossier_id = d.id AND type IN ('relance','appel','visite')) INTO v_amiable;
+  SELECT EXISTS (SELECT 1 FROM mf.action_recouvrement WHERE dossier_id = d.id AND type = 'mise_en_demeure') INTO v_med;
+  IF NEW.type = 'mise_en_demeure' AND NOT v_amiable THEN
+    RAISE EXCEPTION 'Avant la mise en demeure : relances, appels ou visites à l''amiable obligatoires';
+  END IF;
+  IF NEW.type IN ('mise_en_demeure_aval','saisie_salaire','vente_garantie') AND NOT v_med THEN
+    RAISE EXCEPTION 'Mise en demeure du débiteur obligatoire avant cette étape';
+  END IF;
+  IF NEW.type = 'mise_en_demeure' THEN
+    UPDATE mf.dossier_recouvrement SET statut = 'mise_en_demeure' WHERE id = d.id AND statut = 'amiable';
+  ELSIF NEW.type IN ('saisie_salaire','vente_garantie') THEN
+    UPDATE mf.dossier_recouvrement SET statut = 'garanties' WHERE id = d.id;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER action_recouvrement_regles BEFORE INSERT ON action_recouvrement FOR EACH ROW EXECUTE FUNCTION trg_action_recouvrement();
+
+CREATE FUNCTION trg_action_immuable() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'une action de recouvrement est conservée telle quelle (%)', TG_OP; END $$;
+CREATE TRIGGER action_recouvrement_immuable BEFORE UPDATE OR DELETE ON action_recouvrement FOR EACH ROW EXECUTE FUNCTION trg_action_immuable();
+
+-- Passage en perte : toutes les étapes faites, visite du client, retard minimal, approbateur distinct de l'agent
+CREATE FUNCTION passer_en_perte(p_dossier integer, p_utilisateur integer, p_motif text) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE d mf.dossier_recouvrement; v_min numeric; v_retard integer; v_cap numeric; v_id integer;
+BEGIN
+  SELECT * INTO d FROM mf.dossier_recouvrement WHERE id = p_dossier FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'dossier % inconnu', p_dossier; END IF;
+  IF d.statut NOT IN ('mise_en_demeure','garanties') THEN
+    RAISE EXCEPTION 'Passage en perte impossible : le dossier est au stade « % » (mise en demeure obligatoire)', d.statut;
+  END IF;
+  IF length(btrim(COALESCE(p_motif, ''))) < 10 THEN RAISE EXCEPTION 'Le motif du passage en perte est obligatoire (10 caractères)'; END IF;
+  IF p_utilisateur IS NOT DISTINCT FROM d.agent_id THEN
+    RAISE EXCEPTION 'Séparation des tâches : l''agent de recouvrement ne peut pas approuver le passage en perte';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM mf.action_recouvrement WHERE dossier_id = d.id AND type = 'visite') THEN
+    RAISE EXCEPTION 'Une visite du client est obligatoire avant le passage en perte';
+  END IF;
+  v_min := COALESCE(mf.param_num('perte_min_retard_jours', d.agence_id), 365);
+  v_retard := mf.jours_retard_credit(d.credit_id);
+  IF v_retard < v_min THEN RAISE EXCEPTION 'Retard insuffisant : % jours (minimum %)', v_retard, v_min; END IF;
+  SELECT capital_restant INTO v_cap FROM mf.v_credit_situation WHERE credit_id = d.credit_id;
+  INSERT INTO mf.radiation_credit(credit_id, dossier_id, capital_restant, motif, approuvee_par)
+  VALUES (d.credit_id, d.id, v_cap, p_motif, p_utilisateur) RETURNING id INTO v_id;
+  UPDATE mf.dossier_recouvrement SET statut = 'perte', cloture_le = current_date, cloture_motif = p_motif WHERE id = d.id;
+  RETURN v_id;
+END $$;
+
+CREATE FUNCTION cloturer_dossier_regle(p_dossier integer) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE d mf.dossier_recouvrement; v_statut text;
+BEGIN
+  SELECT * INTO d FROM mf.dossier_recouvrement WHERE id = p_dossier FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'dossier % inconnu', p_dossier; END IF;
+  SELECT statut INTO v_statut FROM mf.credit WHERE id = d.credit_id;
+  IF v_statut <> 'solde' THEN RAISE EXCEPTION 'Le crédit n''est pas soldé : le dossier reste ouvert'; END IF;
+  UPDATE mf.dossier_recouvrement SET statut = 'regle', cloture_le = current_date, cloture_motif = 'Crédit soldé' WHERE id = p_dossier;
+END $$;
+
+-- Rééchelonnement = nouveau dossier : demande de crédit pour le capital restant, liée à l'ancien crédit
+ALTER TABLE demande_credit ADD COLUMN reechelonne_de integer REFERENCES credit(id);
+
+CREATE FUNCTION reechelonner_credit(p_credit integer, p_nb_echeances integer, p_note text DEFAULT NULL) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE c mf.credit; v_cap numeric; v_id integer; v_produit integer;
+BEGIN
+  SELECT * INTO c FROM mf.credit WHERE id = p_credit FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'crédit % inconnu', p_credit; END IF;
+  IF c.statut <> 'en_retard' THEN RAISE EXCEPTION 'Seul un crédit en retard se rééchelonne'; END IF;
+  IF EXISTS (SELECT 1 FROM mf.demande_credit WHERE reechelonne_de = p_credit AND statut IN ('demandee','approuvee')) THEN
+    RAISE EXCEPTION 'Un rééchelonnement est déjà en cours pour ce crédit';
+  END IF;
+  SELECT capital_restant INTO v_cap FROM mf.v_credit_situation WHERE credit_id = p_credit;
+  SELECT d.produit_id INTO v_produit FROM mf.demande_credit d WHERE d.credit_id = p_credit;
+  IF v_produit IS NULL THEN RAISE EXCEPTION 'Produit d''origine introuvable pour ce crédit'; END IF;
+  INSERT INTO mf.demande_credit(agence_id, client_id, produit_id, montant, nb_echeances, taux, mode_remboursement, note, reechelonne_de)
+  VALUES (c.agence_id, c.client_id, v_produit, v_cap, p_nb_echeances, c.taux, c.mode_remboursement,
+          COALESCE(p_note, 'Rééchelonnement du crédit ' || c.numero), p_credit) RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+CREATE TRIGGER audit_dossier_recouvrement AFTER INSERT OR UPDATE OR DELETE ON dossier_recouvrement FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_radiation_credit AFTER INSERT OR UPDATE OR DELETE ON radiation_credit FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 38_procuration_cheques.sql
+-- =====================================================================
+-- =====================================================================
+-- 38_procuration_cheques.sql
+-- Contrôles du guide (caisse, liquidités, épargne) :
+--   * procurations sur un compte d'épargne : créées puis validées par une autre personne, bornées dans le temps et par
+--     un plafond ; un retrait par mandataire doit citer une procuration valide
+--   * chèques : signatures requises (directeur + comptable ; + président du conseil au-delà du plafond), le
+--     préparateur ne signe pas, chaque personne signe une fois ; émission seulement quand tout est signé
+--   * comptes dormants : clôture (solde nul) ou blocage (solde non nul)
+-- Dépend de : 01, 13, 36.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('cheque_plafond_trois_signatures', '1000000', 'Montant à partir duquel un chèque exige aussi la signature du président du conseil (provisoire)');
+
+-- ---------------------------------------------------------------- procurations
+CREATE TABLE procuration (
+  id               serial PRIMARY KEY,
+  agence_id        smallint NOT NULL REFERENCES agence(id),
+  compte_id        integer NOT NULL REFERENCES compte_epargne(id),
+  mandataire_nom   text NOT NULL,
+  mandataire_piece text NOT NULL,                  -- type et numéro de la pièce d'identité contrôlée
+  mandataire_tel   varchar(30),
+  debut            date NOT NULL DEFAULT current_date,
+  fin              date,
+  plafond          numeric(14,0) CHECK (plafond IS NULL OR plafond > 0),   -- par opération ; NULL = pas de plafond
+  statut           varchar(12) NOT NULL DEFAULT 'en_attente' CHECK (statut IN ('en_attente','validee','revoquee')),
+  cree_par         integer REFERENCES utilisateur(id),
+  validee_par      integer REFERENCES utilisateur(id),
+  validee_le       timestamptz,
+  cree_le          timestamptz NOT NULL DEFAULT now(),
+  CHECK (fin IS NULL OR fin >= debut),
+  CHECK (statut <> 'validee' OR (validee_par IS NOT NULL AND validee_par IS DISTINCT FROM cree_par))
+);
+
+ALTER TABLE mouvement_epargne ADD COLUMN procuration_id integer REFERENCES procuration(id);
+
+CREATE FUNCTION trg_mouvement_procuration() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE p mf.procuration;
+BEGIN
+  IF NEW.procuration_id IS NULL THEN RETURN NEW; END IF;
+  IF NEW.type <> 'retrait' THEN RAISE EXCEPTION 'Une procuration ne s''applique qu''à un retrait'; END IF;
+  SELECT * INTO p FROM mf.procuration WHERE id = NEW.procuration_id;
+  IF p.compte_id <> NEW.compte_id THEN RAISE EXCEPTION 'Cette procuration concerne un autre compte'; END IF;
+  IF p.statut <> 'validee' THEN RAISE EXCEPTION 'Procuration non validée (statut %)', p.statut; END IF;
+  IF NEW.date_operation < p.debut OR (p.fin IS NOT NULL AND NEW.date_operation > p.fin) THEN
+    RAISE EXCEPTION 'Procuration hors de sa période de validité';
+  END IF;
+  IF p.plafond IS NOT NULL AND NEW.montant > p.plafond THEN
+    RAISE EXCEPTION 'Le retrait dépasse le plafond de la procuration (%)', p.plafond;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER mouvement_procuration BEFORE INSERT ON mouvement_epargne FOR EACH ROW EXECUTE FUNCTION trg_mouvement_procuration();
+
+CREATE FUNCTION valider_procuration(p_procuration integer, p_utilisateur integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE mf.procuration SET statut = 'validee', validee_par = p_utilisateur, validee_le = now()
+   WHERE id = p_procuration AND statut = 'en_attente';
+  IF NOT FOUND THEN RAISE EXCEPTION 'Procuration introuvable ou déjà traitée'; END IF;
+END $$;
+
+-- ---------------------------------------------------------------- chèques
+CREATE TABLE cheque_emission (
+  id               serial PRIMARY KEY,
+  agence_id        smallint NOT NULL REFERENCES agence(id),
+  compte_banque_id integer NOT NULL REFERENCES compte_banque(id),
+  numero_cheque    varchar(30) NOT NULL,
+  beneficiaire     text NOT NULL,
+  objet            text NOT NULL,
+  montant          numeric(14,0) NOT NULL CHECK (montant > 0),
+  trois_signatures boolean NOT NULL,               -- figé à la préparation selon le plafond
+  statut           varchar(10) NOT NULL DEFAULT 'prepare' CHECK (statut IN ('prepare','emis','annule')),
+  cree_par         integer REFERENCES utilisateur(id),
+  cree_le          timestamptz NOT NULL DEFAULT now(),
+  emis_le          timestamptz,
+  UNIQUE (compte_banque_id, numero_cheque)
+);
+
+CREATE FUNCTION trg_cheque_plafond() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.trois_signatures := NEW.montant >= COALESCE(mf.param_num('cheque_plafond_trois_signatures', NEW.agence_id), 1000000);
+  ELSIF NEW.montant <> OLD.montant OR NEW.trois_signatures <> OLD.trois_signatures THEN
+    RAISE EXCEPTION 'Le montant d''un chèque ne se modifie pas : annuler et refaire';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER cheque_plafond BEFORE INSERT OR UPDATE ON cheque_emission FOR EACH ROW EXECUTE FUNCTION trg_cheque_plafond();
+
+CREATE TABLE cheque_signature (
+  cheque_id       integer NOT NULL REFERENCES cheque_emission(id),
+  utilisateur_id  integer NOT NULL REFERENCES utilisateur(id),
+  fonction        varchar(15) NOT NULL CHECK (fonction IN ('directeur','comptable','president_ca')),
+  signe_le        timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (cheque_id, utilisateur_id),
+  UNIQUE (cheque_id, fonction)
+);
+
+CREATE FUNCTION trg_cheque_signature() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE c mf.cheque_emission; v_role text;
+BEGIN
+  SELECT * INTO c FROM mf.cheque_emission WHERE id = NEW.cheque_id;
+  IF c.statut <> 'prepare' THEN RAISE EXCEPTION 'Le chèque n''est plus à signer (statut %)', c.statut; END IF;
+  IF NEW.utilisateur_id IS NOT DISTINCT FROM c.cree_par THEN
+    RAISE EXCEPTION 'Séparation des tâches : celui qui prépare le chèque ne le signe pas';
+  END IF;
+  IF NEW.fonction = 'president_ca' AND NOT c.trois_signatures THEN
+    RAISE EXCEPTION 'La signature du président n''est requise qu''au-delà du plafond';
+  END IF;
+  SELECT role::text INTO v_role FROM mf.utilisateur WHERE id = NEW.utilisateur_id;
+  IF (NEW.fonction = 'directeur' AND v_role <> 'directeur') OR (NEW.fonction = 'comptable' AND v_role <> 'comptable')
+     OR (NEW.fonction = 'president_ca' AND v_role <> 'admin') THEN
+    RAISE EXCEPTION 'Le rôle % ne peut pas signer en qualité de %', v_role, NEW.fonction;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER cheque_signature_regles BEFORE INSERT ON cheque_signature FOR EACH ROW EXECUTE FUNCTION trg_cheque_signature();
+
+CREATE FUNCTION emettre_cheque(p_cheque integer) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE c mf.cheque_emission; v_n integer; v_req integer;
+BEGIN
+  SELECT * INTO c FROM mf.cheque_emission WHERE id = p_cheque FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'chèque % inconnu', p_cheque; END IF;
+  IF c.statut <> 'prepare' THEN RAISE EXCEPTION 'Chèque déjà %', c.statut; END IF;
+  SELECT count(*) INTO v_n FROM mf.cheque_signature WHERE cheque_id = p_cheque;
+  v_req := CASE WHEN c.trois_signatures THEN 3 ELSE 2 END;
+  IF v_n < v_req THEN
+    RAISE EXCEPTION 'Signatures insuffisantes : % sur % requises', v_n, v_req;
+  END IF;
+  UPDATE mf.cheque_emission SET statut = 'emis', emis_le = now() WHERE id = p_cheque;
+END $$;
+
+-- ---------------------------------------------------------------- comptes dormants
+CREATE FUNCTION traiter_compte_dormant(p_compte integer, p_action text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE d mf.v_compte_dormant;
+BEGIN
+  SELECT * INTO d FROM mf.v_compte_dormant WHERE compte_id = p_compte;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Ce compte n''est pas dormant'; END IF;
+  IF p_action = 'clore' THEN
+    IF d.solde <> 0 THEN RAISE EXCEPTION 'Clôture impossible : solde non nul (%) ; bloquer le compte et prévenir le client', d.solde; END IF;
+    UPDATE mf.compte_epargne SET statut = 'clos' WHERE id = p_compte;
+    RETURN 'clos';
+  ELSIF p_action = 'bloquer' THEN
+    UPDATE mf.compte_epargne SET statut = 'bloque' WHERE id = p_compte;
+    RETURN 'bloque';
+  END IF;
+  RAISE EXCEPTION 'Action inconnue : % (clore ou bloquer)', p_action;
+END $$;
+
+CREATE TRIGGER audit_procuration AFTER INSERT OR UPDATE OR DELETE ON procuration FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_cheque_emission AFTER INSERT OR UPDATE OR DELETE ON cheque_emission FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_cheque_signature AFTER INSERT OR UPDATE OR DELETE ON cheque_signature FOR EACH ROW EXECUTE FUNCTION trg_audit();

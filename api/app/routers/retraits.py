@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..auth import User, agence_filter, agence_scope, require, verifier_agence
+from ..controles import controler_seuil_retrait
 from ..db import all_rows, one_row, tx
 from .caisse import verifier_session
 
@@ -129,7 +130,9 @@ class ExecutionIn(BaseModel):
 def executer(retrait_id: int, body: ExecutionIn, user: User = Depends(require("retrait:execute"))):
     with tx(user.login) as cur:
         ag = verifier_agence(cur, user, "retrait", retrait_id)
-        r = one_row(cur, "SELECT nature, decaissement, statut FROM retrait WHERE id = %s", (retrait_id,))
+        r = one_row(cur, "SELECT r.nature, r.decaissement, r.statut, r.montant, cy.client_id FROM retrait r JOIN cycle cy ON cy.id = r.cycle_id WHERE r.id = %s", (retrait_id,))
+        if r["nature"] == "retrait_client" and r["decaissement"]:
+            controler_seuil_retrait(cur, user, r["client_id"], ag, r["montant"], body.date)
         if body.session_id is not None:
             if verifier_session(cur, user, body.session_id) != ag:
                 raise HTTPException(status_code=422, detail="La session de caisse appartient à une autre agence")

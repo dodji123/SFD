@@ -21,8 +21,8 @@ class AgenceIn(BaseModel):
 @router.get("/agences")
 def lister_agences(user: User = Depends(require("ref:read"))):
     with tx() as cur:
-        if user.agence_id is not None:
-            return all_rows(cur, "SELECT * FROM agence WHERE id = %s", (user.agence_id,))
+        if not user.siege:
+            return all_rows(cur, "SELECT * FROM agence WHERE id = ANY(%s) ORDER BY code", (user.agences,))
         return all_rows(cur, "SELECT * FROM agence ORDER BY code")
 
 

@@ -83,6 +83,9 @@ async function request<T>(method: string, path: string, opts: { params?: Params;
   } catch {
     throw new ApiError(0, 'Serveur injoignable. Vérifiez la connexion.')
   }
+  // session glissante : l'API renvoie un jeton frais à chaque requête authentifiée (inactivité maximale)
+  const frais = res.headers.get('X-Nouveau-Jeton')
+  if (frais && token && res.ok) session.setToken(frais)
   if (res.status === 204) return undefined as T
   let data: unknown = null
   try {

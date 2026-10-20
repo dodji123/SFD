@@ -76,7 +76,7 @@ def etats_agence(du: dt.date, au: dt.date, agence_id: int | None = None, user: U
 def etats_consolides(du: dt.date, au: dt.date, user: User = Depends(require("etats:consolide"))):
     """Réseau entier : une colonne par agence et une colonne « total » (compte de résultat, bilan, synthèse)."""
     _verifier_periode(du, au)
-    if user.agence_id is not None:
+    if not user.siege:
         raise HTTPException(status_code=403, detail="Les états consolidés sont réservés au siège")
     with tx() as cur:
         agences = all_rows(cur, "SELECT id, code, libelle FROM agence ORDER BY code")

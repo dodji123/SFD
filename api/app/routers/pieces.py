@@ -140,7 +140,7 @@ def lister(date: dt.date | None = None, type: str | None = None, client_id: int 
 def lire(piece_id: int, user: User = Depends(require("epargne:read"))):
     with tx() as cur:
         p = detail(cur, piece_id)
-        if user.agence_id is not None and p["agence_id"] != user.agence_id:
+        if not user.peut_agence(p["agence_id"]):
             raise HTTPException(status_code=404, detail="Introuvable")
         return p
 
@@ -158,16 +158,16 @@ def pour_operation(body: OperationIn, user: User = Depends(require("epargne:writ
     with tx(user.login) as cur:
         if body.source == "mouvement_epargne":
             ag = one_row(cur, "SELECT ce.agence_id FROM mouvement_epargne m JOIN compte_epargne ce ON ce.id = m.compte_id WHERE m.id = %s", (body.id,))
-            pid = piece_mouvement(cur, user, body.id) if ag and (user.agence_id in (None, ag["agence_id"])) else None
+            pid = piece_mouvement(cur, user, body.id) if ag and user.peut_agence(ag["agence_id"]) else None
         elif body.source == "adhesion":
             ag = one_row(cur, "SELECT agence_id FROM compte_epargne WHERE id = %s", (body.id,))
-            pid = piece_adhesion(cur, user, body.id) if ag and (user.agence_id in (None, ag["agence_id"])) else None
+            pid = piece_adhesion(cur, user, body.id) if ag and user.peut_agence(ag["agence_id"]) else None
         elif body.source in ("depot_garantie", "liberation_garantie"):
             ag = one_row(cur, "SELECT agence_id FROM depot_garantie WHERE id = %s", (body.id,))
-            pid = piece_garantie(cur, user, body.id, body.source == "liberation_garantie") if ag and (user.agence_id in (None, ag["agence_id"])) else None
+            pid = piece_garantie(cur, user, body.id, body.source == "liberation_garantie") if ag and user.peut_agence(ag["agence_id"]) else None
         else:
             ag = one_row(cur, "SELECT agence_id FROM depot_terme WHERE id = %s", (body.id,))
-            pid = piece_terme(cur, user, body.id, body.source != "depot_terme") if ag and (user.agence_id in (None, ag["agence_id"])) else None
+            pid = piece_terme(cur, user, body.id, body.source != "depot_terme") if ag and user.peut_agence(ag["agence_id"]) else None
         if pid is None:
             raise HTTPException(status_code=422, detail="Aucune pièce justificative pour cette opération")
         return detail(cur, pid)
@@ -182,8 +182,8 @@ class RetraitsIn(BaseModel):
 def pour_retraits_tontine(body: RetraitsIn, user: User = Depends(require("retrait:execute"))):
     """Une seule pièce pour les retraits exécutés de plusieurs cycles d'un même client."""
     with tx(user.login) as cur:
-        if user.agence_id is not None:
-            autres = one_row(cur, "SELECT count(*) AS n FROM retrait WHERE id = ANY(%s) AND agence_id <> %s", (body.retrait_ids, user.agence_id))["n"]
+        if not user.siege:
+            autres = one_row(cur, "SELECT count(*) AS n FROM retrait WHERE id = ANY(%s) AND NOT (agence_id = ANY(%s))", (body.retrait_ids, user.agences))["n"]
             if autres:
                 raise HTTPException(status_code=404, detail="Introuvable")
         pid = one_row(cur, "SELECT creer_piece_retraits_tontine(%s::integer[], COALESCE(%s, current_date), %s) AS id", (body.retrait_ids, body.date, user.id))["id"]

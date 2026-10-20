@@ -279,7 +279,7 @@ def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int 
 def _ligne_autorisee(cur, user: User, ligne_id: int) -> dict:
     l = one_row(cur, "SELECT l.id, l.agent_id, l.montant_collecte, c.agence_id, c.type_cycle, c.mise_courante, s.reste_a_collecter FROM ligne_collecte l "
                      "JOIN cycle c ON c.id = l.cycle_id JOIN v_cycle_situation s ON s.cycle_id = c.id WHERE l.id = %s", (ligne_id,))
-    if l is None or (user.agence_id is not None and l["agence_id"] != user.agence_id):
+    if l is None or not user.peut_agence(l["agence_id"]):
         raise HTTPException(status_code=404, detail="Introuvable")
     if user.role == "agent" and l["agent_id"] != user.agent_id:
         raise HTTPException(status_code=403, detail="Un agent ne corrige que ses propres collectes")

@@ -61,8 +61,8 @@ def transferts_du_client(client_id: int, user: User = Depends(require("ref:read"
         r = one_row(cur, "SELECT agence_id FROM client WHERE id = %s", (client_id,))
         if r is None:
             raise HTTPException(status_code=404, detail="Introuvable")
-        if user.agence_id is not None and user.agence_id != r["agence_id"] and not one_row(
-                cur, "SELECT 1 AS x FROM client_transfert WHERE client_id = %s AND agence_source_id = %s LIMIT 1", (client_id, user.agence_id)):
+        if not user.peut_agence(r["agence_id"]) and not one_row(
+                cur, "SELECT 1 AS x FROM client_transfert WHERE client_id = %s AND agence_source_id = ANY(%s) LIMIT 1", (client_id, user.agences)):
             raise HTTPException(status_code=404, detail="Introuvable")
         return all_rows(cur, JOURNAL + "WHERE t.client_id = %s ORDER BY t.date_effet DESC, t.id DESC", (client_id,))
 

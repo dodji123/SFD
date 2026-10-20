@@ -21,6 +21,9 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
   ] },
   { titre: 'Crédit et caisse', items: [
     { to: '/credits', titre: 'Crédits', perm: 'credit:read' },
+    { to: '/comites', titre: 'Comité de crédit', perm: 'comite:read' },
+    { to: '/recouvrement', titre: 'Recouvrement', perm: 'recouvrement:read' },
+    { to: '/procurations', titre: 'Procurations et chèques', perm: ['procuration:write', 'cheque:read'] },
     { to: '/caisse', titre: 'Caisse', perm: 'caisse:read' },
     { to: '/tresorerie', titre: 'Trésorerie', perm: 'tresorerie:read' },
     { to: '/provisions', titre: 'Provisions', perm: 'provisions:read' },

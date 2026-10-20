@@ -4,10 +4,10 @@ L'auditeur est en lecture seule partout où la lecture existe. Le cloisonnement 
 séparément (voir auth.agence_scope) : seuls admin, directeur, comptable et auditeur peuvent être au siège
 et voir plusieurs agences.
 """
-ADMIN, DIR, CHEF, CAIS, COMPTA, AGENT, COLL, RH, AUD = (
-    "admin", "directeur", "chef_agence", "caissier", "comptable", "agent", "collectrice", "rh", "auditeur",
+ADMIN, DIR, CHEF, CAIS, COMPTA, AGENT, COLL, RH, AUD, COORD = (
+    "admin", "directeur", "chef_agence", "caissier", "comptable", "agent", "collectrice", "rh", "auditeur", "coordinateur",
 )
-ALL = {ADMIN, DIR, CHEF, CAIS, COMPTA, AGENT, COLL, RH, AUD}
+ALL = {ADMIN, DIR, CHEF, CAIS, COMPTA, AGENT, COLL, RH, AUD, COORD}
 
 PERMS: dict[str, set[str]] = {
     "ref:read": ALL,
@@ -60,7 +60,40 @@ PERMS: dict[str, set[str]] = {
     "rh:read": {ADMIN, DIR, RH, AUD},
     "rh:write": {ADMIN, RH},
     "audit:read": {ADMIN, DIR, AUD},
+    # sécurité des comptes et des données
+    "securite:read": {ADMIN, DIR, AUD},
+    "securite:write": {ADMIN},
+    "securite:alertes": {ADMIN, DIR, AUD},
+    "sauvegarde:write": {ADMIN},
+    "sauvegarde:tester": {AUD, DIR},
+    # réseaux d'agences
+    "reseaux:read": {ADMIN, DIR, AUD, COORD},
+    "reseaux:write": {ADMIN},
+    # comité de gestion du crédit
+    "comite:read": ALL,
+    "comite:manage": {ADMIN, DIR, CHEF, COORD},
+    "comite:participer": ALL,
+    "delegation:write": {ADMIN, DIR, COORD},
+    # recouvrement, procurations, chèques, comptes dormants
+    "recouvrement:read": {ADMIN, DIR, CHEF, AGENT, COLL, COMPTA, AUD},
+    "recouvrement:write": {ADMIN, CHEF, AGENT, COLL},
+    "recouvrement:perte": {ADMIN, DIR},
+    "procuration:write": {ADMIN, CHEF, CAIS},
+    "procuration:valider": {ADMIN, CHEF},
+    "cheque:read": {ADMIN, DIR, CHEF, COMPTA, AUD},
+    "cheque:prepare": {ADMIN, CHEF, COMPTA, CAIS},
+    "cheque:sign": {ADMIN, DIR, COMPTA},
+    "epargne:dormant": {ADMIN, CHEF},
 }
+
+# Le coordinateur de réseau a les droits du directeur, dans son réseau seulement (le cloisonnement vient du périmètre).
+# Exceptions : ce qui relève de l'institution entière.
+_SIEGE_SEUL = {"etats:consolide", "ratios:enregistrer", "ratios:saisir", "ratios:parametrer", "ratios:valider",
+               "lbc:write", "lbc:listes", "params:write", "clients:transfer-agence", "provisions:parametrer", "audit:read",
+               "securite:read", "securite:write", "securite:alertes", "sauvegarde:write", "sauvegarde:tester", "cheque:sign", "cheque:read"}
+for _perm, _roles in PERMS.items():
+    if DIR in _roles and COORD not in _roles and _perm not in _SIEGE_SEUL:
+        _roles.add(COORD)
 
 # rôles autorisés à n'avoir aucune agence (siège)
 ROLES_SIEGE = {ADMIN, DIR, COMPTA, AUD}

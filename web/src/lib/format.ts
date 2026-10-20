@@ -56,5 +56,5 @@ export const tonStatut: Record<string, 'ok' | 'warn' | 'bad' | 'info' | 'neutre'
 
 export const libellesRole: Record<string, string> = {
   admin: 'Administrateur', directeur: 'Directeur', chef_agence: "Chef d'agence", caissier: 'Caissier', comptable: 'Comptable',
-  agent: 'Agent', collectrice: 'Collectrice', rh: 'Ressources humaines', auditeur: 'Auditeur',
+  agent: 'Agent', collectrice: 'Collectrice', rh: 'Ressources humaines', auditeur: 'Auditeur', coordinateur: 'Coordinateur de réseau',
 }

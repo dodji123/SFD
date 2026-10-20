@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/reglementaire", tags=["reglementaire"])
 def _perimetre(user: User, agence_id: int | None, consolide: bool) -> int | None:
     """Agence demandée, ou None pour le réseau entier (siège habilité seulement)."""
     if consolide:
-        if user.agence_id is not None or user.role not in ("admin", "directeur", "comptable", "auditeur"):
+        if not user.siege or user.role not in ("admin", "directeur", "comptable", "auditeur"):
             raise HTTPException(status_code=403, detail="Les états consolidés sont réservés au siège")
         return None
     return agence_scope(user, agence_id)

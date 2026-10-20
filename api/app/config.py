@@ -17,7 +17,21 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:sfd@localhost:5440/sfd"
     pool_max: int = 20
     jwt_secret: str = ""
-    jwt_expire_minutes: int = 480
+    session_inactivity_minutes: int = 15  # guide du contrôle interne : session du personnel <= 15 min d'inactivité
+    password_max_age_days: int = 90       # changement périodique obligatoire (0 = désactivé)
+    password_history: int = 5             # nombre de derniers mots de passe interdits à la réutilisation
+    reset_token_minutes: int = 30         # durée de vie du lien de récupération
+    reset_max_per_hour: int = 3           # demandes de récupération par compte et par heure
+    app_url: str = "http://localhost:5173"  # base des liens envoyés (récupération du mot de passe)
+    mail_mode: str = "console"            # console (développement : message journalisé) | smtp | disabled
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""                   # adresse expéditrice (obligatoire en mode smtp)
+    smtp_starttls: bool = True
+    backup_docker_container: str = ""     # ex. sfd-pg : utiliser pg_dump / psql de ce conteneur plutôt que ceux du poste
+    heures_ouvrables: str = "06-21"       # connexions hors de cette plage : alerte (HH-HH, heure locale du serveur)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     max_failed_logins: int = 5
     lockout_minutes: int = 15

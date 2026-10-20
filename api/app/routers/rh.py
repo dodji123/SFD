@@ -98,7 +98,7 @@ def lister_rubriques(user: User = Depends(require("rh:read"))):
 def creer_rubrique(body: RubriqueIn, user: User = Depends(require("rh:write"))):
     """Un utilisateur d'agence ne crée que des rubriques de son agence (jamais globales ni d'une autre agence) ;
     seul le siège peut créer une rubrique globale (agence_id vide)."""
-    ag = agence_scope(user, body.agence_id) if user.agence_id is not None else body.agence_id
+    ag = agence_scope(user, body.agence_id) if not user.siege else body.agence_id
     with tx(user.login) as cur:
         return one_row(
             cur,

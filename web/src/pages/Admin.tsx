@@ -3,14 +3,18 @@ import { api } from '../lib/api'
 import { dateHeure, libellesRole } from '../lib/format'
 import { useSession } from '../lib/session'
 import InstitutionAdmin from './InstitutionAdmin'
+import ReseauxAdmin from './ReseauxAdmin'
+import SecuriteAdmin from './SecuriteAdmin'
 import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Modal, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
-interface Utilisateur { id: number; login: string; nom: string; role: string; agence_id: number | null; actif: boolean; derniere_connexion: string | null; verrouille_jusqua: string | null }
+interface Utilisateur { id: number; login: string; nom: string; role: string; agence_id: number | null; reseau_id: number | null; email: string | null; telephone: string | null; doit_changer_mdp: boolean; actif: boolean; derniere_connexion: string | null; verrouille_jusqua: string | null }
+interface ReseauLigne { id: number; code: string; libelle: string }
 interface Parametre { cle: string; valeur: string; description: string | null; agence_id: number | null }
 interface Audit { id: number; horodatage: string; utilisateur: string; table_name: string; operation: string; ligne_id: string | null; avant: unknown; apres: unknown }
 
 const ROLES = Object.keys(libellesRole)
 const ROLES_SIEGE = ['admin', 'directeur', 'comptable', 'auditeur']
+const ROLES_RESEAU = ['coordinateur']
 
 export default function Admin() {
   const { can } = useSession()
@@ -19,6 +23,8 @@ export default function Admin() {
     ...(can('params:read') ? [{ id: 'parametres', titre: 'Paramètres' }] : []),
     ...(can('ref:write') ? [{ id: 'referentiels', titre: 'Référentiels' }] : []),
     ...(can('ref:read') ? [{ id: 'institution', titre: 'Institution et en-tête' }] : []),
+    ...(can('reseaux:read') ? [{ id: 'reseaux', titre: 'Réseaux' }] : []),
+    ...(can('securite:read') ? [{ id: 'securite', titre: 'Sécurité' }] : []),
     ...(can('audit:read') ? [{ id: 'audit', titre: "Piste d'audit" }] : []),
   ]
   const [onglet, setOnglet] = useState(onglets[0]?.id ?? '')
@@ -29,6 +35,8 @@ export default function Admin() {
       {onglet === 'parametres' && <Parametres />}
       {onglet === 'referentiels' && <Referentiels />}
       {onglet === 'institution' && <InstitutionAdmin />}
+      {onglet === 'reseaux' && <ReseauxAdmin />}
+      {onglet === 'securite' && <SecuriteAdmin />}
       {onglet === 'audit' && <AuditLog />}
     </Page>
   )
@@ -37,6 +45,7 @@ export default function Admin() {
 function Utilisateurs() {
   const { agences, user } = useSession()
   const q = useFetch(() => api.get<Utilisateur[]>('/api/utilisateurs'), [])
+  const reseaux = useFetch(() => api.get<ReseauLigne[]>('/api/reseaux'), [])
   const { run, busy } = useAction()
   const [modale, setModale] = useState<null | 'nouveau' | Utilisateur>(null)
   const fin = () => { setModale(null); q.reload() }
@@ -48,42 +57,56 @@ function Utilisateurs() {
             { titre: 'Identifiant', render: (u) => <strong>{u.login}</strong> },
             { titre: 'Nom', render: (u) => u.nom },
             { titre: 'Rôle', render: (u) => libellesRole[u.role] },
-            { titre: 'Agence', render: (u) => (u.agence_id === null ? 'Siège' : agences.find((a) => a.id === u.agence_id)?.code ?? u.agence_id) },
+            { titre: 'Périmètre', render: (u) => (u.agence_id !== null ? agences.find((a) => a.id === u.agence_id)?.code ?? u.agence_id : u.reseau_id !== null ? `Réseau ${reseaux.data?.find((r) => r.id === u.reseau_id)?.code ?? u.reseau_id}` : 'Siège') },
+            { titre: 'Contact', render: (u) => u.email ?? <span className="muted">aucun</span> },
             { titre: 'Dernière connexion', render: (u) => dateHeure(u.derniere_connexion) },
-            { titre: 'État', render: (u) => (!u.actif ? <Badge tone="bad">Désactivé</Badge> : u.verrouille_jusqua && new Date(u.verrouille_jusqua) > new Date() ? <Badge tone="warn">Verrouillé</Badge> : <Badge tone="ok">Actif</Badge>) },
+            { titre: 'État', render: (u) => (!u.actif ? <Badge tone="bad">Désactivé</Badge> : u.verrouille_jusqua && new Date(u.verrouille_jusqua) > new Date() ? <Badge tone="warn">Verrouillé</Badge> : u.doit_changer_mdp ? <Badge tone="info">Mot de passe temporaire</Badge> : <Badge tone="ok">Actif</Badge>) },
             { titre: '', render: (u) => (
               <span className="actions">
                 <Button small onClick={() => setModale(u)}>Mot de passe</Button>
+                {u.verrouille_jusqua && new Date(u.verrouille_jusqua) > new Date() && <Button small disabled={busy} onClick={() => void run(() => api.post(`/api/utilisateurs/${u.id}/deverrouiller`), 'Compte déverrouillé', q.reload)}>Déverrouiller</Button>}
                 {u.id !== user?.id && <Button small variant={u.actif ? 'danger' : undefined} disabled={busy} onClick={() => void run(() => api.patch(`/api/utilisateurs/${u.id}`, { actif: !u.actif }), u.actif ? 'Compte désactivé' : 'Compte réactivé', q.reload)}>{u.actif ? 'Désactiver' : 'Réactiver'}</Button>}
               </span>
             ) },
           ]} />
         )}
       </Charge>
-      {modale === 'nouveau' && <NouvelUtilisateur onClose={() => setModale(null)} onFait={fin} />}
+      {modale === 'nouveau' && <NouvelUtilisateur reseaux={reseaux.data ?? []} onClose={() => setModale(null)} onFait={fin} />}
       {modale && typeof modale === 'object' && <Reinit u={modale} onClose={() => setModale(null)} onFait={fin} />}
     </Card>
   )
 }
 
-function NouvelUtilisateur({ onClose, onFait }: { onClose: () => void; onFait: () => void }) {
+function NouvelUtilisateur({ reseaux, onClose, onFait }: { reseaux: ReseauLigne[]; onClose: () => void; onFait: () => void }) {
   const { agences } = useSession()
   const { run, busy } = useAction()
-  const [f, setF] = useState({ login: '', nom: '', role: 'caissier', agence_id: '', mdp: '' })
+  const [f, setF] = useState({ login: '', nom: '', role: 'caissier', agence_id: '', reseau_id: '', email: '', telephone: '', mdp: '' })
   const maj = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
   const siegeOk = ROLES_SIEGE.includes(f.role)
+  const reseauRole = ROLES_RESEAU.includes(f.role)
   return (
     <FormModal titre="Nouvel utilisateur" onClose={onClose} busy={busy} valider="Créer le compte"
-      onSubmit={() => void run(() => api.post('/api/utilisateurs', { login: f.login, nom: f.nom, role: f.role, agence_id: f.agence_id ? Number(f.agence_id) : null, mot_de_passe: f.mdp }), 'Utilisateur créé', onFait)}>
+      onSubmit={() => void run(() => api.post('/api/utilisateurs', {
+        login: f.login, nom: f.nom, role: f.role, agence_id: reseauRole ? null : f.agence_id ? Number(f.agence_id) : null,
+        reseau_id: reseauRole ? Number(f.reseau_id) : null, email: f.email || null, telephone: f.telephone || null, mot_de_passe: f.mdp,
+      }), 'Utilisateur créé', onFait)}>
       <Field label="Identifiant" hint="Lettres, chiffres, . _ - @"><Input value={f.login} onChange={maj('login')} required autoFocus /></Field>
       <Field label="Nom"><Input value={f.nom} onChange={maj('nom')} required /></Field>
       <Field label="Rôle"><Select value={f.role} onChange={maj('role')}>{ROLES.map((r) => <option key={r} value={r}>{libellesRole[r]}</option>)}</Select></Field>
-      <Field label="Agence" hint={siegeOk ? 'Vide : siège (toutes les agences)' : 'Obligatoire pour ce rôle'}>
-        <Select value={f.agence_id} onChange={maj('agence_id')} required={!siegeOk}>
-          <option value="">{siegeOk ? 'Siège' : '— choisir —'}</option>{agences.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.libelle}</option>)}
-        </Select>
-      </Field>
-      <Field label="Mot de passe provisoire" hint="10 caractères au moins"><Input type="password" value={f.mdp} onChange={maj('mdp')} minLength={10} autoComplete="new-password" required /></Field>
+      {reseauRole ? (
+        <Field label="Réseau" hint="Le coordinateur voit toutes les agences de ce réseau, et elles seules">
+          <Select value={f.reseau_id} onChange={maj('reseau_id')} required><option value="">— choisir —</option>{reseaux.map((r) => <option key={r.id} value={r.id}>{r.code} — {r.libelle}</option>)}</Select>
+        </Field>
+      ) : (
+        <Field label="Agence" hint={siegeOk ? 'Vide : siège (toutes les agences)' : 'Obligatoire pour ce rôle'}>
+          <Select value={f.agence_id} onChange={maj('agence_id')} required={!siegeOk}>
+            <option value="">{siegeOk ? 'Siège' : '— choisir —'}</option>{agences.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.libelle}</option>)}
+          </Select>
+        </Field>
+      )}
+      <Field label="Adresse e-mail" hint="Sert à la récupération du mot de passe"><Input type="email" value={f.email} onChange={maj('email')} /></Field>
+      <Field label="Téléphone"><Input value={f.telephone} onChange={maj('telephone')} /></Field>
+      <Field label="Mot de passe provisoire" hint="10 caractères, avec majuscule, minuscule, chiffre et caractère spécial. L'intéressé devra le changer à sa première connexion."><Input type="password" value={f.mdp} onChange={maj('mdp')} minLength={10} autoComplete="new-password" required /></Field>
     </FormModal>
   )
 }
@@ -94,7 +117,7 @@ function Reinit({ u, onClose, onFait }: { u: Utilisateur; onClose: () => void; o
   return (
     <FormModal titre={`Mot de passe — ${u.login}`} onClose={onClose} busy={busy} valider="Réinitialiser"
       onSubmit={() => void run(() => api.post(`/api/utilisateurs/${u.id}/mot-de-passe`, { mot_de_passe: mdp }), 'Mot de passe réinitialisé (compte déverrouillé)', onFait)}>
-      <Field label="Nouveau mot de passe" hint="10 caractères au moins"><Input type="password" value={mdp} onChange={(e) => setMdp(e.target.value)} minLength={10} autoComplete="new-password" required autoFocus /></Field>
+      <Field label="Nouveau mot de passe temporaire" hint="10 caractères, majuscule, minuscule, chiffre et caractère spécial. L'intéressé devra le changer à sa prochaine connexion."><Input type="password" value={mdp} onChange={(e) => setMdp(e.target.value)} minLength={10} autoComplete="new-password" required autoFocus /></Field>
     </FormModal>
   )
 }
