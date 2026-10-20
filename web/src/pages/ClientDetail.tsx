@@ -1,3 +1,4 @@
+import { ReleveModal } from '../components/ReleveClient'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -26,7 +27,7 @@ export default function ClientDetail() {
   const nav = useNavigate()
   const { can } = useSession()
   const q = useFetch(() => api.get<Detail>(`/api/clients/${id}`), [id])
-  const [modale, setModale] = useState<null | 'compte' | 'cycle' | 'credit' | 'zone' | 'agence' | { op: 'depot' | 'retrait'; compte: Compte }>(null)
+  const [modale, setModale] = useState<null | 'compte' | 'cycle' | 'credit' | 'zone' | 'agence' | 'releve' | { op: 'depot' | 'retrait'; compte: Compte }>(null)
   const transferts = useFetch(() => api.get<Transfert[]>(`/api/clients/${id}/transferts`), [id])
   const fin = () => { setModale(null); q.reload(); transferts.reload() }
 
@@ -36,6 +37,7 @@ export default function ClientDetail() {
         <Page title={c.nom} subtitle={`${c.numero} · ${c.telephone ?? 'sans téléphone'} · zone ${c.zone ?? '—'}`}
           actions={<>
             <Link to="/clients" className="btn">← Clients</Link>{!c.actif && <Badge tone="bad">Inactif</Badge>}
+            {can('epargne:read') && <Button onClick={() => setModale('releve')}>Relevé de compte</Button>}
             {can('clients:transfer-zone') && <Button onClick={() => setModale('zone')}>Changer de zone</Button>}
             {can('clients:transfer-agence') && <Button onClick={() => setModale('agence')}>Transférer vers une agence</Button>}
           </>}>
@@ -97,6 +99,7 @@ export default function ClientDetail() {
             </Card>
           )}
 
+          {modale === 'releve' && <ReleveModal clientId={c.id} onClose={() => setModale(null)} />}
           {modale === 'zone' && <TransfertZone client={c} onClose={() => setModale(null)} onFait={fin} />}
           {modale === 'agence' && <TransfertAgence client={c} onClose={() => setModale(null)} onFait={() => nav('/clients')} />}
           {modale === 'compte' && <OuvrirCompte client={c} onClose={() => setModale(null)} onFait={fin} />}

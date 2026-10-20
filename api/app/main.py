@@ -36,10 +36,11 @@ from .routers import securite as r_securite
 from .routers import reseaux as r_reseaux
 from .routers import comites as r_comites
 from .routers import recouvrement as r_recouvrement
+from .routers import releves as r_releves
 from .routers import procurations_cheques as r_procchq
 
 ROUTERS = [r_auth.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_adhesion.router, r_depots.router, r_pieces.router, r_institution.router, r_capacite.router,
-           r_caisse.router, r_retraits.router, r_credits.router, r_rapports.router, r_compta.router, r_admin.router, r_rh.router, r_tresorerie.router, r_transferts.router, r_etats.router, r_kyc.router, r_espace.router, r_espace.admin_router, r_reglementaire.router, r_provisions.router, r_rapprochement.router, r_securite.router, r_reseaux.router, r_comites.router, r_recouvrement.router, r_procchq.router]
+           r_caisse.router, r_retraits.router, r_credits.router, r_rapports.router, r_compta.router, r_admin.router, r_rh.router, r_tresorerie.router, r_transferts.router, r_etats.router, r_kyc.router, r_espace.router, r_espace.admin_router, r_reglementaire.router, r_provisions.router, r_rapprochement.router, r_securite.router, r_reseaux.router, r_comites.router, r_recouvrement.router, r_procchq.router, r_releves.router]
 
 
 @asynccontextmanager

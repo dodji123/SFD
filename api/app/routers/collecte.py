@@ -11,10 +11,15 @@ router = APIRouter(prefix="/api", tags=["collecte"])
 
 SITUATION = (
     "SELECT s.cycle_id AS id, s.agence_id, s.numero, s.client_id, cl.nom AS client, s.type_cycle, s.statut, "
+    "       c.produit_id, pe.code AS produit, pe.libelle AS produit_libelle, "
     "       c.mise_initiale, c.mise_courante, c.mise_finale, c.objectif, c.nb_lignes_prevues, c.date_debut, c.date_fin, c.date_cloture, "
     "       s.nb_lignes, s.montant_collecte, s.montant_previsionnel, s.reste_a_collecter, s.mise_cycle, s.net "
     "FROM v_cycle_situation s JOIN cycle c ON c.id = s.cycle_id JOIN client cl ON cl.id = s.client_id "
+    "JOIN produit_epargne pe ON pe.id = c.produit_id "
 )
+
+
+ORDRES = {"recent": "s.cycle_id DESC", "produit": "pe.code, cl.nom, s.cycle_id DESC", "client": "cl.nom, s.cycle_id DESC", "fin": "c.date_fin, s.cycle_id DESC"}
 
 
 class CycleIn(BaseModel):
@@ -32,6 +37,7 @@ class CycleIn(BaseModel):
 @router.get("/cycles")
 def lister_cycles(
     client_id: int | None = None, statut: str | None = None, agence_id: int | None = None, q: str | None = None,
+    produit_id: int | None = None, tri: str = Query("recent", pattern="^(recent|produit|client|fin)$"),
     limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
     user: User = Depends(require("collecte:read")),
 ):
@@ -40,10 +46,10 @@ def lister_cycles(
         return all_rows(
             cur,
             SITUATION + "WHERE (%s::int IS NULL OR s.agence_id = %s) AND (%s::int IS NULL OR s.client_id = %s) "
-            "AND (%s::text IS NULL OR s.statut = %s) "
+            "AND (%s::text IS NULL OR s.statut = %s) AND (%s::int IS NULL OR c.produit_id = %s) "
             "AND (%s::text IS NULL OR s.numero ILIKE '%%' || %s || '%%' OR cl.nom ILIKE '%%' || %s || '%%') "
-            "ORDER BY s.cycle_id DESC LIMIT %s OFFSET %s",
-            (ag, ag, client_id, client_id, statut, statut, q, q, q, limit, offset),
+            "ORDER BY " + ORDRES[tri] + " LIMIT %s OFFSET %s",
+            (ag, ag, client_id, client_id, statut, statut, produit_id, produit_id, q, q, q, limit, offset),
         )
 
 
@@ -149,6 +155,14 @@ def trouver_client(cur, agence_id: int, suffixe: str, date: dt.date | None = Non
     return cl
 
 
+@router.get("/collecte/client")
+def client_par_numero(suffixe: str, agence_id: int | None = None, date: dt.date | None = None, user: User = Depends(require("collecte:read"))):
+    """Client désigné par son numéro d'ordre (formulaire « nouvelle mise »)."""
+    ag = agence_scope(user, agence_id)
+    with tx() as cur:
+        return trouver_client(cur, ag, suffixe, date)
+
+
 @router.get("/collecte/client-cycle")
 def cycle_du_client(suffixe: str, produit_id: int, zone_id: int | None = None, agence_id: int | None = None,
                     date: dt.date | None = None, user: User = Depends(require("collecte:read"))):
@@ -217,6 +231,28 @@ def cloturer(cycle_id: int, body: ClotureIn, user: User = Depends(require("colle
         verifier_agence(cur, user, "cycle", cycle_id)
         cur.execute("SELECT cloturer_cycle(%s, COALESCE(%s, current_date))", (cycle_id, body.date))
         return _detail(cur, cycle_id)
+
+
+class SelectionIn(BaseModel):
+    cycle_ids: list[int] = Field(min_length=1, max_length=200)
+    date: dt.date | None = None
+
+
+@router.post("/cycles/cloturer-selection")
+def cloturer_selection(body: SelectionIn, user: User = Depends(require("collecte:admin"))):
+    """Clôture manuelle de plusieurs mises (cycles en cours) à la date choisie ; un cycle refusé n'empêche pas les autres."""
+    clotures, refuses = [], []
+    for cid in body.cycle_ids:
+        try:
+            with tx(user.login) as cur:
+                verifier_agence(cur, user, "cycle", cid)
+                cur.execute("SELECT cloturer_cycle(%s, COALESCE(%s, current_date))", (cid, body.date))
+            clotures.append(cid)
+        except HTTPException as e:
+            refuses.append({"cycle_id": cid, "motif": e.detail})
+        except Exception as e:  # noqa: BLE001 — règle métier de la base : message du schéma
+            refuses.append({"cycle_id": cid, "motif": str(e).splitlines()[0][:200]})
+    return {"clotures": clotures, "refuses": refuses}
 
 
 class EchusIn(BaseModel):

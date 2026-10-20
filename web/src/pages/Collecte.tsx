@@ -4,7 +4,7 @@ import { aujourdhui, xof } from '../lib/format'
 import { useAgents, useProduitsEpargne, useZones } from '../lib/hooks'
 import { useSession } from '../lib/session'
 import { ChampClient, FiltreTableau, estNumero, filtrer } from '../components/ChampClient'
-import { Alert, Badge, Button, Card, Charge, Field, Input, Kpi, Page, Select, Table, useAction, useFetch } from '../components/ui'
+import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Kpi, Page, Select, Table, useAction, useFetch } from '../components/ui'
 
 interface Feuille {
   total_collecte: number; nb_lignes: number
@@ -77,6 +77,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
   const [trouve, setTrouve] = useState<Trouve | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [montant, setMontant] = useState('')
+  const [nouvelle, setNouvelle] = useState(false)
   const { run, busy } = useAction()
   const refNumero = useRef<HTMLInputElement>(null)
   const refMontant = useRef<HTMLInputElement>(null)
@@ -112,7 +113,9 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
   })
 
   return (
-    <Card title="Saisie d'une collecte">
+    <Card title="Saisie d'une collecte" actions={<Button small onClick={() => setNouvelle(true)}>Nouvelle mise</Button>}>
+      {nouvelle && <NouvelleMise produitInitial={produit} numeroInitial={suffixe} jour={jour} onClose={() => setNouvelle(false)}
+        onFait={(p, n) => { setNouvelle(false); setProduit(p); setSuffixe(n) }} />}
       <div className="row">
         <Field label="Produit tontine">
           <Select value={produit} onChange={(e) => setProduit(e.target.value)}>
@@ -149,7 +152,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
         </Field>
         <Button variant="primary" disabled={!pret} onClick={valider}>Valider la saisie</Button>
       </div>
-      {erreur && <Alert tone="warn">{erreur}</Alert>}
+      {erreur && <Alert tone="warn">{erreur}{estNumero(suffixe) && produit && <> <Button small onClick={() => setNouvelle(true)}>Ouvrir une nouvelle mise pour ce client</Button></>}</Alert>}
       {!multipleOk && c && <Alert tone="bad">Le montant doit être un multiple de la mise ({xof(c.mise_courante)}).</Alert>}
       {depasse && c && <Alert tone="bad">Le montant dépasse l'encours de collecte ({xof(c.reste_a_collecter ?? 0)}).</Alert>}
     </Card>
@@ -249,5 +252,49 @@ function Versement({ agentId, jour, feuille, onFait }: { agentId: number; jour: 
         </div>
       ) : <p className="muted">Aucun versement enregistré.</p>}
     </Card>
+  )
+}
+
+/** Ouvre un cycle de tontine (une « mise ») pour un client depuis l'écran de saisie. */
+function NouvelleMise({ produitInitial, numeroInitial, jour, onClose, onFait }: {
+  produitInitial: string; numeroInitial: string; jour: string; onClose: () => void; onFait: (produit: string, numero: string) => void
+}) {
+  const produits = useProduitsEpargne('collecte')
+  const { run, busy } = useAction()
+  const fin = new Date(jour); fin.setDate(fin.getDate() + 30)
+  const [f, setF] = useState({ produit: produitInitial, numero: numeroInitial, mise: '', debut: jour, fin: fin.toISOString().slice(0, 10) })
+  const [client, setClient] = useState<{ id: number; numero: string; nom: string } | null>(null)
+  const [erreur, setErreur] = useState<string | null>(null)
+
+  useEffect(() => {
+    setClient(null); setErreur(null)
+    if (!estNumero(f.numero)) return
+    let ok = true
+    const t = setTimeout(() => {
+      api.get<{ id: number; numero: string; nom: string }>('/api/collecte/client', { suffixe: f.numero, date: f.debut })
+        .then((c) => ok && setClient(c)).catch((e: Error) => ok && setErreur(e.message))
+    }, 250)
+    return () => { ok = false; clearTimeout(t) }
+  }, [f.numero, f.debut])
+
+  return (
+    <FormModal titre="Nouvelle mise (nouveau cycle)" onClose={onClose} busy={busy || !client} valider="Créer la mise"
+      onSubmit={() => { if (!client) return; void run(async () => {
+        await api.post('/api/cycles', { client_id: client.id, produit_id: Number(f.produit), mise: Number(f.mise), date_debut: f.debut, date_fin: f.fin })
+        onFait(f.produit, f.numero)
+      }, 'Mise créée : le client peut être collecté') }}>
+      <Field label="Produit tontine">
+        <Select value={f.produit} onChange={(e) => setF({ ...f, produit: e.target.value })} required>
+          <option value="">— choisir un produit —</option>
+          {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle} (type {p.type_cycle})</option>)}
+        </Select>
+      </Field>
+      <ChampClient valeur={f.numero} onChange={(v) => setF({ ...f, numero: v })} />
+      <Field label="Client trouvé"><Input readOnly value={client ? `${client.nom} (${client.numero})` : ''} /></Field>
+      {erreur && <Alert tone="warn">{erreur}</Alert>}
+      <Field label="Mise (F)" hint="Montant d'une ligne du livret"><Input type="number" min={1} value={f.mise} onChange={(e) => setF({ ...f, mise: e.target.value })} required /></Field>
+      <Field label="Début"><Input type="date" value={f.debut} onChange={(e) => setF({ ...f, debut: e.target.value })} required /></Field>
+      <Field label="Fin"><Input type="date" value={f.fin} min={f.debut} onChange={(e) => setF({ ...f, fin: e.target.value })} required /></Field>
+    </FormModal>
   )
 }
