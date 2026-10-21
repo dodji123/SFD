@@ -1,6 +1,8 @@
 """Collecte : cycles de tontine, livret (31 lignes par page), mises, clôtures."""
 import datetime as dt
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -11,7 +13,7 @@ router = APIRouter(prefix="/api", tags=["collecte"])
 
 SITUATION = (
     "SELECT s.cycle_id AS id, s.agence_id, s.numero, s.client_id, cl.nom AS client, s.type_cycle, s.statut, "
-    "       c.produit_id, pe.code AS produit, pe.libelle AS produit_libelle, "
+    "       c.produit_id, pe.code AS produit, pe.libelle AS produit_libelle, delai_grace_cycle(c.id) AS delai_grace, date_limite_cycle(c.id) AS date_limite, "
     "       c.mise_initiale, c.mise_courante, c.mise_finale, c.objectif, c.nb_lignes_prevues, c.date_debut, c.date_fin, c.date_cloture, "
     "       s.nb_lignes, s.montant_collecte, s.montant_previsionnel, s.reste_a_collecter, s.mise_cycle, s.net "
     "FROM v_cycle_situation s JOIN cycle c ON c.id = s.cycle_id JOIN client cl ON cl.id = s.client_id "
@@ -32,6 +34,7 @@ class CycleIn(BaseModel):
     objectif: int | None = Field(default=None, gt=0)
     nb_lignes_prevues: int | None = Field(default=None, gt=0, le=620)
     numero: str | None = Field(default=None, max_length=25)  # vide : numérotation automatique
+    type_cycle: Literal[1, 2, 3] | None = None   # choisi à la première mise du client sur le produit (ignoré si le produit impose un type)
 
 
 @router.get("/cycles")
@@ -53,6 +56,32 @@ def lister_cycles(
         )
 
 
+def _type_du_cycle(cur, client_id: int, produit_id: int, type_produit: int | None, demande: int | None) -> int:
+    """Type imposé par le produit, sinon celui de la première mise du client sur ce produit, sinon celui qu'on choisit maintenant."""
+    if type_produit is not None:
+        return type_produit
+    premier = one_row(cur, "SELECT type_cycle FROM cycle WHERE client_id = %s AND produit_id = %s ORDER BY id LIMIT 1", (client_id, produit_id))
+    if premier is not None:
+        if demande is not None and demande != premier["type_cycle"]:
+            raise HTTPException(status_code=422, detail=f"Le type de cycle de ce client sur ce produit est fixé à sa première mise (type {premier['type_cycle']})")
+        return premier["type_cycle"]
+    if demande is None:
+        raise HTTPException(status_code=422, detail="Première mise du client sur ce produit : choisissez le type de cycle (1, 2 ou 3)")
+    return demande
+
+
+@router.get("/cycles/type-propose")
+def type_propose(client_id: int, produit_id: int, user: User = Depends(require("collecte:read"))):
+    """Type de cycle déjà fixé (par le produit ou par la première mise du client), ou null si c'est une première mise."""
+    with tx() as cur:
+        verifier_agence(cur, user, "client", client_id)
+        p = one_row(cur, "SELECT type_cycle FROM produit_epargne WHERE id = %s", (produit_id,))
+        if p is None:
+            raise HTTPException(status_code=404, detail="Produit introuvable")
+        premier = one_row(cur, "SELECT type_cycle FROM cycle WHERE client_id = %s AND produit_id = %s ORDER BY id LIMIT 1", (client_id, produit_id))
+        return {"type_cycle": p["type_cycle"] or (premier["type_cycle"] if premier else None), "impose_par": "produit" if p["type_cycle"] else ("premiere_mise" if premier else None)}
+
+
 @router.post("/cycles", status_code=201)
 def creer_cycle(body: CycleIn, user: User = Depends(require("collecte:write"))):
     with tx(user.login) as cur:
@@ -62,13 +91,14 @@ def creer_cycle(body: CycleIn, user: User = Depends(require("collecte:write"))):
         p = one_row(cur, "SELECT categorie, type_cycle, nb_pages_livret FROM produit_epargne WHERE id = %s AND actif", (body.produit_id,))
         if p is None or p["categorie"] != "collecte":
             raise HTTPException(status_code=422, detail="Le produit doit être un produit de collecte")
+        type_cycle = _type_du_cycle(cur, body.client_id, body.produit_id, p["type_cycle"], body.type_cycle)
         nb = body.nb_lignes_prevues or 31 * p["nb_pages_livret"]
-        objectif = body.objectif if body.objectif is not None else (body.mise * nb if p["type_cycle"] in (1, 2) else None)
+        objectif = body.objectif if body.objectif is not None else (body.mise * nb if type_cycle in (1, 2) else None)
         cid = one_row(
             cur,
             "INSERT INTO cycle(agence_id, numero, client_id, produit_id, type_cycle, mise_initiale, mise_courante, objectif, "
             "nb_lignes_prevues, date_debut, date_fin) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-            (ag, body.numero, body.client_id, body.produit_id, p["type_cycle"], body.mise, body.mise, objectif, nb,
+            (ag, body.numero, body.client_id, body.produit_id, type_cycle, body.mise, body.mise, objectif, nb,
              body.date_debut, body.date_fin),
         )["id"]
         return one_row(cur, SITUATION + "WHERE s.cycle_id = %s", (cid,))
@@ -338,9 +368,11 @@ def modifier_ligne(ligne_id: int, body: CorrectionIn, user: User = Depends(requi
 
 
 @router.delete("/collecte/lignes/{ligne_id}")
-def supprimer_ligne(ligne_id: int, user: User = Depends(require("collecte:write"))):
+def supprimer_ligne(ligne_id: int, motif: str = Query(min_length=5, max_length=300), user: User = Depends(require("collecte:write"))):
+    """Suppression : la ligne disparaît des écrans et des calculs ; qui, quand, pourquoi et son contenu sont conservés pour l'audit."""
     with tx(user.login) as cur:
         _ligne_autorisee(cur, user, ligne_id)
+        cur.execute("SELECT set_config('mf.motif_suppression', %s, true)", (motif,))
         cur.execute("SELECT supprimer_ligne_collecte(%s)", (ligne_id,))
     return {"ok": True}
 
@@ -366,3 +398,66 @@ def rouvrir_journee(body: JourneeIn, user: User = Depends(require("collecte:admi
     with tx(user.login) as cur:
         cur.execute("SELECT rouvrir_journee_collecte(%s::smallint, %s, %s, %s)", (ag, body.date, body.motif, user.id))
     return collecte_du_jour(body.date, None, ag, user)
+
+
+# ---------------------------------------------------------------- prolongation d'un cycle (avec autorisation)
+class ProlongationIn(BaseModel):
+    nouvelle_fin: dt.date
+    motif: str = Field(min_length=10, max_length=500)
+
+
+PROLONGATION_SQL = (
+    "SELECT p.*, c.numero AS cycle, cl.nom AS client, c.agence_id, pe.code AS produit, ud.nom AS demande_par_nom, ua.nom AS decide_par_nom "
+    "FROM prolongation_cycle p JOIN cycle c ON c.id = p.cycle_id JOIN client cl ON cl.id = c.client_id JOIN produit_epargne pe ON pe.id = c.produit_id "
+    "LEFT JOIN utilisateur ud ON ud.id = p.demande_par LEFT JOIN utilisateur ua ON ua.id = p.decide_par "
+)
+
+
+@router.post("/cycles/{cycle_id}/prolongation", status_code=201)
+def demander_prolongation(cycle_id: int, body: ProlongationIn, user: User = Depends(require("collecte:write"))):
+    with tx(user.login) as cur:
+        verifier_agence(cur, user, "cycle", cycle_id)
+        c = one_row(cur, "SELECT date_fin FROM cycle WHERE id = %s", (cycle_id,))
+        r = one_row(cur, "INSERT INTO prolongation_cycle(cycle_id, ancienne_fin, nouvelle_fin, motif, demande_par) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                    (cycle_id, c["date_fin"], body.nouvelle_fin, body.motif, user.id))
+        return one_row(cur, PROLONGATION_SQL + "WHERE p.id = %s", (r["id"],))
+
+
+@router.get("/prolongations")
+def lister_prolongations(statut: str | None = None, cycle_id: int | None = None, agence_id: int | None = None, user: User = Depends(require("collecte:read"))):
+    ag = agence_filter(user, agence_id)
+    with tx() as cur:
+        return all_rows(cur, PROLONGATION_SQL + "WHERE (%s::int IS NULL OR c.agence_id = %s) AND (%s::text IS NULL OR p.statut = %s) AND (%s::int IS NULL OR p.cycle_id = %s) "
+                                                 "ORDER BY p.id DESC LIMIT 200", (ag, ag, statut, statut, cycle_id, cycle_id))
+
+
+class DecisionProlongationIn(BaseModel):
+    autorise: bool
+    commentaire: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/prolongations/{prolongation_id}/decider")
+def decider_prolongation(prolongation_id: int, body: DecisionProlongationIn, user: User = Depends(require("cycle:prolongation-decider"))):
+    with tx(user.login) as cur:
+        p = one_row(cur, "SELECT cycle_id, statut FROM prolongation_cycle WHERE id = %s", (prolongation_id,))
+        if p is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        verifier_agence(cur, user, "cycle", p["cycle_id"])
+        if p["statut"] != "demandee":
+            raise HTTPException(status_code=422, detail=f"Cette demande est déjà {p['statut']}")
+        cur.execute("UPDATE prolongation_cycle SET statut = %s, decide_par = %s, commentaire = %s WHERE id = %s",
+                    ("autorisee" if body.autorise else "refusee", user.id, body.commentaire, prolongation_id))
+        return one_row(cur, PROLONGATION_SQL + "WHERE p.id = %s", (prolongation_id,))
+
+
+@router.post("/prolongations/{prolongation_id}/annuler")
+def annuler_prolongation(prolongation_id: int, user: User = Depends(require("collecte:write"))):
+    with tx(user.login) as cur:
+        p = one_row(cur, "SELECT cycle_id FROM prolongation_cycle WHERE id = %s", (prolongation_id,))
+        if p is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        verifier_agence(cur, user, "cycle", p["cycle_id"])
+        cur.execute("UPDATE prolongation_cycle SET statut = 'annulee' WHERE id = %s AND statut = 'demandee'", (prolongation_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=422, detail="Seule une demande en attente s'annule")
+        return one_row(cur, PROLONGATION_SQL + "WHERE p.id = %s", (prolongation_id,))

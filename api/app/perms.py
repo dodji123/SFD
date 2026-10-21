@@ -31,6 +31,7 @@ PERMS: dict[str, set[str]] = {
     "collecte:read": {ADMIN, DIR, CHEF, CAIS, AGENT, COLL, AUD},
     "collecte:write": {ADMIN, CHEF, AGENT, COLL},
     "collecte:admin": {ADMIN, CHEF},
+    "cycle:prolongation-decider": {ADMIN, DIR, CHEF},
     "versement:write": {ADMIN, CHEF, CAIS},
     "retrait:request": {ADMIN, CHEF, CAIS, AGENT, COLL},
     "retrait:ecart": {ADMIN, DIR, CHEF},
@@ -84,6 +85,16 @@ PERMS: dict[str, set[str]] = {
     "cheque:prepare": {ADMIN, CHEF, COMPTA, CAIS},
     "cheque:sign": {ADMIN, DIR, COMPTA},
     "epargne:dormant": {ADMIN, CHEF},
+    # gestion des ressources humaines
+    "grh:read": {ADMIN, DIR, CHEF, RH, AUD},
+    "grh:write": {ADMIN, DIR, RH},
+    "conge:decider": {ADMIN, DIR, CHEF, RH},
+    "recrutement:decider": {ADMIN, DIR},
+    "sanction:write": {ADMIN, DIR, CHEF, RH},
+    "evaluation:ecrire": {ADMIN, DIR, CHEF, RH},
+    "evaluation:valider": {ADMIN, DIR, RH},
+    "sortie:write": {ADMIN, DIR, RH},
+    "grh:self": ALL,
 }
 
 # Le coordinateur de réseau a les droits du directeur, dans son réseau seulement (le cloisonnement vient du périmètre).

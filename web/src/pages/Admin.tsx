@@ -3,13 +3,13 @@ import { api } from '../lib/api'
 import { dateHeure, libellesRole } from '../lib/format'
 import { useSession } from '../lib/session'
 import InstitutionAdmin from './InstitutionAdmin'
+import ParametresAdmin from './ParametresAdmin'
 import ReseauxAdmin from './ReseauxAdmin'
 import SecuriteAdmin from './SecuriteAdmin'
 import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Modal, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Utilisateur { id: number; login: string; nom: string; role: string; agence_id: number | null; reseau_id: number | null; email: string | null; telephone: string | null; doit_changer_mdp: boolean; actif: boolean; derniere_connexion: string | null; verrouille_jusqua: string | null }
 interface ReseauLigne { id: number; code: string; libelle: string }
-interface Parametre { cle: string; valeur: string; description: string | null; agence_id: number | null }
 interface Audit { id: number; horodatage: string; utilisateur: string; table_name: string; operation: string; ligne_id: string | null; avant: unknown; apres: unknown }
 
 const ROLES = Object.keys(libellesRole)
@@ -32,7 +32,7 @@ export default function Admin() {
     <Page title="Administration" subtitle="Utilisateurs, paramètres, référentiels et audit">
       <Tabs actif={onglet} onChange={setOnglet} tabs={onglets} />
       {onglet === 'utilisateurs' && <Utilisateurs />}
-      {onglet === 'parametres' && <Parametres />}
+      {onglet === 'parametres' && <ParametresAdmin />}
       {onglet === 'referentiels' && <Referentiels />}
       {onglet === 'institution' && <InstitutionAdmin />}
       {onglet === 'reseaux' && <ReseauxAdmin />}
@@ -122,77 +122,47 @@ function Reinit({ u, onClose, onFait }: { u: Utilisateur; onClose: () => void; o
   )
 }
 
-const LIBELLES_PARAM: Record<string, string> = {
-  taux_commission: 'Taux de commission des collectrices (ex. 0,02 = 2 %)', plafond_retenue: 'Part maximale de la commission retenable pour solder le compte agent',
-  mode_cloture: 'Mode de clôture / production : calendaire_mensuel ou date_fin_client', arrondi_mode: 'Arrondi de la mise (type 3) : plus_proche, superieur, inferieur',
-  arrondi_multiple: "Multiple d'arrondi", diviseur_type3: 'Diviseur de la mise finale (type 3)', jours_saisie_garantie: 'Jours de retard avant saisie de la garantie',
-  points_a_temps: 'Points : échéance payée à temps', points_retard_par_tranche: 'Points perdus par tranche de retard', jours_tranche_retard: 'Taille d’une tranche de retard (jours)',
-  points_credit_solde: 'Points : crédit soldé sans retard', penalite_taux: 'Pénalité par jour : part du capital de l’échéance', penalite_plafond: 'Plafond de pénalité (part de l’échéance)',
-  seuil_validation_credit: 'Montant au-delà duquel un validateur est obligatoire', comptabilisation_auto: 'Comptabilisation automatique des opérations : oui / non',
-}
-
-function Parametres() {
-  const { can, agenceId } = useSession()
-  const q = useFetch(() => api.get<Parametre[]>('/api/parametres'), [agenceId])
-  const [edit, setEdit] = useState<Parametre | null>(null)
-  return (
-    <div className="stack">
-      <Alert tone="warn">Valeurs provisoires à faire valider par le client : taux de commission, plafond de retenue, plafond de pénalité, points de fidélité. L'activation de la comptabilisation automatique exige un exercice comptable ouvert et des règles validées par le comptable.</Alert>
-      <Card flush>
-        <Charge q={q}>
-          {(rows) => (
-            <Table rows={rows} cols={[
-              { titre: 'Paramètre', render: (p) => <><strong>{p.cle}</strong><div className="muted">{LIBELLES_PARAM[p.cle] ?? p.description}</div></> },
-              { titre: 'Valeur', render: (p) => <>{p.valeur}{p.agence_id !== null && <> <Badge tone="info">surcharge agence</Badge></>}</> },
-              { titre: '', render: (p) => can('params:write') && <Button small onClick={() => setEdit(p)}>Modifier</Button> },
-            ]} />
-          )}
-        </Charge>
-        {edit && <ModifierParametre p={edit} onClose={() => setEdit(null)} onFait={() => { setEdit(null); q.reload() }} />}
-      </Card>
-    </div>
-  )
-}
-
-function ModifierParametre({ p, onClose, onFait }: { p: Parametre; onClose: () => void; onFait: () => void }) {
-  const { agenceId } = useSession()
-  const { agences } = useSession()
-  const { run, busy } = useAction()
-  const [v, setV] = useState(p.valeur)
-  const [portee, setPortee] = useState(p.agence_id !== null ? 'agence' : 'globale')
-  return (
-    <FormModal titre={`Modifier ${p.cle}`} onClose={onClose} busy={busy} valider="Enregistrer"
-      onSubmit={() => void run(() => api.put(`/api/parametres/${p.cle}`, { valeur: v, agence_id: portee === 'agence' ? agenceId : null }), 'Paramètre modifié', onFait)}>
-      <Field label="Valeur"><Input value={v} onChange={(e) => setV(e.target.value)} required autoFocus /></Field>
-      <Field label="Portée">
-        <Select value={portee} onChange={(e) => setPortee(e.target.value)}>
-          <option value="globale">Toutes les agences</option>
-          <option value="agence">Cette agence seulement ({agences.find((a) => a.id === agenceId)?.code})</option>
-        </Select>
-      </Field>
-    </FormModal>
-  )
-}
+interface ProduitEp { id: number; code: string; libelle: string; categorie: string; type_cycle: number | null; solde_minimum: number; delai_grace_jours: number | null }
+const contient = (t: string, ...champs: (string | null | undefined)[]) => champs.some((c) => (c ?? '').toLowerCase().includes(t.trim().toLowerCase()))
 
 function Referentiels() {
   const { agenceId, can } = useSession()
   const [type, setType] = useState('zone')
   const [modale, setModale] = useState(false)
+  const [texte, setTexte] = useState('')
+  const [nature, setNature] = useState('')
+  const { run, busy } = useAction()
   const zones = useFetch(() => api.get<{ id: number; code: string; libelle: string; collectrice: string | null }[]>('/api/zones'), [agenceId])
   const agents = useFetch(() => api.get<{ id: number; matricule: string; nom: string }[]>('/api/agents'), [agenceId])
   const colls = useFetch(() => api.get<{ id: number; matricule: string; nom: string }[]>('/api/collectrices'), [agenceId])
-  const produits = useFetch(() => api.get<{ id: number; code: string; libelle: string; categorie: string; type_cycle: number | null; solde_minimum: number }[]>('/api/produits-epargne'), [])
+  const produits = useFetch(() => api.get<ProduitEp[]>('/api/produits-epargne'), [])
   const pcredit = useFetch(() => api.get<{ id: number; code: string; libelle: string; type: string; taux_annuel: number; frais_dossier_taux: number }[]>('/api/produits-credit'), [])
   const recharger = () => { zones.reload(); agents.reload(); colls.reload(); produits.reload(); pcredit.reload() }
+  const changerGrace = (p: ProduitEp) => {
+    const v = window.prompt(`Délai de grâce de « ${p.libelle} » en jours (0 à 90). Laisser vide pour reprendre le paramètre commun :`, p.delai_grace_jours === null ? '' : String(p.delai_grace_jours))
+    if (v === null) return
+    void run(() => api.patch(`/api/produits-epargne/${p.id}`, { delai_grace_jours: v.trim() === '' ? null : Number(v) }), 'Délai de grâce enregistré', recharger)
+  }
   return (
     <div className="stack">
-      <Tabs actif={type} onChange={setType} tabs={[{ id: 'zone', titre: 'Zones' }, { id: 'agent', titre: 'Agents' }, { id: 'collectrice', titre: 'Collectrices' }, { id: 'produit', titre: "Produits d'épargne" }, { id: 'credit', titre: 'Produits de crédit' }]} />
+      <Tabs actif={type} onChange={(t) => { setType(t); setTexte(''); setNature('') }} tabs={[{ id: 'zone', titre: 'Zones' }, { id: 'agent', titre: 'Agents' }, { id: 'collectrice', titre: 'Collectrices' }, { id: 'produit', titre: "Produits d'épargne" }, { id: 'credit', titre: 'Produits de crédit' }]} />
       <Card flush actions={can('ref:write') && <Button variant="primary" onClick={() => setModale(true)}>Ajouter</Button>}>
-        {type === 'zone' && <Charge q={zones}>{(r) => <Table rows={r} cols={[{ titre: 'Code', render: (z) => z.code }, { titre: 'Libellé', render: (z) => z.libelle }, { titre: 'Collectrice actuelle', render: (z) => z.collectrice ?? '—' }]} />}</Charge>}
-        {type === 'agent' && <Charge q={agents}>{(r) => <Table rows={r} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
-        {type === 'collectrice' && <Charge q={colls}>{(r) => <Table rows={r} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
-        {type === 'produit' && <Charge q={produits}>{(r) => <Table rows={r} cols={[{ titre: 'Code', render: (p) => p.code }, { titre: 'Libellé', render: (p) => p.libelle }, { titre: 'Nature', render: (p) => (p.categorie === 'collecte' ? `Tontine type ${p.type_cycle}` : 'Épargne classique') }, { titre: 'Solde minimum', num: true, render: (p) => p.solde_minimum }]} />}</Charge>}
-        {type === 'credit' && <Charge q={pcredit}>{(r) => <Table rows={r} cols={[{ titre: 'Code', render: (p) => p.code }, { titre: 'Libellé', render: (p) => p.libelle }, { titre: 'Type', render: (p) => (p.type === 'sur_epargne' ? 'Sur épargne' : 'Sans épargne') }, { titre: 'Taux annuel', num: true, render: (p) => `${Math.round(p.taux_annuel * 1000) / 10} %` }, { titre: 'Frais de dossier', num: true, render: (p) => `${Math.round(p.frais_dossier_taux * 1000) / 10} %` }]} />}</Charge>}
+        <div className="card-b row">
+          <Field label="Recherche"><Input value={texte} onChange={(e) => setTexte(e.target.value)} placeholder="Code, nom ou libellé" /></Field>
+          {type === 'produit' && <Field label="Nature"><Select value={nature} onChange={(e) => setNature(e.target.value)}><option value="">Toutes</option><option value="collecte">Tontine</option><option value="classique">Épargne classique</option></Select></Field>}
+          {type === 'credit' && <Field label="Type"><Select value={nature} onChange={(e) => setNature(e.target.value)}><option value="">Tous</option><option value="sur_epargne">Sur épargne</option><option value="sans_epargne">Sans épargne</option></Select></Field>}
+        </div>
+        {type === 'zone' && <Charge q={zones}>{(r) => <Table rows={r.filter((z) => contient(texte, z.code, z.libelle, z.collectrice))} cols={[{ titre: 'Code', render: (z) => z.code }, { titre: 'Libellé', render: (z) => z.libelle }, { titre: 'Collectrice actuelle', render: (z) => z.collectrice ?? '—' }]} />}</Charge>}
+        {type === 'agent' && <Charge q={agents}>{(r) => <Table rows={r.filter((a) => contient(texte, a.matricule, a.nom))} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
+        {type === 'collectrice' && <Charge q={colls}>{(r) => <Table rows={r.filter((a) => contient(texte, a.matricule, a.nom))} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
+        {type === 'produit' && <Charge q={produits}>{(r) => <Table rows={r.filter((p) => contient(texte, p.code, p.libelle) && (!nature || p.categorie === nature))} cols={[
+          { titre: 'Code', render: (p) => p.code }, { titre: 'Libellé', render: (p) => p.libelle },
+          { titre: 'Nature', render: (p) => (p.categorie === 'collecte' ? (p.type_cycle ? `Tontine — type ${p.type_cycle} imposé` : 'Tontine — type choisi à la première mise') : 'Épargne classique') },
+          { titre: 'Délai de grâce', num: true, render: (p) => (p.categorie === 'collecte' ? (p.delai_grace_jours === null ? 'paramètre commun' : `${p.delai_grace_jours} j`) : '') },
+          { titre: 'Solde minimum', num: true, render: (p) => p.solde_minimum },
+          { titre: '', render: (p) => can('ref:write') && p.categorie === 'collecte' && <Button small disabled={busy} onClick={() => changerGrace(p)}>Délai de grâce</Button> },
+        ]} />}</Charge>}
+        {type === 'credit' && <Charge q={pcredit}>{(r) => <Table rows={r.filter((p) => contient(texte, p.code, p.libelle) && (!nature || p.type === nature))} cols={[{ titre: 'Code', render: (p) => p.code }, { titre: 'Libellé', render: (p) => p.libelle }, { titre: 'Type', render: (p) => (p.type === 'sur_epargne' ? 'Sur épargne' : 'Sans épargne') }, { titre: 'Taux annuel', num: true, render: (p) => `${Math.round(p.taux_annuel * 1000) / 10} %` }, { titre: 'Frais de dossier', num: true, render: (p) => `${Math.round(p.frais_dossier_taux * 1000) / 10} %` }]} />}</Charge>}
       </Card>
       {modale && <AjoutReferentiel type={type} onClose={() => setModale(false)} onFait={() => { setModale(false); recharger() }} />}
     </div>
@@ -201,13 +171,13 @@ function Referentiels() {
 
 function AjoutReferentiel({ type, onClose, onFait }: { type: string; onClose: () => void; onFait: () => void }) {
   const { run, busy } = useAction()
-  const [f, setF] = useState({ code: '', libelle: '', nom: '', categorie: 'collecte', type_cycle: '1', solde_minimum: '0', type: 'sur_epargne', taux: '12', frais: '1' })
+  const [f, setF] = useState({ code: '', libelle: '', nom: '', categorie: 'collecte', grace: '', solde_minimum: '0', type: 'sur_epargne', taux: '12', frais: '1' })
   const maj = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
   const envoyer = () => {
     if (type === 'zone') return api.post('/api/zones', { code: f.code, libelle: f.libelle })
     if (type === 'agent') return api.post('/api/agents', { matricule: f.code, nom: f.nom })
     if (type === 'collectrice') return api.post('/api/collectrices', { matricule: f.code, nom: f.nom })
-    if (type === 'produit') return api.post('/api/produits-epargne', { code: f.code, libelle: f.libelle, categorie: f.categorie, type_cycle: f.categorie === 'collecte' ? Number(f.type_cycle) : null, solde_minimum: Number(f.solde_minimum) })
+    if (type === 'produit') return api.post('/api/produits-epargne', { code: f.code, libelle: f.libelle, categorie: f.categorie, solde_minimum: Number(f.solde_minimum), delai_grace_jours: f.categorie === 'collecte' && f.grace !== '' ? Number(f.grace) : null })
     return api.post('/api/produits-credit', { code: f.code, libelle: f.libelle, type: f.type, taux_annuel: Number(f.taux) / 100, frais_dossier_taux: Number(f.frais) / 100 })
   }
   return (
@@ -217,7 +187,9 @@ function AjoutReferentiel({ type, onClose, onFait }: { type: string; onClose: ()
       {type === 'produit' && (
         <>
           <Field label="Nature"><Select value={f.categorie} onChange={maj('categorie')}><option value="collecte">Tontine (collecte)</option><option value="classique">Épargne classique</option></Select></Field>
-          {f.categorie === 'collecte' ? <Field label="Type de cycle"><Select value={f.type_cycle} onChange={maj('type_cycle')}><option value="1">Type 1 — mise × 31 lignes</option><option value="2">Type 2 — durée</option><option value="3">Type 3 — collecte libre</option></Select></Field>
+          {f.categorie === 'collecte'
+            ? <><Alert tone="info">Le type de cycle (1, 2 ou 3) n'est pas lié au produit : il est choisi à la première mise de chaque client, puis reste le même.</Alert>
+              <Field label="Délai de grâce (jours)" hint="Après la date de fin d'un cycle : saisie encore acceptée, clôture automatique différée. Vide : paramètre commun."><Input type="number" min={0} max={90} value={f.grace} onChange={maj('grace')} /></Field></>
             : <Field label="Solde minimum (F)"><Input type="number" min={0} value={f.solde_minimum} onChange={maj('solde_minimum')} /></Field>}
         </>
       )}
@@ -233,6 +205,59 @@ function AjoutReferentiel({ type, onClose, onFait }: { type: string; onClose: ()
 }
 
 function AuditLog() {
+  const [vue, setVue] = useState('journal')
+  return (
+    <div className="stack">
+      <Tabs actif={vue} onChange={setVue} tabs={[{ id: 'journal', titre: 'Journal des modifications' }, { id: 'supprimees', titre: 'Opérations supprimées' }]} />
+      {vue === 'journal' ? <JournalAudit /> : <OperationsSupprimees />}
+    </div>
+  )
+}
+
+interface Supprimee { id: number; nature: string; ligne_id: string | null; agence: string | null; cycle: string | null; supprime_par: string; supprime_le: string; motif: string; donnees: Record<string, unknown> }
+const NATURES: Record<string, string> = { ligne_collecte: 'Collecte', mouvement_epargne: "Mouvement d'épargne", versement_agent: "Versement d'agent", retrait: 'Retrait de tontine' }
+
+function OperationsSupprimees() {
+  const [nature, setNature] = useState('')
+  const [utilisateur, setUtilisateur] = useState('')
+  const [du, setDu] = useState('')
+  const [au, setAu] = useState('')
+  const q = useFetch(() => api.get<Supprimee[]>('/api/audit/operations-supprimees', { nature, utilisateur: utilisateur.trim(), du, au }), [nature, utilisateur, du, au])
+  const [ouvert, setOuvert] = useState<Supprimee | null>(null)
+  return (
+    <Card flush>
+      <Alert tone="info">Ces opérations ont été supprimées : elles n'apparaissent plus dans les écrans ni dans les calculs. Cette liste est conservée pour l'audit (auteur, date, motif et contenu d'origine) et ne peut être ni modifiée ni effacée.</Alert>
+      <div className="card-b row">
+        <Field label="Nature"><Select value={nature} onChange={(e) => setNature(e.target.value)}><option value="">Toutes</option>{Object.entries(NATURES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field>
+        <Field label="Supprimée par"><Input value={utilisateur} onChange={(e) => setUtilisateur(e.target.value)} placeholder="identifiant" /></Field>
+        <Field label="Du"><Input type="date" value={du} onChange={(e) => setDu(e.target.value)} /></Field>
+        <Field label="Au"><Input type="date" value={au} onChange={(e) => setAu(e.target.value)} /></Field>
+      </div>
+      <Charge q={q}>
+        {(rows) => (
+          <Table rows={rows} onRowClick={setOuvert} vide="Aucune opération supprimée" cols={[
+            { titre: 'Supprimée le', render: (o) => dateHeure(o.supprime_le) },
+            { titre: 'Mention', render: () => <Badge tone="bad">SUPPRIMÉE</Badge> },
+            { titre: 'Nature', render: (o) => NATURES[o.nature] ?? o.nature },
+            { titre: 'Agence', render: (o) => o.agence ?? '—' },
+            { titre: 'Cycle', render: (o) => o.cycle ?? '—' },
+            { titre: 'Montant', num: true, render: (o) => String(o.donnees.montant_collecte ?? o.donnees.montant ?? o.donnees.montant_verse ?? '') },
+            { titre: 'Par', render: (o) => o.supprime_par },
+            { titre: 'Motif', render: (o) => o.motif },
+          ]} />
+        )}
+      </Charge>
+      {ouvert && (
+        <Modal titre={`Opération supprimée — ${NATURES[ouvert.nature] ?? ouvert.nature} #${ouvert.ligne_id}`} onClose={() => setOuvert(null)} large footer={<Button onClick={() => setOuvert(null)}>Fermer</Button>}>
+          <p><Badge tone="bad">SUPPRIMÉE</Badge> le {dateHeure(ouvert.supprime_le)} par <strong>{ouvert.supprime_par}</strong> — motif : {ouvert.motif}</p>
+          <pre style={{ overflow: 'auto', fontSize: '0.8rem' }}>{JSON.stringify(ouvert.donnees, null, 2)}</pre>
+        </Modal>
+      )}
+    </Card>
+  )
+}
+
+function JournalAudit() {
   const [table, setTable] = useState('')
   const [utilisateur, setUtilisateur] = useState('')
   const q = useFetch(() => api.get<Audit[]>('/api/audit', { table_name: table, utilisateur, limit: 200 }), [table, utilisateur])

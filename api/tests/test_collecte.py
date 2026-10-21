@@ -135,7 +135,7 @@ def test_liste_isolation_et_lecture_seule(client, h, base):
 
 
 def test_feuille_de_collecte_du_jour(client, h, base):
-    c = _cycle(client, h, base, client_key="c2", mise=700)
+    c = _cycle(client, h, base, client_key="c2", mise=700, debut="2026-11-01", fin="2026-11-30")
     _lignes(client, h, c["id"], base["ag2"]["id"], 1, montant=700, debut="2026-11-15")
     r = client.get("/api/collecte/journee", params={"agent_id": base["ag2"]["id"], "date": "2026-11-15"}, headers=h("caissier1"))
     assert r.status_code == 200
@@ -186,12 +186,12 @@ def test_tableau_correction_et_validation_de_la_journee(client, h, base):
     assert s(500).status_code == 201
     extra = [l for l in client.get("/api/collecte/jour", params={"date": jour}, headers=h("chef1")).json()["lignes"] if l["cycle_id"] == c["id"]]
     assert sorted(l["montant_collecte"] for l in extra) == [500, 1500]
-    assert client.delete(f"/api/collecte/lignes/{extra[0]['id']}", headers=h("chef1")).status_code == 200
+    assert client.delete(f"/api/collecte/lignes/{extra[0]['id']}?motif=Saisie+en+double", headers=h("chef1")).status_code == 200
     # validation globale : réservée au chef / admin, puis plus aucune modification
     assert client.post("/api/collecte/valider-journee", json={"date": jour}, headers=h("agent_lie")).status_code == 403
     v = client.post("/api/collecte/valider-journee", json={"date": jour}, headers=h("chef1"))
     assert v.status_code == 201 and v.json()["validee"] is True and all(l["modifiable"] is False for l in v.json()["lignes"])
-    assert client.delete(f"/api/collecte/lignes/{lid}", headers=h("chef1")).status_code == 422
+    assert client.delete(f"/api/collecte/lignes/{lid}?motif=Saisie+en+double", headers=h("chef1")).status_code == 422
     assert s(500).status_code == 422
     assert client.post("/api/collecte/valider-journee", json={"date": jour}, headers=h("chef1")).status_code == 422
     # réouverture : motif obligatoire

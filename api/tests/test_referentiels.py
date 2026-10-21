@@ -65,9 +65,11 @@ def test_zone_d_une_autre_agence_refusee(client, h, agences):
 def test_produits(client, h, base):
     assert client.post("/api/produits-epargne", json={"code": "ZZ", "libelle": "x", "categorie": "classique"}, headers=h("caissier1")).status_code == 403
     assert client.post("/api/produits-epargne", json={"code": "P1", "libelle": "doublon", "categorie": "collecte", "type_cycle": 1}, headers=h("admin")).status_code == 409
-    # une collecte sans type de cycle viole une règle du schéma
-    assert client.post("/api/produits-epargne", json={"code": "Q1", "libelle": "x", "categorie": "collecte"}, headers=h("admin")).status_code == 422
-    assert len(client.get("/api/produits-epargne", params={"categorie": "collecte"}, headers=h("caissier1")).json()) == 3
+    # un produit de collecte n'impose plus de type de cycle : il est choisi à la première mise du client
+    assert client.post("/api/produits-epargne", json={"code": "Q1", "libelle": "x", "categorie": "collecte"}, headers=h("admin")).status_code == 201
+    # mais l'épargne classique n'a jamais de type de cycle
+    assert client.post("/api/produits-epargne", json={"code": "Q2", "libelle": "x", "categorie": "classique", "type_cycle": 1}, headers=h("admin")).status_code == 422
+    assert len(client.get("/api/produits-epargne", params={"categorie": "collecte"}, headers=h("caissier1")).json()) >= 4
 
 
 def test_collectrice_et_affectations(client, h, base, agences):

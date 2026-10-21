@@ -10197,3 +10197,1104 @@ END $$;
 CREATE TRIGGER audit_procuration AFTER INSERT OR UPDATE OR DELETE ON procuration FOR EACH ROW EXECUTE FUNCTION trg_audit();
 CREATE TRIGGER audit_cheque_emission AFTER INSERT OR UPDATE OR DELETE ON cheque_emission FOR EACH ROW EXECUTE FUNCTION trg_audit();
 CREATE TRIGGER audit_cheque_signature AFTER INSERT OR UPDATE OR DELETE ON cheque_signature FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 39_grh_organisation.sql
+-- =====================================================================
+-- =====================================================================
+-- 39_grh_organisation.sql
+-- Gestion des ressources humaines — organisation et dossier du personnel :
+--   * services (arbre) et postes (fiches de poste, fourchette de salaire, effectif prévu)
+--   * dossier de l'employé : état civil, contacts, personne à prévenir, pièce d'identité, CNSS, banque
+--   * hiérarchie (supérieur direct, sans cycle) et organigramme
+--   * pièces du dossier avec date d'expiration ; périodes d'essai et fins de contrat à surveiller
+--   * agents commerciaux dans la RH : fiche RH créée depuis l'agent, tableau de bord par agent
+-- Dépend de : 00, 04, 11.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('alerte_contrat_jours', '60', 'Jours avant la fin d''un CDD / stage pour signaler l''échéance'),
+  ('alerte_essai_jours', '15', 'Jours avant la fin d''une période d''essai pour la signaler'),
+  ('alerte_piece_jours', '60', 'Jours avant l''expiration d''une pièce du dossier pour la signaler');
+
+CREATE TABLE service_rh (
+  id          serial PRIMARY KEY,
+  code        varchar(15) NOT NULL UNIQUE,
+  libelle     text NOT NULL,
+  parent_id   integer REFERENCES service_rh(id),
+  actif       boolean NOT NULL DEFAULT true,
+  CHECK (parent_id IS NULL OR parent_id <> id)
+);
+
+CREATE TABLE poste (
+  id              serial PRIMARY KEY,
+  code            varchar(15) NOT NULL UNIQUE,
+  libelle         text NOT NULL,
+  service_id      integer REFERENCES service_rh(id),
+  description     text,
+  competences     text,
+  salaire_min     numeric(14,0) CHECK (salaire_min IS NULL OR salaire_min >= 0),
+  salaire_max     numeric(14,0),
+  effectif_prevu  smallint NOT NULL DEFAULT 1 CHECK (effectif_prevu >= 0),
+  actif           boolean NOT NULL DEFAULT true,
+  CHECK (salaire_max IS NULL OR salaire_min IS NULL OR salaire_max >= salaire_min)
+);
+
+ALTER TABLE employe
+  ADD COLUMN poste_id            integer REFERENCES poste(id),
+  ADD COLUMN service_id          integer REFERENCES service_rh(id),
+  ADD COLUMN superieur_id        integer REFERENCES employe(id),
+  ADD COLUMN sexe                char(1) CHECK (sexe IN ('F','M')),
+  ADD COLUMN date_naissance      date CHECK (date_naissance IS NULL OR date_naissance < current_date),
+  ADD COLUMN lieu_naissance      text,
+  ADD COLUMN situation_familiale varchar(15) CHECK (situation_familiale IN ('celibataire','marie','divorce','veuf')),
+  ADD COLUMN nb_enfants          smallint NOT NULL DEFAULT 0 CHECK (nb_enfants >= 0),
+  ADD COLUMN telephone           varchar(30),
+  ADD COLUMN email               varchar(200),
+  ADD COLUMN adresse             text,
+  ADD COLUMN urgence_nom         text,
+  ADD COLUMN urgence_telephone   varchar(30),
+  ADD COLUMN piece_identite      text,
+  ADD COLUMN numero_cnss         varchar(30),
+  ADD COLUMN banque              text,
+  ADD COLUMN numero_compte       varchar(40);
+
+ALTER TABLE employe ADD CONSTRAINT employe_pas_son_propre_superieur CHECK (superieur_id IS NULL OR superieur_id <> id);
+
+-- Hiérarchie sans cycle : le supérieur ne doit pas être un subordonné (direct ou indirect)
+CREATE FUNCTION trg_employe_hierarchie() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.superieur_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.superieur_id IS DISTINCT FROM OLD.superieur_id) THEN
+    IF TG_OP = 'UPDATE' AND EXISTS (
+         WITH RECURSIVE sub AS (
+           SELECT id FROM mf.employe WHERE superieur_id = NEW.id
+           UNION SELECT e.id FROM mf.employe e JOIN sub s ON e.superieur_id = s.id)
+         SELECT 1 FROM sub WHERE id = NEW.superieur_id) THEN
+      RAISE EXCEPTION 'Hiérarchie circulaire : le supérieur choisi dépend déjà de cet employé';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER employe_hierarchie BEFORE INSERT OR UPDATE OF superieur_id ON employe FOR EACH ROW EXECUTE FUNCTION trg_employe_hierarchie();
+
+-- Un service ne peut pas devenir son propre descendant
+CREATE FUNCTION trg_service_hierarchie() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.parent_id IS NOT NULL AND NEW.parent_id IS DISTINCT FROM OLD.parent_id AND EXISTS (
+       WITH RECURSIVE sub AS (
+         SELECT id FROM mf.service_rh WHERE parent_id = NEW.id
+         UNION SELECT s2.id FROM mf.service_rh s2 JOIN sub s ON s2.parent_id = s.id)
+       SELECT 1 FROM sub WHERE id = NEW.parent_id) THEN
+    RAISE EXCEPTION 'Hiérarchie circulaire entre services';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER service_hierarchie BEFORE UPDATE OF parent_id ON service_rh FOR EACH ROW EXECUTE FUNCTION trg_service_hierarchie();
+
+-- Pièces du dossier du personnel
+CREATE TABLE document_employe (
+  id               serial PRIMARY KEY,
+  employe_id       integer NOT NULL REFERENCES employe(id),
+  type             varchar(20) NOT NULL CHECK (type IN ('identite','diplome','contrat','cnss','certificat_medical','casier_judiciaire','attestation','photo','autre')),
+  libelle          text NOT NULL,
+  reference        text,
+  date_emission    date,
+  date_expiration  date,
+  note             text,
+  cree_le          timestamptz NOT NULL DEFAULT now(),
+  CHECK (date_expiration IS NULL OR date_emission IS NULL OR date_expiration >= date_emission)
+);
+CREATE INDEX document_employe_employe ON document_employe(employe_id);
+
+-- Période d'essai et motif du CDD sur les contrats
+ALTER TABLE contrat
+  ADD COLUMN periode_essai_fin date,
+  ADD COLUMN motif_cdd text,
+  ADD COLUMN poste_id integer REFERENCES poste(id),
+  ADD CONSTRAINT contrat_essai_dans_le_contrat CHECK (periode_essai_fin IS NULL OR periode_essai_fin >= date_debut);
+
+-- Alertes : fins de contrat, fins de période d'essai, pièces qui expirent (agence de l'employé)
+CREATE VIEW v_grh_echeances AS
+SELECT 'fin_contrat'::text AS nature, e.id AS employe_id, e.agence_id, e.matricule, e.nom, c.date_fin AS echeance,
+       (c.date_fin - current_date) AS jours, c.type::text AS detail
+  FROM mf.employe e JOIN mf.contrat c ON c.employe_id = e.id
+ WHERE e.statut = 'actif' AND c.type IN ('cdd','stage','journalier') AND c.date_fin IS NOT NULL
+   AND c.date_fin BETWEEN current_date AND current_date + COALESCE(mf.param_num('alerte_contrat_jours', e.agence_id), 60)::int
+UNION ALL
+SELECT 'fin_essai', e.id, e.agence_id, e.matricule, e.nom, c.periode_essai_fin, (c.periode_essai_fin - current_date), c.type::text
+  FROM mf.employe e JOIN mf.contrat c ON c.employe_id = e.id
+ WHERE e.statut = 'actif' AND c.periode_essai_fin BETWEEN current_date AND current_date + COALESCE(mf.param_num('alerte_essai_jours', e.agence_id), 15)::int
+UNION ALL
+SELECT 'piece_expire', e.id, e.agence_id, e.matricule, e.nom, d.date_expiration, (d.date_expiration - current_date), d.libelle
+  FROM mf.employe e JOIN mf.document_employe d ON d.employe_id = e.id
+ WHERE e.statut = 'actif' AND d.date_expiration <= current_date + COALESCE(mf.param_num('alerte_piece_jours', e.agence_id), 60)::int;
+
+-- Organigramme : chaque employé avec son niveau et son chemin hiérarchique
+CREATE VIEW v_organigramme AS
+WITH RECURSIVE arbre AS (
+  SELECT e.id, e.agence_id, e.matricule, e.nom, e.poste_id, e.service_id, e.superieur_id, 0 AS niveau, ARRAY[e.id] AS chemin
+    FROM mf.employe e WHERE e.statut = 'actif' AND (e.superieur_id IS NULL OR NOT EXISTS (SELECT 1 FROM mf.employe s WHERE s.id = e.superieur_id AND s.statut = 'actif'))
+  UNION ALL
+  SELECT e.id, e.agence_id, e.matricule, e.nom, e.poste_id, e.service_id, e.superieur_id, a.niveau + 1, a.chemin || e.id
+    FROM mf.employe e JOIN arbre a ON e.superieur_id = a.id WHERE e.statut = 'actif')
+SELECT a.*, p.libelle AS poste, s.libelle AS service FROM arbre a
+  LEFT JOIN mf.poste p ON p.id = a.poste_id LEFT JOIN mf.service_rh s ON s.id = a.service_id;
+
+-- ---------------------------------------------------------------------
+-- Agents commerciaux dans la RH
+-- ---------------------------------------------------------------------
+-- Fiche RH d'un agent commercial : même matricule et même nom, rattachée à l'agent
+CREATE FUNCTION creer_employe_depuis_agent(p_agent integer, p_date_embauche date DEFAULT current_date, p_poste integer DEFAULT NULL)
+RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE a mf.agent; v_id integer; v_poste integer;
+BEGIN
+  SELECT * INTO a FROM mf.agent WHERE id = p_agent FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'agent % inconnu', p_agent; END IF;
+  IF EXISTS (SELECT 1 FROM mf.employe WHERE agent_id = p_agent) THEN
+    RAISE EXCEPTION 'L''agent % a déjà une fiche RH', a.matricule;
+  END IF;
+  v_poste := COALESCE(p_poste, (SELECT id FROM mf.poste WHERE code = 'AGENT-COM'));
+  INSERT INTO mf.employe(agence_id, matricule, nom, poste, poste_id, date_embauche, agent_id)
+  VALUES (a.agence_id, a.matricule, a.nom, 'Agent commercial', v_poste, p_date_embauche, p_agent)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+INSERT INTO poste(code, libelle, description, effectif_prevu) VALUES
+  ('AGENT-COM', 'Agent commercial', 'Collecte de proximité, suivi des clients et des cycles de tontine', 5),
+  ('COLLECTRICE', 'Collectrice', 'Collecte journalière auprès des clients', 5);
+
+-- Vue RH des agents commerciaux : fiche RH, contrat, zones, clients et collecte du mois
+CREATE VIEW v_agent_rh AS
+SELECT a.id AS agent_id, a.agence_id, a.matricule, a.nom, a.actif,
+       e.id AS employe_id, e.statut AS statut_rh, e.date_embauche, e.superieur_id,
+       (SELECT salaire_base FROM mf.contrat c WHERE c.employe_id = e.id AND c.date_debut <= current_date
+           AND (c.date_fin IS NULL OR c.date_fin >= current_date) ORDER BY c.date_debut DESC LIMIT 1) AS salaire_base,
+       (SELECT count(*) FROM mf.zone z WHERE z.agent_id = a.id) AS nb_zones,
+       (SELECT count(*) FROM mf.client cl JOIN mf.zone z ON z.id = cl.zone_id WHERE z.agent_id = a.id) AS nb_clients,
+       COALESCE((SELECT sum(l.montant_collecte) FROM mf.ligne_collecte l
+                  WHERE l.agent_id = a.id AND l.date_collecte >= date_trunc('month', current_date)::date), 0) AS collecte_du_mois
+  FROM mf.agent a LEFT JOIN mf.employe e ON e.agent_id = a.id;
+
+CREATE TRIGGER audit_poste AFTER INSERT OR UPDATE OR DELETE ON poste FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_service_rh AFTER INSERT OR UPDATE OR DELETE ON service_rh FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_document_employe AFTER INSERT OR UPDATE OR DELETE ON document_employe FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 40_grh_conges_absences.sql
+-- =====================================================================
+-- =====================================================================
+-- 40_grh_conges_absences.sql
+-- GRH — congés, absences et présences :
+--   * jours fériés (globaux ou par agence) et décompte des jours ouvrés (lundi à vendredi)
+--   * droits à congé annuel (jours par mois travaillé) et solde
+--   * demande, décision (jamais par l'intéressé), annulation ; pas de chevauchement ; solde suffisant
+--   * un congé approuvé pose les présences « conge » ; une présence ne contredit pas un congé
+--   * pointage (arrivée, départ, motif) et synthèse mensuelle de l'absentéisme
+-- Dépend de : 04, 39.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('conge_jours_par_mois', '2.5', 'Jours de congé annuel acquis par mois travaillé (provisoire : à valider avec le code du travail applicable)');
+
+CREATE TABLE jour_ferie (
+  id         serial PRIMARY KEY,
+  date_jour  date NOT NULL,
+  libelle    text NOT NULL,
+  agence_id  smallint REFERENCES agence(id)          -- NULL = toutes les agences
+);
+CREATE UNIQUE INDEX jour_ferie_unique ON jour_ferie (date_jour, COALESCE(agence_id, 0));
+
+ALTER TABLE conge DROP CONSTRAINT conge_type_check;
+ALTER TABLE conge ADD CONSTRAINT conge_type_check CHECK (type IN
+  ('annuel','maladie','maternite','paternite','permission','deuil','formation','sans_solde','autre'));
+ALTER TABLE conge DROP CONSTRAINT conge_statut_check;
+ALTER TABLE conge ADD CONSTRAINT conge_statut_check CHECK (statut IN ('demande','approuve','refuse','annule'));
+ALTER TABLE conge
+  ADD COLUMN jours_ouvres        numeric(5,1),
+  ADD COLUMN motif               text,
+  ADD COLUMN remplacant_id       integer REFERENCES employe(id),
+  ADD COLUMN decide_par          integer REFERENCES utilisateur(id),
+  ADD COLUMN decide_le           timestamptz,
+  ADD COLUMN commentaire_decision text,
+  ADD COLUMN cree_le             timestamptz NOT NULL DEFAULT now();
+
+ALTER TABLE presence DROP CONSTRAINT presence_statut_check;
+ALTER TABLE presence ALTER COLUMN statut TYPE varchar(20);
+ALTER TABLE presence ADD CONSTRAINT presence_statut_check CHECK (statut IN ('present','absent','retard','conge','mission','absent_justifie','ferie'));
+ALTER TABLE presence
+  ADD COLUMN heure_arrivee time,
+  ADD COLUMN heure_depart  time,
+  ADD COLUMN motif         text,
+  ADD CONSTRAINT presence_heures_coherentes CHECK (heure_arrivee IS NULL OR heure_depart IS NULL OR heure_depart > heure_arrivee);
+
+-- Jours ouvrés (lundi à vendredi hors jours fériés) entre deux dates incluses
+CREATE FUNCTION jours_ouvres(p_debut date, p_fin date, p_agence smallint DEFAULT NULL) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT count(*)::numeric FROM generate_series(p_debut, p_fin, interval '1 day') g(d)
+   WHERE extract(isodow FROM g.d) < 6
+     AND NOT EXISTS (SELECT 1 FROM mf.jour_ferie f WHERE f.date_jour = g.d::date AND (f.agence_id IS NULL OR f.agence_id = p_agence))
+$$;
+
+-- Congé annuel acquis (mois entiers travaillés x taux) et solde (acquis - congés annuels approuvés)
+CREATE FUNCTION conge_acquis(p_employe integer, p_date date DEFAULT current_date) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT (GREATEST(0, (extract(year FROM age(p_date, e.date_embauche)) * 12 + extract(month FROM age(p_date, e.date_embauche)))::int)
+          * COALESCE(mf.param_num('conge_jours_par_mois', e.agence_id), 2.5))::numeric
+    FROM mf.employe e WHERE e.id = p_employe
+$$;
+
+CREATE FUNCTION solde_conge(p_employe integer, p_date date DEFAULT current_date) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT mf.conge_acquis(p_employe, p_date) - COALESCE((SELECT sum(jours_ouvres) FROM mf.conge
+          WHERE employe_id = p_employe AND type = 'annuel' AND statut = 'approuve'), 0)
+$$;
+
+CREATE FUNCTION trg_conge_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE e mf.employe; v_user_employe integer;
+BEGIN
+  SELECT * INTO e FROM mf.employe WHERE id = NEW.employe_id;
+  NEW.jours_ouvres := mf.jours_ouvres(NEW.date_debut, NEW.date_fin, e.agence_id);
+  IF NEW.jours_ouvres = 0 THEN RAISE EXCEPTION 'Cette période ne contient aucun jour ouvré'; END IF;
+  IF e.statut <> 'actif' THEN RAISE EXCEPTION 'Employé sorti : aucun congé'; END IF;
+  IF NEW.statut IN ('demande','approuve') AND EXISTS (
+       SELECT 1 FROM mf.conge c WHERE c.employe_id = NEW.employe_id AND c.id IS DISTINCT FROM NEW.id
+          AND c.statut IN ('demande','approuve') AND daterange(c.date_debut, c.date_fin, '[]') && daterange(NEW.date_debut, NEW.date_fin, '[]')) THEN
+    RAISE EXCEPTION 'Cette période chevauche un autre congé de l''employé';
+  END IF;
+  IF NEW.statut = 'approuve' AND (TG_OP = 'INSERT' OR OLD.statut <> 'approuve') THEN
+    IF NEW.decide_par IS NULL THEN RAISE EXCEPTION 'La décision doit être prise par un responsable identifié'; END IF;
+    IF e.utilisateur_id IS NOT NULL AND e.utilisateur_id = NEW.decide_par THEN
+      RAISE EXCEPTION 'Séparation des tâches : on n''approuve pas son propre congé';
+    END IF;
+    IF NEW.type = 'annuel' AND mf.solde_conge(NEW.employe_id, NEW.date_debut) < NEW.jours_ouvres THEN
+      RAISE EXCEPTION 'Solde de congé insuffisant : % jour(s) disponible(s) pour % demandé(s)',
+        mf.solde_conge(NEW.employe_id, NEW.date_debut), NEW.jours_ouvres;
+    END IF;
+    NEW.decide_le := now();
+  END IF;
+  IF NEW.statut = 'refuse' AND (TG_OP = 'INSERT' OR OLD.statut <> 'refuse') THEN
+    IF NEW.decide_par IS NULL OR length(btrim(COALESCE(NEW.commentaire_decision, ''))) < 5 THEN
+      RAISE EXCEPTION 'Un refus doit être motivé et attribué à son auteur';
+    END IF;
+    NEW.decide_le := now();
+  END IF;
+  IF TG_OP = 'UPDATE' AND OLD.statut IN ('refuse','annule') AND NEW.statut <> OLD.statut THEN
+    RAISE EXCEPTION 'Un congé % ne se rouvre pas : refaire une demande', OLD.statut;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER conge_regles BEFORE INSERT OR UPDATE ON conge FOR EACH ROW EXECUTE FUNCTION trg_conge_regles();
+
+-- Les présences suivent le congé : posées à l'approbation, retirées à l'annulation
+CREATE FUNCTION trg_conge_presences() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v_ag smallint;
+BEGIN
+  SELECT agence_id INTO v_ag FROM mf.employe WHERE id = NEW.employe_id;
+  IF NEW.statut = 'approuve' AND (TG_OP = 'INSERT' OR OLD.statut <> 'approuve') THEN
+    INSERT INTO mf.presence(employe_id, date_jour, statut, motif)
+    SELECT NEW.employe_id, g.d::date, 'conge', NEW.type
+      FROM generate_series(NEW.date_debut, NEW.date_fin, interval '1 day') g(d)
+     WHERE extract(isodow FROM g.d) < 6
+       AND NOT EXISTS (SELECT 1 FROM mf.jour_ferie f WHERE f.date_jour = g.d::date AND (f.agence_id IS NULL OR f.agence_id = v_ag))
+    ON CONFLICT (employe_id, date_jour) DO UPDATE SET statut = 'conge', motif = EXCLUDED.motif, heure_arrivee = NULL, heure_depart = NULL;
+  ELSIF TG_OP = 'UPDATE' AND OLD.statut = 'approuve' AND NEW.statut = 'annule' THEN
+    DELETE FROM mf.presence WHERE employe_id = NEW.employe_id AND statut = 'conge' AND date_jour BETWEEN NEW.date_debut AND NEW.date_fin;
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER conge_presences AFTER INSERT OR UPDATE ON conge FOR EACH ROW EXECUTE FUNCTION trg_conge_presences();
+
+-- Une présence ne contredit pas un congé approuvé ; pas de pointage dans le futur
+CREATE FUNCTION trg_presence_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.date_jour > current_date THEN RAISE EXCEPTION 'On ne pointe pas dans le futur'; END IF;
+  IF NEW.statut IN ('present','retard','absent') AND EXISTS (
+       SELECT 1 FROM mf.conge c WHERE c.employe_id = NEW.employe_id AND c.statut = 'approuve' AND NEW.date_jour BETWEEN c.date_debut AND c.date_fin) THEN
+    RAISE EXCEPTION 'L''employé est en congé approuvé ce jour-là';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER presence_regles BEFORE INSERT OR UPDATE ON presence FOR EACH ROW
+  WHEN (NEW.statut <> 'conge') EXECUTE FUNCTION trg_presence_regles();
+
+-- Pointage d'un employé (création ou correction du jour)
+CREATE FUNCTION enregistrer_presence(p_employe integer, p_date date, p_statut text, p_arrivee time DEFAULT NULL,
+                                     p_depart time DEFAULT NULL, p_motif text DEFAULT NULL) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE v_id integer; v_heures numeric;
+BEGIN
+  v_heures := CASE WHEN p_arrivee IS NOT NULL AND p_depart IS NOT NULL THEN round((extract(epoch FROM (p_depart - p_arrivee)) / 3600)::numeric, 1) END;
+  INSERT INTO mf.presence(employe_id, date_jour, statut, heures, heure_arrivee, heure_depart, motif)
+  VALUES (p_employe, p_date, p_statut, v_heures, p_arrivee, p_depart, p_motif)
+  ON CONFLICT (employe_id, date_jour) DO UPDATE
+    SET statut = EXCLUDED.statut, heures = EXCLUDED.heures, heure_arrivee = EXCLUDED.heure_arrivee,
+        heure_depart = EXCLUDED.heure_depart, motif = EXCLUDED.motif
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+-- Synthèse mensuelle : absences, retards, congés, présences
+CREATE VIEW v_absenteisme AS
+SELECT e.id AS employe_id, e.agence_id, e.matricule, e.nom, date_trunc('month', p.date_jour)::date AS mois,
+       count(*) FILTER (WHERE p.statut IN ('present','retard','mission')) AS jours_presents,
+       count(*) FILTER (WHERE p.statut = 'absent') AS absences_injustifiees,
+       count(*) FILTER (WHERE p.statut = 'absent_justifie') AS absences_justifiees,
+       count(*) FILTER (WHERE p.statut = 'retard') AS retards,
+       count(*) FILTER (WHERE p.statut = 'conge') AS jours_conge
+  FROM mf.employe e JOIN mf.presence p ON p.employe_id = e.id
+ GROUP BY e.id, date_trunc('month', p.date_jour);
+
+CREATE TRIGGER audit_conge AFTER INSERT OR UPDATE OR DELETE ON conge FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_jour_ferie AFTER INSERT OR UPDATE OR DELETE ON jour_ferie FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 41_grh_recrutement.sql
+-- =====================================================================
+-- =====================================================================
+-- 41_grh_recrutement.sql
+-- GRH — recrutement :
+--   * besoin de recrutement (poste, nombre, motif) décidé par une autre personne que le demandeur
+--   * candidats, candidatures (une par candidat et par besoin), entretiens notés
+--   * une candidature n'est « retenue » qu'après un entretien favorable de note suffisante
+--   * embauche : crée l'employé et son contrat (salaire dans la fourchette du poste) ; le besoin est pourvu quand
+--     le nombre de postes est atteint
+-- Dépend de : 04, 39.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('recrutement_note_min', '6', 'Note minimale (sur 10) d''un entretien favorable pour retenir un candidat (provisoire)');
+
+CREATE TABLE besoin_recrutement (
+  id               serial PRIMARY KEY,
+  agence_id        smallint NOT NULL REFERENCES agence(id),
+  poste_id         integer NOT NULL REFERENCES poste(id),
+  motif            text NOT NULL CHECK (length(btrim(motif)) >= 5),
+  nb_postes        smallint NOT NULL DEFAULT 1 CHECK (nb_postes BETWEEN 1 AND 50),
+  date_souhaitee   date,
+  statut           varchar(10) NOT NULL DEFAULT 'soumis' CHECK (statut IN ('soumis','approuve','refuse','pourvu','annule')),
+  demandeur_id     integer REFERENCES utilisateur(id),
+  decide_par       integer REFERENCES utilisateur(id),
+  decide_le        timestamptz,
+  commentaire      text,
+  cree_le          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE FUNCTION trg_besoin_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.statut IN ('approuve','refuse') AND OLD.statut = 'soumis' THEN
+    IF NEW.decide_par IS NULL THEN RAISE EXCEPTION 'La décision doit être attribuée à son auteur'; END IF;
+    IF NEW.decide_par IS NOT DISTINCT FROM NEW.demandeur_id THEN
+      RAISE EXCEPTION 'Séparation des tâches : le demandeur ne décide pas de son propre besoin';
+    END IF;
+    IF NEW.statut = 'refuse' AND length(btrim(COALESCE(NEW.commentaire, ''))) < 5 THEN
+      RAISE EXCEPTION 'Un refus doit être motivé';
+    END IF;
+    NEW.decide_le := now();
+  ELSIF TG_OP = 'UPDATE' AND NEW.statut IS DISTINCT FROM OLD.statut
+        AND NOT ((OLD.statut = 'soumis' AND NEW.statut = 'annule') OR (OLD.statut = 'approuve' AND NEW.statut IN ('pourvu','annule'))) THEN
+    RAISE EXCEPTION 'Transition impossible : % -> %', OLD.statut, NEW.statut;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER besoin_regles BEFORE UPDATE ON besoin_recrutement FOR EACH ROW EXECUTE FUNCTION trg_besoin_regles();
+
+CREATE TABLE candidat (
+  id            serial PRIMARY KEY,
+  nom           text NOT NULL,
+  telephone     varchar(30),
+  email         varchar(200),
+  source        varchar(20) NOT NULL DEFAULT 'spontanee' CHECK (source IN ('spontanee','annonce','recommandation','cabinet','autre')),
+  cv_reference  text,
+  notes         text,
+  cree_le       timestamptz NOT NULL DEFAULT now(),
+  CHECK (telephone IS NOT NULL OR email IS NOT NULL)
+);
+
+CREATE TABLE candidature (
+  id           serial PRIMARY KEY,
+  besoin_id    integer NOT NULL REFERENCES besoin_recrutement(id),
+  candidat_id  integer NOT NULL REFERENCES candidat(id),
+  statut       varchar(15) NOT NULL DEFAULT 'recue' CHECK (statut IN ('recue','preselection','entretien','retenue','refusee','embauchee','desistement')),
+  motif_refus  text,
+  employe_id   integer REFERENCES employe(id),
+  cree_le      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (besoin_id, candidat_id),
+  CHECK (statut <> 'refusee' OR length(btrim(COALESCE(motif_refus, ''))) >= 5)
+);
+
+CREATE TABLE entretien (
+  id              serial PRIMARY KEY,
+  candidature_id  integer NOT NULL REFERENCES candidature(id),
+  date_entretien  date NOT NULL,
+  type            varchar(12) NOT NULL DEFAULT 'rh' CHECK (type IN ('telephone','technique','rh','direction')),
+  evaluateur_id   integer REFERENCES utilisateur(id),
+  note            numeric(3,1) NOT NULL CHECK (note BETWEEN 0 AND 10),
+  decision        varchar(12) NOT NULL CHECK (decision IN ('favorable','reserve','defavorable')),
+  avis            text
+);
+
+CREATE FUNCTION trg_candidature_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE b mf.besoin_recrutement; v_min numeric;
+BEGIN
+  SELECT * INTO b FROM mf.besoin_recrutement WHERE id = NEW.besoin_id;
+  IF TG_OP = 'INSERT' AND b.statut <> 'approuve' THEN
+    RAISE EXCEPTION 'On ne reçoit de candidature que pour un besoin approuvé (statut %)', b.statut;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.statut = 'retenue' AND OLD.statut <> 'retenue' THEN
+    v_min := COALESCE(mf.param_num('recrutement_note_min', b.agence_id), 6);
+    IF NOT EXISTS (SELECT 1 FROM mf.entretien WHERE candidature_id = NEW.id AND decision = 'favorable' AND note >= v_min) THEN
+      RAISE EXCEPTION 'Candidature non retenable : aucun entretien favorable de note au moins %', v_min;
+    END IF;
+  END IF;
+  IF TG_OP = 'UPDATE' AND OLD.statut IN ('embauchee','refusee','desistement') AND NEW.statut <> OLD.statut THEN
+    RAISE EXCEPTION 'Candidature close (%)', OLD.statut;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.statut = 'embauchee' AND OLD.statut <> 'retenue' THEN
+    RAISE EXCEPTION 'On n''embauche qu''un candidat retenu';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER candidature_regles BEFORE INSERT OR UPDATE ON candidature FOR EACH ROW EXECUTE FUNCTION trg_candidature_regles();
+
+-- Un entretien fait passer la candidature à « entretien » si elle n'était qu'à l'étape précédente
+CREATE FUNCTION trg_entretien_etape() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE mf.candidature SET statut = 'entretien' WHERE id = NEW.candidature_id AND statut IN ('recue','preselection');
+  RETURN NULL;
+END $$;
+CREATE TRIGGER entretien_etape AFTER INSERT ON entretien FOR EACH ROW EXECUTE FUNCTION trg_entretien_etape();
+
+-- Embauche d'un candidat retenu : employé + contrat, dans la fourchette de salaire du poste
+CREATE FUNCTION embaucher_candidat(p_candidature integer, p_matricule text, p_date_embauche date, p_salaire numeric,
+                                   p_type_contrat text DEFAULT 'cdi', p_date_fin date DEFAULT NULL, p_essai_fin date DEFAULT NULL)
+RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE c mf.candidature; b mf.besoin_recrutement; p mf.poste; cd mf.candidat; v_emp integer; v_n integer;
+BEGIN
+  SELECT * INTO c FROM mf.candidature WHERE id = p_candidature FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'candidature % inconnue', p_candidature; END IF;
+  IF c.statut <> 'retenue' THEN RAISE EXCEPTION 'On n''embauche qu''un candidat retenu (statut %)', c.statut; END IF;
+  SELECT * INTO b FROM mf.besoin_recrutement WHERE id = c.besoin_id FOR UPDATE;
+  IF b.statut <> 'approuve' THEN RAISE EXCEPTION 'Le besoin n''est plus ouvert (statut %)', b.statut; END IF;
+  SELECT * INTO p FROM mf.poste WHERE id = b.poste_id;
+  IF (p.salaire_min IS NOT NULL AND p_salaire < p.salaire_min) OR (p.salaire_max IS NOT NULL AND p_salaire > p.salaire_max) THEN
+    RAISE EXCEPTION 'Salaire % hors de la fourchette du poste (% à %)', p_salaire, COALESCE(p.salaire_min::text, '…'), COALESCE(p.salaire_max::text, '…');
+  END IF;
+  SELECT * INTO cd FROM mf.candidat WHERE id = c.candidat_id;
+  INSERT INTO mf.employe(agence_id, matricule, nom, poste, poste_id, service_id, date_embauche, telephone, email)
+  VALUES (b.agence_id, p_matricule, cd.nom, p.libelle, p.id, p.service_id, p_date_embauche, cd.telephone, cd.email) RETURNING id INTO v_emp;
+  INSERT INTO mf.contrat(employe_id, type, date_debut, date_fin, salaire_base, periode_essai_fin, poste_id, motif_cdd)
+  VALUES (v_emp, p_type_contrat, p_date_embauche, p_date_fin, p_salaire, p_essai_fin, p.id,
+          CASE WHEN p_type_contrat = 'cdd' THEN 'Recrutement pour le besoin ' || b.id END);
+  UPDATE mf.candidature SET statut = 'embauchee', employe_id = v_emp WHERE id = p_candidature;
+  SELECT count(*) INTO v_n FROM mf.candidature WHERE besoin_id = b.id AND statut = 'embauchee';
+  IF v_n >= b.nb_postes THEN UPDATE mf.besoin_recrutement SET statut = 'pourvu' WHERE id = b.id; END IF;
+  RETURN v_emp;
+END $$;
+
+-- Entonnoir de recrutement par besoin
+CREATE VIEW v_recrutement AS
+SELECT b.id AS besoin_id, b.agence_id, p.libelle AS poste, b.nb_postes, b.statut,
+       count(c.id) AS candidatures,
+       count(c.id) FILTER (WHERE c.statut IN ('entretien','retenue','embauchee')) AS en_entretien_ou_plus,
+       count(c.id) FILTER (WHERE c.statut = 'retenue') AS retenues,
+       count(c.id) FILTER (WHERE c.statut = 'embauchee') AS embauches
+  FROM mf.besoin_recrutement b JOIN mf.poste p ON p.id = b.poste_id LEFT JOIN mf.candidature c ON c.besoin_id = b.id
+ GROUP BY b.id, p.libelle;
+
+CREATE TRIGGER audit_besoin_recrutement AFTER INSERT OR UPDATE OR DELETE ON besoin_recrutement FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_candidature AFTER INSERT OR UPDATE OR DELETE ON candidature FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 42_grh_formation_evaluation.sql
+-- =====================================================================
+-- =====================================================================
+-- 42_grh_formation_evaluation.sql
+-- GRH — formation et évaluation de la performance :
+--   * catalogue de formations, sessions (capacité, coût), inscriptions, présence, validation avec certificat ;
+--     pas d'inscription d'un employé sorti ou en congé approuvé pendant la session
+--   * campagnes d'évaluation, évaluation par le supérieur direct sur des objectifs pondérés (total 100),
+--     note globale pondérée, décision (maintien, augmentation, promotion, formation, alerte), validation
+--     par une autre personne ; une évaluation validée est figée
+-- Dépend de : 39, 40.
+-- =====================================================================
+SET search_path = mf, public;
+
+-- ---------------------------------------------------------------- formation
+CREATE TABLE formation (
+  id             serial PRIMARY KEY,
+  code           varchar(15) NOT NULL UNIQUE,
+  titre          text NOT NULL,
+  organisme      text,
+  duree_heures   numeric(6,1) NOT NULL CHECK (duree_heures > 0),
+  cout_unitaire  numeric(14,0) NOT NULL DEFAULT 0 CHECK (cout_unitaire >= 0),
+  objectifs      text,
+  actif          boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE session_formation (
+  id            serial PRIMARY KEY,
+  formation_id  integer NOT NULL REFERENCES formation(id),
+  date_debut    date NOT NULL,
+  date_fin      date NOT NULL,
+  lieu          text,
+  formateur     text,
+  capacite      smallint NOT NULL DEFAULT 20 CHECK (capacite > 0),
+  cout_total    numeric(14,0) CHECK (cout_total IS NULL OR cout_total >= 0),
+  statut        varchar(10) NOT NULL DEFAULT 'planifiee' CHECK (statut IN ('planifiee','realisee','annulee')),
+  CHECK (date_fin >= date_debut)
+);
+
+CREATE TABLE participation_formation (
+  session_id       integer NOT NULL REFERENCES session_formation(id),
+  employe_id       integer NOT NULL REFERENCES employe(id),
+  statut           varchar(10) NOT NULL DEFAULT 'inscrit' CHECK (statut IN ('inscrit','present','absent','valide')),
+  note             numeric(4,1) CHECK (note IS NULL OR note BETWEEN 0 AND 20),
+  certificat_ref   text,
+  inscrit_le       timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (session_id, employe_id)
+);
+
+CREATE FUNCTION trg_participation_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE s mf.session_formation; e mf.employe; v_n integer;
+BEGIN
+  SELECT * INTO s FROM mf.session_formation WHERE id = NEW.session_id FOR UPDATE;
+  IF TG_OP = 'INSERT' THEN
+    IF s.statut <> 'planifiee' THEN RAISE EXCEPTION 'La session n''accepte plus d''inscription (statut %)', s.statut; END IF;
+    SELECT * INTO e FROM mf.employe WHERE id = NEW.employe_id;
+    IF e.statut <> 'actif' THEN RAISE EXCEPTION 'Employé sorti : pas d''inscription'; END IF;
+    SELECT count(*) INTO v_n FROM mf.participation_formation WHERE session_id = NEW.session_id;
+    IF v_n >= s.capacite THEN RAISE EXCEPTION 'Session complète (% places)', s.capacite; END IF;
+    IF EXISTS (SELECT 1 FROM mf.conge c WHERE c.employe_id = NEW.employe_id AND c.statut = 'approuve'
+                  AND daterange(c.date_debut, c.date_fin, '[]') && daterange(s.date_debut, s.date_fin, '[]')) THEN
+      RAISE EXCEPTION 'L''employé est en congé approuvé pendant la session';
+    END IF;
+  ELSE
+    IF NEW.statut IN ('present','absent','valide') AND s.date_debut > current_date THEN
+      RAISE EXCEPTION 'La session n''a pas encore commencé';
+    END IF;
+    IF NEW.statut = 'valide' AND OLD.statut <> 'present' THEN
+      RAISE EXCEPTION 'On ne valide qu''un participant présent';
+    END IF;
+    IF NEW.statut = 'valide' AND NEW.certificat_ref IS NULL THEN
+      RAISE EXCEPTION 'Référence du certificat obligatoire pour valider la formation';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER participation_regles BEFORE INSERT OR UPDATE ON participation_formation FOR EACH ROW EXECUTE FUNCTION trg_participation_regles();
+
+CREATE VIEW v_formation_employe AS
+SELECT e.id AS employe_id, e.agence_id, e.matricule, e.nom, extract(year FROM s.date_debut)::int AS annee,
+       count(*) FILTER (WHERE p.statut = 'valide') AS formations_validees,
+       COALESCE(sum(f.duree_heures) FILTER (WHERE p.statut IN ('present','valide')), 0) AS heures_suivies
+  FROM mf.employe e JOIN mf.participation_formation p ON p.employe_id = e.id
+  JOIN mf.session_formation s ON s.id = p.session_id JOIN mf.formation f ON f.id = s.formation_id
+ GROUP BY e.id, extract(year FROM s.date_debut);
+
+-- ---------------------------------------------------------------- évaluation
+CREATE TABLE campagne_evaluation (
+  id             serial PRIMARY KEY,
+  libelle        text NOT NULL,
+  periode_debut  date NOT NULL,
+  periode_fin    date NOT NULL,
+  statut         varchar(8) NOT NULL DEFAULT 'ouverte' CHECK (statut IN ('ouverte','close')),
+  CHECK (periode_fin >= periode_debut)
+);
+
+CREATE TABLE evaluation (
+  id                   serial PRIMARY KEY,
+  campagne_id          integer NOT NULL REFERENCES campagne_evaluation(id),
+  employe_id           integer NOT NULL REFERENCES employe(id),
+  evaluateur_id        integer NOT NULL REFERENCES employe(id),
+  statut               varchar(16) NOT NULL DEFAULT 'a_faire' CHECK (statut IN ('a_faire','auto_evaluation','evalue','validee')),
+  note_globale         numeric(4,2) CHECK (note_globale IS NULL OR note_globale BETWEEN 0 AND 10),
+  points_forts         text,
+  axes_progres         text,
+  decision             varchar(12) CHECK (decision IN ('maintien','augmentation','promotion','formation','alerte')),
+  commentaire_employe  text,
+  validee_par          integer REFERENCES utilisateur(id),
+  validee_le           timestamptz,
+  UNIQUE (campagne_id, employe_id),
+  CHECK (evaluateur_id <> employe_id)
+);
+
+CREATE TABLE objectif_evaluation (
+  id             serial PRIMARY KEY,
+  evaluation_id  integer NOT NULL REFERENCES evaluation(id),
+  libelle        text NOT NULL,
+  poids          numeric(5,2) NOT NULL CHECK (poids > 0 AND poids <= 100),
+  resultat       text,
+  note           numeric(4,2) CHECK (note IS NULL OR note BETWEEN 0 AND 10)
+);
+
+-- Note globale = moyenne pondérée des notes d'objectifs
+CREATE FUNCTION note_evaluation(p_evaluation integer) RETURNS numeric LANGUAGE sql STABLE AS $$
+  SELECT round(sum(note * poids) / NULLIF(sum(poids), 0), 2) FROM mf.objectif_evaluation WHERE evaluation_id = p_evaluation AND note IS NOT NULL
+$$;
+
+CREATE FUNCTION trg_evaluation_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE c mf.campagne_evaluation; v_poids numeric; v_sans_note integer; v_evaluateur_user integer;
+BEGIN
+  SELECT * INTO c FROM mf.campagne_evaluation WHERE id = NEW.campagne_id;
+  IF TG_OP = 'INSERT' THEN
+    IF c.statut <> 'ouverte' THEN RAISE EXCEPTION 'Campagne close : plus d''évaluation'; END IF;
+    RETURN NEW;
+  END IF;
+  IF OLD.statut = 'validee' THEN RAISE EXCEPTION 'Une évaluation validée est figée'; END IF;
+  IF NEW.statut IN ('evalue','validee') AND OLD.statut NOT IN ('evalue') THEN
+    SELECT COALESCE(sum(poids), 0), count(*) FILTER (WHERE note IS NULL) INTO v_poids, v_sans_note
+      FROM mf.objectif_evaluation WHERE evaluation_id = NEW.id;
+    IF v_poids <> 100 THEN RAISE EXCEPTION 'Les poids des objectifs doivent totaliser 100 (actuellement %)', v_poids; END IF;
+    IF v_sans_note > 0 THEN RAISE EXCEPTION 'Tous les objectifs doivent être notés'; END IF;
+    NEW.note_globale := mf.note_evaluation(NEW.id);
+  END IF;
+  IF NEW.statut = 'validee' THEN
+    IF NEW.decision IS NULL THEN RAISE EXCEPTION 'La décision est obligatoire pour valider'; END IF;
+    IF NEW.validee_par IS NULL THEN RAISE EXCEPTION 'La validation doit être attribuée à son auteur'; END IF;
+    SELECT utilisateur_id INTO v_evaluateur_user FROM mf.employe WHERE id = NEW.evaluateur_id;
+    IF v_evaluateur_user IS NOT NULL AND v_evaluateur_user = NEW.validee_par THEN
+      RAISE EXCEPTION 'Séparation des tâches : l''évaluateur ne valide pas sa propre évaluation';
+    END IF;
+    IF (SELECT utilisateur_id FROM mf.employe WHERE id = NEW.employe_id) = NEW.validee_par THEN
+      RAISE EXCEPTION 'On ne valide pas sa propre évaluation';
+    END IF;
+    NEW.validee_le := now();
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER evaluation_regles BEFORE INSERT OR UPDATE ON evaluation FOR EACH ROW EXECUTE FUNCTION trg_evaluation_regles();
+
+CREATE FUNCTION trg_objectif_fige() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v_statut text;
+BEGIN
+  SELECT statut INTO v_statut FROM mf.evaluation WHERE id = COALESCE(NEW.evaluation_id, OLD.evaluation_id);
+  IF v_statut = 'validee' THEN RAISE EXCEPTION 'Une évaluation validée est figée'; END IF;
+  RETURN COALESCE(NEW, OLD);
+END $$;
+CREATE TRIGGER objectif_fige BEFORE INSERT OR UPDATE OR DELETE ON objectif_evaluation FOR EACH ROW EXECUTE FUNCTION trg_objectif_fige();
+
+-- Ouvre les évaluations d'une campagne : tout employé actif ayant un supérieur direct est évalué par lui.
+-- Retourne le nombre d'évaluations créées (les employés sans supérieur sont à traiter à la main).
+CREATE FUNCTION ouvrir_evaluations(p_campagne integer, p_agence smallint DEFAULT NULL) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE v_n integer;
+BEGIN
+  INSERT INTO mf.evaluation(campagne_id, employe_id, evaluateur_id)
+  SELECT p_campagne, e.id, e.superieur_id FROM mf.employe e
+   WHERE e.statut = 'actif' AND e.superieur_id IS NOT NULL AND (p_agence IS NULL OR e.agence_id = p_agence)
+     AND e.date_embauche <= (SELECT periode_fin FROM mf.campagne_evaluation WHERE id = p_campagne)
+  ON CONFLICT (campagne_id, employe_id) DO NOTHING;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_n;
+END $$;
+
+CREATE TRIGGER audit_evaluation AFTER INSERT OR UPDATE OR DELETE ON evaluation FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_participation_formation AFTER INSERT OR UPDATE OR DELETE ON participation_formation FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 43_grh_discipline_sortie.sql
+-- =====================================================================
+-- =====================================================================
+-- 43_grh_discipline_sortie.sql
+-- GRH — discipline, sorties et indicateurs :
+--   * sanctions graduées (avertissement verbal / écrit, blâme, mise à pied) : entretien préalable obligatoire dès
+--     l'avertissement écrit, prescription des faits, décision par une autre personne que l'intéressé, sanction
+--     notifiée non modifiable (annulation motivée seulement)
+--   * sortie de l'employé : démission, licenciement, fin de CDD, retraite, décès, rupture conventionnelle ;
+--     préavis, indemnité de congés restants, retenue des avances, solde de tout compte ;
+--     la finalisation clôt le contrat, désactive le compte utilisateur et l'agent, annule les congés futurs
+--   * indicateurs RH par agence : effectifs, ancienneté, masse salariale, turnover, absentéisme
+-- Dépend de : 04, 11, 39, 40, 41.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('discipline_prescription_jours', '60', 'Au-delà de ce délai après les faits, plus de sanction possible (provisoire : à valider avec le droit du travail applicable)'),
+  ('preavis_jours', '30', 'Préavis minimal (jours) en cas de démission ou de licenciement (provisoire : selon contrat et convention collective)'),
+  ('jours_ouvres_par_mois', '22', 'Diviseur du salaire mensuel pour valoriser un jour de congé indemnisé');
+
+-- ---------------------------------------------------------------- sanctions
+CREATE TABLE sanction (
+  id                      serial PRIMARY KEY,
+  employe_id              integer NOT NULL REFERENCES employe(id),
+  date_faits              date NOT NULL,
+  type                    varchar(20) NOT NULL CHECK (type IN ('avertissement_verbal','avertissement_ecrit','blame','mise_a_pied')),
+  motif                   text NOT NULL CHECK (length(btrim(motif)) >= 10),
+  date_entretien_prealable date,
+  jours_mise_a_pied       smallint CHECK (jours_mise_a_pied IS NULL OR jours_mise_a_pied BETWEEN 1 AND 30),
+  explications_employe    text,
+  statut                  varchar(10) NOT NULL DEFAULT 'proposee' CHECK (statut IN ('proposee','notifiee','annulee')),
+  decide_par              integer REFERENCES utilisateur(id),
+  date_notification       date,
+  motif_annulation        text,
+  cree_le                 timestamptz NOT NULL DEFAULT now(),
+  CHECK ((type = 'mise_a_pied') = (jours_mise_a_pied IS NOT NULL)),
+  CHECK (date_faits <= current_date),
+  CHECK (statut <> 'annulee' OR length(btrim(COALESCE(motif_annulation, ''))) >= 5)
+);
+
+CREATE FUNCTION trg_sanction_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE e mf.employe; v_presc numeric;
+BEGIN
+  SELECT * INTO e FROM mf.employe WHERE id = NEW.employe_id;
+  IF TG_OP = 'UPDATE' AND OLD.statut IN ('notifiee','annulee') THEN
+    IF NOT (OLD.statut = 'notifiee' AND NEW.statut = 'annulee') THEN
+      RAISE EXCEPTION 'Une sanction notifiée ne se modifie pas : seule son annulation motivée est possible';
+    END IF;
+    IF (NEW.motif, NEW.type, NEW.date_faits, NEW.employe_id) IS DISTINCT FROM (OLD.motif, OLD.type, OLD.date_faits, OLD.employe_id) THEN
+      RAISE EXCEPTION 'Une sanction notifiée ne se modifie pas';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NEW.type <> 'avertissement_verbal' AND NEW.date_entretien_prealable IS NULL AND NEW.statut = 'notifiee' THEN
+    RAISE EXCEPTION 'Entretien préalable obligatoire avant cette sanction';
+  END IF;
+  IF NEW.date_entretien_prealable IS NOT NULL AND NEW.date_entretien_prealable < NEW.date_faits THEN
+    RAISE EXCEPTION 'L''entretien préalable ne peut précéder les faits';
+  END IF;
+  IF NEW.statut = 'notifiee' THEN
+    IF NEW.decide_par IS NULL THEN RAISE EXCEPTION 'La sanction doit être attribuée à son auteur'; END IF;
+    IF e.utilisateur_id IS NOT NULL AND e.utilisateur_id = NEW.decide_par THEN
+      RAISE EXCEPTION 'Séparation des tâches : on ne prononce pas une sanction contre soi-même';
+    END IF;
+    v_presc := COALESCE(mf.param_num('discipline_prescription_jours', e.agence_id), 60);
+    IF current_date - NEW.date_faits > v_presc THEN
+      RAISE EXCEPTION 'Faits prescrits : plus de % jours depuis les faits', v_presc;
+    END IF;
+    IF NEW.date_notification IS NULL THEN NEW.date_notification := current_date; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER sanction_regles BEFORE INSERT OR UPDATE ON sanction FOR EACH ROW EXECUTE FUNCTION trg_sanction_regles();
+
+-- ---------------------------------------------------------------- sorties
+CREATE TABLE sortie_employe (
+  id                 serial PRIMARY KEY,
+  employe_id         integer NOT NULL UNIQUE REFERENCES employe(id),
+  type               varchar(25) NOT NULL CHECK (type IN ('demission','licenciement','fin_cdd','retraite','deces','rupture_conventionnelle')),
+  date_notification  date NOT NULL,
+  date_sortie        date NOT NULL,
+  motif              text NOT NULL CHECK (length(btrim(motif)) >= 5),
+  indemnite_conges   numeric(14,0) NOT NULL DEFAULT 0,
+  retenue_avances    numeric(14,0) NOT NULL DEFAULT 0,
+  solde_tout_compte  numeric(14,0) NOT NULL DEFAULT 0,        -- négatif : somme due par l'employé
+  statut             varchar(10) NOT NULL DEFAULT 'en_cours' CHECK (statut IN ('en_cours','finalisee')),
+  decide_par         integer REFERENCES utilisateur(id),
+  finalisee_le       timestamptz,
+  CHECK (date_sortie >= date_notification)
+);
+
+-- Calcule le solde de tout compte : congés restants valorisés - avances non remboursées
+CREATE FUNCTION calculer_solde_tout_compte(p_employe integer, p_date_sortie date) RETURNS TABLE(indemnite_conges numeric, retenue_avances numeric, solde numeric)
+LANGUAGE plpgsql STABLE AS $$
+DECLARE v_base numeric; e mf.employe; v_indem numeric; v_av numeric;
+BEGIN
+  SELECT * INTO e FROM mf.employe WHERE id = p_employe;
+  SELECT salaire_base INTO v_base FROM mf.contrat WHERE employe_id = p_employe AND date_debut <= p_date_sortie
+     AND (date_fin IS NULL OR date_fin >= p_date_sortie) ORDER BY date_debut DESC LIMIT 1;
+  v_indem := round(GREATEST(0, mf.solde_conge(p_employe, p_date_sortie)) * COALESCE(v_base, 0)
+                   / COALESCE(mf.param_num('jours_ouvres_par_mois', e.agence_id), 22));
+  SELECT COALESCE(sum(restant), 0) INTO v_av FROM mf.avance_salaire WHERE employe_id = p_employe AND statut = 'en_cours';
+  RETURN QUERY SELECT v_indem, v_av, v_indem - v_av;
+END $$;
+
+CREATE FUNCTION preparer_sortie(p_employe integer, p_type text, p_date_notification date, p_date_sortie date, p_motif text,
+                                p_decide_par integer DEFAULT NULL) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE e mf.employe; v_preavis numeric; v_id integer; c record;
+BEGIN
+  SELECT * INTO e FROM mf.employe WHERE id = p_employe FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'employé % inconnu', p_employe; END IF;
+  IF e.statut <> 'actif' THEN RAISE EXCEPTION 'L''employé est déjà sorti'; END IF;
+  IF e.utilisateur_id IS NOT NULL AND e.utilisateur_id = p_decide_par THEN
+    RAISE EXCEPTION 'Séparation des tâches : on ne décide pas de sa propre sortie';
+  END IF;
+  IF p_type IN ('demission','licenciement') THEN
+    v_preavis := COALESCE(mf.param_num('preavis_jours', e.agence_id), 30);
+    IF p_date_sortie - p_date_notification < v_preavis THEN
+      RAISE EXCEPTION 'Préavis insuffisant : % jours au moins entre la notification et la sortie', v_preavis;
+    END IF;
+  END IF;
+  SELECT * INTO c FROM mf.calculer_solde_tout_compte(p_employe, p_date_sortie);
+  INSERT INTO mf.sortie_employe(employe_id, type, date_notification, date_sortie, motif, indemnite_conges, retenue_avances, solde_tout_compte, decide_par)
+  VALUES (p_employe, p_type, p_date_notification, p_date_sortie, p_motif, c.indemnite_conges, c.retenue_avances, c.solde, p_decide_par)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+CREATE FUNCTION finaliser_sortie(p_sortie integer, p_utilisateur integer DEFAULT NULL) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE s mf.sortie_employe; e mf.employe;
+BEGIN
+  SELECT * INTO s FROM mf.sortie_employe WHERE id = p_sortie FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'sortie % inconnue', p_sortie; END IF;
+  IF s.statut = 'finalisee' THEN RAISE EXCEPTION 'Sortie déjà finalisée'; END IF;
+  IF s.date_sortie > current_date THEN RAISE EXCEPTION 'La date de sortie (%) n''est pas atteinte', s.date_sortie; END IF;
+  SELECT * INTO e FROM mf.employe WHERE id = s.employe_id FOR UPDATE;
+  IF e.utilisateur_id IS NOT NULL AND e.utilisateur_id = p_utilisateur THEN
+    RAISE EXCEPTION 'Séparation des tâches : on ne finalise pas sa propre sortie';
+  END IF;
+  -- recalcul à la date de finalisation : les avances et congés ont pu bouger
+  UPDATE mf.sortie_employe SET (indemnite_conges, retenue_avances, solde_tout_compte) =
+    (SELECT indemnite_conges, retenue_avances, solde FROM mf.calculer_solde_tout_compte(s.employe_id, s.date_sortie)) WHERE id = p_sortie;
+  UPDATE mf.avance_salaire SET restant = 0, statut = 'soldee' WHERE employe_id = s.employe_id AND statut = 'en_cours';
+  UPDATE mf.contrat SET date_fin = s.date_sortie WHERE employe_id = s.employe_id AND (date_fin IS NULL OR date_fin > s.date_sortie);
+  UPDATE mf.conge SET statut = 'annule' WHERE employe_id = s.employe_id AND statut IN ('demande','approuve') AND date_debut > s.date_sortie;
+  UPDATE mf.employe SET statut = 'sorti', date_sortie = s.date_sortie WHERE id = s.employe_id;
+  IF e.utilisateur_id IS NOT NULL THEN UPDATE mf.utilisateur SET actif = false WHERE id = e.utilisateur_id; END IF;
+  IF e.agent_id IS NOT NULL THEN UPDATE mf.agent SET actif = false WHERE id = e.agent_id; END IF;
+  IF e.collectrice_id IS NOT NULL THEN UPDATE mf.collectrice SET actif = false WHERE id = e.collectrice_id; END IF;
+  UPDATE mf.sortie_employe SET statut = 'finalisee', finalisee_le = now() WHERE id = p_sortie;
+END $$;
+
+-- ---------------------------------------------------------------- indicateurs
+CREATE VIEW v_grh_indicateurs AS
+SELECT a.id AS agence_id, a.code AS agence,
+       (SELECT count(*) FROM mf.employe e WHERE e.agence_id = a.id AND e.statut = 'actif') AS effectif,
+       (SELECT count(*) FROM mf.employe e WHERE e.agence_id = a.id AND e.statut = 'actif' AND e.sexe = 'F') AS femmes,
+       (SELECT count(*) FROM mf.employe e WHERE e.agence_id = a.id AND e.statut = 'actif' AND e.sexe = 'M') AS hommes,
+       (SELECT round(COALESCE(avg(extract(year FROM age(current_date, e.date_embauche)) + extract(month FROM age(current_date, e.date_embauche)) / 12.0), 0), 1)
+          FROM mf.employe e WHERE e.agence_id = a.id AND e.statut = 'actif') AS anciennete_moyenne_ans,
+       (SELECT COALESCE(sum(c.salaire_base), 0) FROM mf.contrat c JOIN mf.employe e ON e.id = c.employe_id
+         WHERE e.agence_id = a.id AND e.statut = 'actif' AND c.date_debut <= current_date AND (c.date_fin IS NULL OR c.date_fin >= current_date)) AS masse_salariale,
+       (SELECT count(*) FROM mf.employe e WHERE e.agence_id = a.id AND e.date_embauche >= current_date - 365) AS entrees_12m,
+       (SELECT count(*) FROM mf.employe e WHERE e.agence_id = a.id AND e.date_sortie >= current_date - 365) AS sorties_12m,
+       (SELECT count(*) FROM mf.conge c JOIN mf.employe e ON e.id = c.employe_id
+         WHERE e.agence_id = a.id AND c.statut = 'approuve' AND current_date BETWEEN c.date_debut AND c.date_fin) AS en_conge_aujourdhui,
+       (SELECT count(*) FROM mf.presence p JOIN mf.employe e ON e.id = p.employe_id
+         WHERE e.agence_id = a.id AND p.statut IN ('absent','absent_justifie') AND p.date_jour >= date_trunc('month', current_date)::date) AS absences_du_mois,
+       (SELECT count(*) FROM mf.besoin_recrutement b WHERE b.agence_id = a.id AND b.statut IN ('soumis','approuve')) AS besoins_ouverts
+  FROM mf.agence a;
+
+CREATE TRIGGER audit_sanction AFTER INSERT OR UPDATE OR DELETE ON sanction FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_sortie_employe AFTER INSERT OR UPDATE OR DELETE ON sortie_employe FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 44_cycles_souplesse.sql
+-- =====================================================================
+-- =====================================================================
+-- 44_cycles_souplesse.sql
+-- Tontine : souplesse de gestion des cycles.
+--   * le type de cycle n'est plus porté par le produit : il est choisi à la première mise du client sur le produit
+--     et reste le même ensuite (les produits existants qui imposent un type continuent de le faire)
+--   * délai de grâce après la date de fin (par produit, sinon paramètre) : la clôture automatique et le refus de
+--     saisie n'interviennent qu'après fin + grâce
+--   * prolongation d'un cycle : demandée avec motif, autorisée par une autre personne, plafonnée
+--   * suppression d'une opération : la ligne disparaît des écrans et des calculs, mais une trace « supprimée »
+--     (qui, quand, pourquoi, contenu complet) est conservée de façon inaltérable pour l'audit
+-- Dépend de : 01, 02, 03, 07, 10, 18, 23.
+-- =====================================================================
+SET search_path = mf, public;
+
+INSERT INTO parametre(cle, valeur, description) VALUES
+  ('cycle_delai_grace_jours', '0', 'Délai de grâce par défaut (jours) après la date de fin d''un cycle, avant clôture automatique et refus de saisie'),
+  ('cycle_prolongation_max_jours', '60', 'Prolongation maximale (jours) accordée en une fois pour un cycle'),
+  ('cycle_prolongations_max', '2', 'Nombre maximal de prolongations autorisées pour un même cycle');
+
+-- ---------------------------------------------------------------- type de cycle choisi à la première mise
+ALTER TABLE produit_epargne DROP CONSTRAINT produit_epargne_check;
+ALTER TABLE produit_epargne ADD CONSTRAINT produit_type_selon_categorie CHECK (categorie = 'collecte' OR type_cycle IS NULL);
+ALTER TABLE produit_epargne ADD COLUMN delai_grace_jours smallint CHECK (delai_grace_jours IS NULL OR delai_grace_jours BETWEEN 0 AND 90);
+
+CREATE OR REPLACE FUNCTION trg_cycle_avant() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE p mf.produit_epargne; c mf.client; v_type smallint;
+BEGIN
+  SELECT * INTO p FROM mf.produit_epargne WHERE id = NEW.produit_id;
+  IF p.categorie <> 'collecte' THEN
+    RAISE EXCEPTION 'le produit % n''est pas un produit de collecte', p.code;
+  END IF;
+  IF p.type_cycle IS NOT NULL AND NEW.type_cycle <> p.type_cycle THEN
+    RAISE EXCEPTION 'type de cycle % incompatible avec le produit % (type %)', NEW.type_cycle, p.code, p.type_cycle;
+  END IF;
+  -- produit sans type imposé : le type est fixé par la première mise du client sur ce produit
+  IF p.type_cycle IS NULL THEN
+    SELECT type_cycle INTO v_type FROM mf.cycle WHERE client_id = NEW.client_id AND produit_id = NEW.produit_id ORDER BY id LIMIT 1;
+    IF v_type IS NOT NULL AND v_type <> NEW.type_cycle THEN
+      RAISE EXCEPTION 'Le type de cycle de ce client sur le produit % est fixé à sa première mise (type %)', p.code, v_type;
+    END IF;
+  END IF;
+  SELECT * INTO c FROM mf.client WHERE id = NEW.client_id;
+  IF c.agence_id <> NEW.agence_id THEN
+    RAISE EXCEPTION 'le client % n''appartient pas à l''agence %', c.numero, NEW.agence_id;
+  END IF;
+  IF NEW.nb_lignes_prevues IS NULL THEN NEW.nb_lignes_prevues := 31 * p.nb_pages_livret; END IF;
+  IF NEW.mise_courante IS NULL THEN NEW.mise_courante := NEW.mise_initiale; END IF;
+  RETURN NEW;
+END $$;
+
+-- ---------------------------------------------------------------- délai de grâce
+CREATE FUNCTION delai_grace_cycle(p_cycle integer) RETURNS integer
+LANGUAGE sql STABLE AS $$
+  SELECT COALESCE(p.delai_grace_jours, mf.param_num('cycle_delai_grace_jours', c.agence_id), 0)::int
+    FROM mf.cycle c JOIN mf.produit_epargne p ON p.id = c.produit_id WHERE c.id = p_cycle
+$$;
+
+-- Date limite de saisie et de clôture automatique = date de fin + délai de grâce
+CREATE FUNCTION date_limite_cycle(p_cycle integer) RETURNS date
+LANGUAGE sql STABLE AS $$ SELECT c.date_fin + mf.delai_grace_cycle(c.id) FROM mf.cycle c WHERE c.id = p_cycle $$;
+
+CREATE OR REPLACE FUNCTION trg_ligne_avant() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE c mf.cycle; v_pages smallint;
+BEGIN
+  SELECT * INTO c FROM mf.cycle WHERE id = NEW.cycle_id FOR UPDATE;   -- sérialise les saisies d'un même cycle
+  IF c.statut <> 'en_cours' THEN
+    RAISE EXCEPTION 'cycle % clos : saisie refusée', c.numero;
+  END IF;
+  SELECT nb_pages_livret INTO v_pages FROM mf.produit_epargne WHERE id = c.produit_id;
+  IF NEW.page > v_pages THEN
+    RAISE EXCEPTION 'page % au-delà du livret (% page(s))', NEW.page, v_pages;
+  END IF;
+  IF NEW.date_collecte < c.date_debut THEN
+    RAISE EXCEPTION 'date de collecte % antérieure au début du cycle (%)', NEW.date_collecte, c.date_debut;
+  END IF;
+  IF NEW.date_collecte > mf.date_limite_cycle(c.id) THEN
+    RAISE EXCEPTION 'date de collecte % après la fin du cycle % (fin %, délai de grâce % j) : demander une prolongation',
+      NEW.date_collecte, c.numero, c.date_fin, mf.delai_grace_cycle(c.id);
+  END IF;
+  IF NEW.agent_id IS NOT NULL AND NOT EXISTS
+     (SELECT 1 FROM mf.agent WHERE id = NEW.agent_id AND agence_id = c.agence_id) THEN
+    RAISE EXCEPTION 'agent % hors de l''agence du cycle', NEW.agent_id;
+  END IF;
+  IF NEW.mise_appliquee IS NULL THEN
+    NEW.mise_appliquee := mf.mise_a_date(NEW.cycle_id, NEW.date_collecte);
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION cloturer_cycles_echus(p_agence smallint, p_date date DEFAULT current_date) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE r record; n integer := 0;
+BEGIN
+  FOR r IN
+    SELECT c.id
+      FROM mf.cycle c
+      LEFT JOIN mf.v_cycle_situation s ON s.cycle_id = c.id
+     WHERE c.agence_id = p_agence AND c.statut = 'en_cours'
+       AND ( mf.date_limite_cycle(c.id) <= p_date
+          OR (c.type_cycle = 1 AND (s.montant_collecte >= c.objectif OR s.nb_lignes >= c.nb_lignes_prevues)) )
+     ORDER BY c.id
+  LOOP
+    PERFORM mf.cloturer_cycle(r.id, p_date);
+    n := n + 1;
+  END LOOP;
+  RETURN n;
+END $$;
+
+-- ---------------------------------------------------------------- prolongation avec autorisation
+CREATE TABLE prolongation_cycle (
+  id            serial PRIMARY KEY,
+  cycle_id      integer NOT NULL REFERENCES cycle(id),
+  ancienne_fin  date NOT NULL,
+  nouvelle_fin  date NOT NULL,
+  motif         text NOT NULL CHECK (length(btrim(motif)) >= 10),
+  statut        varchar(10) NOT NULL DEFAULT 'demandee' CHECK (statut IN ('demandee','autorisee','refusee','annulee')),
+  demande_par   integer REFERENCES utilisateur(id),
+  demande_le    timestamptz NOT NULL DEFAULT now(),
+  decide_par    integer REFERENCES utilisateur(id),
+  decide_le     timestamptz,
+  commentaire   text,
+  CHECK (nouvelle_fin > ancienne_fin)
+);
+CREATE UNIQUE INDEX prolongation_une_en_attente ON prolongation_cycle(cycle_id) WHERE statut = 'demandee';
+
+CREATE FUNCTION trg_prolongation_regles() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE c mf.cycle; v_max numeric; v_nb integer; v_lim numeric;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    SELECT * INTO c FROM mf.cycle WHERE id = NEW.cycle_id FOR UPDATE;
+    IF c.statut <> 'en_cours' THEN RAISE EXCEPTION 'Seul un cycle en cours se prolonge (statut %)', c.statut; END IF;
+    NEW.ancienne_fin := c.date_fin;
+    v_max := COALESCE(mf.param_num('cycle_prolongation_max_jours', c.agence_id), 60);
+    IF NEW.nouvelle_fin - c.date_fin > v_max THEN
+      RAISE EXCEPTION 'Prolongation limitée à % jours en une fois', v_max;
+    END IF;
+    v_lim := COALESCE(mf.param_num('cycle_prolongations_max', c.agence_id), 2);
+    SELECT count(*) INTO v_nb FROM mf.prolongation_cycle WHERE cycle_id = NEW.cycle_id AND statut = 'autorisee';
+    IF v_nb >= v_lim THEN RAISE EXCEPTION 'Ce cycle a déjà été prolongé % fois (maximum %)', v_nb, v_lim; END IF;
+  ELSIF NEW.statut IN ('autorisee','refusee') AND OLD.statut = 'demandee' THEN
+    IF NEW.decide_par IS NULL THEN RAISE EXCEPTION 'La décision doit être attribuée à son auteur'; END IF;
+    IF NEW.decide_par IS NOT DISTINCT FROM NEW.demande_par THEN
+      RAISE EXCEPTION 'Séparation des tâches : le demandeur n''autorise pas sa propre prolongation';
+    END IF;
+    IF NEW.statut = 'refusee' AND length(btrim(COALESCE(NEW.commentaire, ''))) < 5 THEN RAISE EXCEPTION 'Un refus doit être motivé'; END IF;
+    NEW.decide_le := now();
+    IF NEW.statut = 'autorisee' THEN
+      SELECT * INTO c FROM mf.cycle WHERE id = NEW.cycle_id FOR UPDATE;
+      IF c.statut <> 'en_cours' THEN RAISE EXCEPTION 'Le cycle n''est plus en cours : prolongation impossible'; END IF;
+      IF c.date_fin <> OLD.ancienne_fin THEN RAISE EXCEPTION 'La date de fin du cycle a changé depuis la demande : refaire la demande'; END IF;
+      UPDATE mf.cycle SET date_fin = NEW.nouvelle_fin WHERE id = NEW.cycle_id;
+    END IF;
+  ELSIF TG_OP = 'UPDATE' AND NEW.statut = 'annulee' AND OLD.statut = 'demandee' THEN
+    NEW.decide_le := now();
+  ELSIF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'Une prolongation décidée ne se modifie pas';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER prolongation_regles BEFORE INSERT OR UPDATE ON prolongation_cycle FOR EACH ROW EXECUTE FUNCTION trg_prolongation_regles();
+
+-- ---------------------------------------------------------------- suppression : trace inaltérable pour l'audit
+CREATE TABLE operation_supprimee (
+  id            bigserial PRIMARY KEY,
+  nature        text NOT NULL,                  -- table d'origine
+  ligne_id      text,
+  agence_id     smallint,
+  cycle_id      integer,
+  donnees       jsonb NOT NULL,                 -- contenu complet de l'opération au moment de la suppression
+  supprime_par  text,
+  supprime_le   timestamptz NOT NULL DEFAULT now(),
+  motif         text NOT NULL
+);
+CREATE INDEX operation_supprimee_date ON operation_supprimee(supprime_le DESC);
+CREATE INDEX operation_supprimee_agence ON operation_supprimee(agence_id, supprime_le DESC);
+
+CREATE FUNCTION trg_archiver_suppression() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v jsonb := to_jsonb(OLD); v_ag smallint; v_cycle integer;
+BEGIN
+  v_cycle := NULLIF(v ->> 'cycle_id', '')::integer;
+  v_ag := NULLIF(v ->> 'agence_id', '')::smallint;
+  IF v_ag IS NULL AND v_cycle IS NOT NULL THEN SELECT agence_id INTO v_ag FROM mf.cycle WHERE id = v_cycle; END IF;
+  IF v_ag IS NULL AND (v ->> 'compte_id') IS NOT NULL THEN SELECT agence_id INTO v_ag FROM mf.compte_epargne WHERE id = (v ->> 'compte_id')::integer; END IF;
+  INSERT INTO mf.operation_supprimee(nature, ligne_id, agence_id, cycle_id, donnees, supprime_par, motif)
+  VALUES (TG_TABLE_NAME, v ->> 'id', v_ag, v_cycle, v,
+          COALESCE(NULLIF(current_setting('mf.utilisateur', true), ''), current_user),
+          COALESCE(NULLIF(btrim(current_setting('mf.motif_suppression', true)), ''), 'non renseigné'));
+  RETURN NULL;
+END $$;
+
+CREATE TRIGGER archive_ligne_collecte AFTER DELETE ON ligne_collecte FOR EACH ROW EXECUTE FUNCTION trg_archiver_suppression();
+CREATE TRIGGER archive_mouvement_epargne AFTER DELETE ON mouvement_epargne FOR EACH ROW EXECUTE FUNCTION trg_archiver_suppression();
+CREATE TRIGGER archive_versement_agent AFTER DELETE ON versement_agent FOR EACH ROW EXECUTE FUNCTION trg_archiver_suppression();
+CREATE TRIGGER archive_retrait AFTER DELETE ON retrait FOR EACH ROW EXECUTE FUNCTION trg_archiver_suppression();
+
+CREATE TRIGGER operation_supprimee_ajout_seul BEFORE UPDATE OR DELETE ON operation_supprimee FOR EACH ROW EXECUTE FUNCTION trg_ajout_seul();
+CREATE TRIGGER operation_supprimee_pas_de_vidage BEFORE TRUNCATE ON operation_supprimee FOR EACH STATEMENT EXECUTE FUNCTION trg_ajout_seul();
+CREATE TRIGGER audit_prolongation_cycle AFTER INSERT OR UPDATE OR DELETE ON prolongation_cycle FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- =====================================================================
+-- MODULE 45_sync_mobile.sql
+-- =====================================================================
+-- =====================================================================
+-- 45_sync_mobile.sql
+-- Application mobile du collecteur : synchronisation hors ligne idempotente.
+--   * chaque saisie faite sur le téléphone porte une clé d'opération (UUID) générée côté client
+--   * la clé est enregistrée dans la même transaction que la ligne de collecte : la rejouer ne crée rien
+-- Dépend de : 01 (utilisateur), 07 (cycle, ligne_collecte).
+-- =====================================================================
+SET search_path = mf, public;
+
+CREATE TABLE operation_mobile (
+  cle            varchar(64) PRIMARY KEY,
+  utilisateur_id integer NOT NULL REFERENCES utilisateur(id),
+  cycle_id       integer NOT NULL REFERENCES cycle(id),
+  ligne_id       integer REFERENCES ligne_collecte(id) ON DELETE SET NULL,
+  recu_le        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX operation_mobile_cycle_idx ON operation_mobile(cycle_id);
+COMMENT ON TABLE operation_mobile IS 'Clés d''opération des saisies mobiles : une collecte envoyée plusieurs fois n''est enregistrée qu''une fois.';

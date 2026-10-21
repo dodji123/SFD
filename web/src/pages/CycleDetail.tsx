@@ -4,13 +4,13 @@ import { api } from '../lib/api'
 import { aujourdhui, date as fdate, decaler, xof } from '../lib/format'
 import { useAgents } from '../lib/hooks'
 import { useSession } from '../lib/session'
-import { Button, Card, Charge, Field, FormModal, Input, Kpi, Page, Select, Statut, Table, useAction, useFetch } from '../components/ui'
+import { Badge, Button, Card, Charge, Field, FormModal, Input, Kpi, Page, Select, Statut, Table, useAction, useFetch } from '../components/ui'
 
 interface Ligne { id: number; page: number; no_ligne: number; date_collecte: string; montant_collecte: number; mise_appliquee: number; origine: string; agent: string | null }
 interface Detail {
   id: number; numero: string; client_id: number; client: string; type_cycle: number; statut: string
   mise_initiale: number; mise_courante: number; mise_finale: number | null; objectif: number | null; nb_lignes_prevues: number
-  date_debut: string; date_fin: string; date_cloture: string | null
+  date_debut: string; date_fin: string; date_cloture: string | null; delai_grace?: number; date_limite?: string
   nb_lignes: number; montant_collecte: number; montant_previsionnel: number | null; reste_a_collecter: number | null; net: number
   lignes: Ligne[]; mises: { date_effet: string; mise: number; motif: string | null }[]
   retraits: { id: number; nature: string; montant: number; montant_paye: number | null; ecart: number; statut: string; date_demande: string }[]
@@ -44,11 +44,14 @@ export default function CycleDetail() {
             </>}>
             <div className="grid-kpi">
               <Kpi label="Collecté" value={xof(c.montant_collecte)} />
+              {c.delai_grace ? <Kpi label="Saisie possible jusqu'au" value={fdate(c.date_limite ?? c.date_fin)} /> : null}
               {c.montant_previsionnel !== null && <Kpi label="Prévisionnel" value={xof(c.montant_previsionnel)} />}
               {c.reste_a_collecter !== null && <Kpi label="Reste à collecter" value={xof(c.reste_a_collecter)} />}
               <Kpi label={c.mise_finale !== null ? 'Mise finale' : 'Mise courante'} value={xof(c.mise_finale ?? c.mise_courante)} />
               <Kpi label="Net (collecté − mise − remboursements)" value={xof(c.net)} />
             </div>
+
+            <Prolongations cycleId={c.id} enCours={enCours} dateFin={c.date_fin} onChange={q.reload} />
 
             <Card title={`Livret — ${c.nb_lignes} ligne${c.nb_lignes > 1 ? 's' : ''} sur ${c.nb_lignes_prevues}`}>
               <div className="stack">
@@ -185,5 +188,61 @@ function DemandeRetrait({ c, onClose, onFait }: { c: Detail; onClose: () => void
       <Field label="Date"><Input type="date" value={f.date} onChange={maj('date')} required /></Field>
       {c.statut === 'en_cours' && <p className="alert warn" style={{ gridColumn: '1 / -1', margin: 0 }}>Le cycle est encore en cours : il sera clôturé à cette date (retrait anticipé).</p>}
     </FormModal>
+  )
+}
+
+interface Prolongation {
+  id: number; ancienne_fin: string; nouvelle_fin: string; motif: string; statut: string; commentaire: string | null
+  demande_par_nom: string | null; decide_par_nom: string | null
+}
+const STATUTS_PROLONGATION: Record<string, { texte: string; tone: 'warn' | 'ok' | 'bad' | 'neutre' }> = {
+  demandee: { texte: 'En attente', tone: 'warn' }, autorisee: { texte: 'Autorisée', tone: 'ok' }, refusee: { texte: 'Refusée', tone: 'bad' }, annulee: { texte: 'Annulée', tone: 'neutre' },
+}
+
+/** Demandes de prolongation du cycle : demandée par la saisie, autorisée par un responsable. */
+function Prolongations({ cycleId, enCours, dateFin, onChange }: { cycleId: number; enCours: boolean; dateFin: string; onChange: () => void }) {
+  const { can } = useSession()
+  const q = useFetch(() => api.get<Prolongation[]>('/api/prolongations', { cycle_id: cycleId }), [cycleId])
+  const { run, busy } = useAction()
+  const [modale, setModale] = useState(false)
+  const [f, setF] = useState({ nouvelle_fin: decaler(dateFin, 15), motif: '' })
+  const [decision, setDecision] = useState<{ p: Prolongation; autorise: boolean } | null>(null)
+  const [commentaire, setCommentaire] = useState('')
+  const recharger = () => { q.reload(); onChange() }
+  const rows = q.data ?? []
+  if (!enCours && rows.length === 0) return null
+  return (
+    <Card title={`Prolongations (${rows.length})`} flush
+      actions={enCours && can('collecte:write') && <Button onClick={() => setModale(true)}>Demander une prolongation</Button>}>
+      <Table rows={rows} vide="Aucune prolongation demandée" cols={[
+        { titre: 'Nouvelle fin', render: (p) => <>{fdate(p.ancienne_fin)} → <strong>{fdate(p.nouvelle_fin)}</strong></> },
+        { titre: 'Motif', render: (p) => p.motif },
+        { titre: 'Demandée par', render: (p) => p.demande_par_nom ?? '—' },
+        { titre: 'Statut', render: (p) => <Badge tone={STATUTS_PROLONGATION[p.statut]?.tone ?? 'neutre'}>{STATUTS_PROLONGATION[p.statut]?.texte ?? p.statut}</Badge> },
+        { titre: 'Décision', render: (p) => (p.decide_par_nom ? `${p.decide_par_nom}${p.commentaire ? ` — ${p.commentaire}` : ''}` : '') },
+        { titre: '', render: (p) => p.statut === 'demandee' && (
+          <span className="row">
+            {can('cycle:prolongation-decider') && <Button small variant="primary" disabled={busy} onClick={() => { setCommentaire(''); setDecision({ p, autorise: true }) }}>Autoriser</Button>}
+            {can('cycle:prolongation-decider') && <Button small variant="danger" disabled={busy} onClick={() => { setCommentaire(''); setDecision({ p, autorise: false }) }}>Refuser</Button>}
+            {can('collecte:write') && <Button small disabled={busy} onClick={() => void run(() => api.post(`/api/prolongations/${p.id}/annuler`), 'Demande annulée', recharger)}>Annuler</Button>}
+          </span>
+        ) },
+      ]} />
+      {modale && (
+        <FormModal titre="Demande de prolongation du cycle" onClose={() => setModale(false)} busy={busy} valider="Envoyer pour autorisation"
+          onSubmit={() => void run(() => api.post(`/api/cycles/${cycleId}/prolongation`, f), 'Demande envoyée : un responsable doit l’autoriser', () => { setModale(false); recharger() })}>
+          <Field label="Nouvelle date de fin" hint={`Fin actuelle : ${fdate(dateFin)} (60 jours au plus, 2 prolongations au plus)`}><Input type="date" min={dateFin} value={f.nouvelle_fin} onChange={(e) => setF({ ...f, nouvelle_fin: e.target.value })} required /></Field>
+          <Field label="Motif (10 caractères minimum)"><Input value={f.motif} minLength={10} onChange={(e) => setF({ ...f, motif: e.target.value })} required /></Field>
+        </FormModal>
+      )}
+      {decision && (
+        <FormModal titre={decision.autorise ? 'Autoriser la prolongation' : 'Refuser la prolongation'} onClose={() => setDecision(null)} busy={busy} valider={decision.autorise ? 'Autoriser' : 'Refuser'}
+          onSubmit={() => void run(() => api.post(`/api/prolongations/${decision.p.id}/decider`, { autorise: decision.autorise, commentaire: commentaire || null }),
+            decision.autorise ? 'Prolongation autorisée' : 'Prolongation refusée', () => { setDecision(null); recharger() })}>
+          <p style={{ margin: 0 }}>Fin du cycle : {fdate(decision.p.ancienne_fin)} → <strong>{fdate(decision.p.nouvelle_fin)}</strong><br />Motif : {decision.p.motif}</p>
+          <Field label={decision.autorise ? 'Commentaire (facultatif)' : 'Raison du refus'}><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} required={!decision.autorise} /></Field>
+        </FormModal>
+      )}
+    </Card>
   )
 }

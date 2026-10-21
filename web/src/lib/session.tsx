@@ -1,5 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api, session } from './api'
+import { api, ApiError, session } from './api'
+
+// Instantané du profil (sans jeton) : permet de rouvrir l'application mobile hors réseau tant que le jeton de la session est valide.
+const SNAP_KEY = 'sfd_profil'
+interface Instantane { user: Utilisateur; perms: string[]; agences: Agence[] }
+function lireInstantane(): Instantane | null {
+  try { return JSON.parse(sessionStorage.getItem(SNAP_KEY) ?? 'null') } catch { return null }
+}
+function ecrireInstantane(s: Instantane | null) {
+  try { if (s) sessionStorage.setItem(SNAP_KEY, JSON.stringify(s)); else sessionStorage.removeItem(SNAP_KEY) } catch { /* stockage indisponible */ }
+}
 
 export interface Utilisateur {
   id: number
@@ -40,6 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     session.setToken(null)
     session.setAgence(null)
+    ecrireInstantane(null)
     setUser(null)
     setPerms(new Set())
     setAgences([])
@@ -59,6 +70,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(moi)
     setPerms(new Set(p.permissions))
     setAgences(ag)
+    ecrireInstantane({ user: moi, perms: p.permissions, agences: ag })
     if (moi.agence_id !== null) {
       session.setAgence(null)               // l'API impose déjà l'agence de l'utilisateur
       setAgenceId(moi.agence_id)
@@ -86,7 +98,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     session.onUnauthorized(logout)
     if (session.getToken()) {
-      charger().catch(logout).finally(() => setChargement(false))
+      charger().catch((e) => {
+        const snap = lireInstantane()
+        if (e instanceof ApiError && (e.status === 0 || e.status >= 500) && snap) {      // réseau ou serveur indisponible : on garde la session ouverte avec le profil connu
+          setUser(snap.user)
+          setPerms(new Set(snap.perms))
+          setAgences(snap.agences)
+          setAgenceId(snap.user.agence_id)
+        } else logout()
+      }).finally(() => setChargement(false))
     }
   }, [charger, logout])
 

@@ -1,3 +1,4 @@
+import { ChampTypeCycle, useTypeCycle } from '../components/TypeCycle'
 import { ReleveModal } from '../components/ReleveClient'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -211,18 +212,20 @@ function NouveauCycle({ client, onClose, onFait }: { client: Detail; onClose: ()
   const { run, busy } = useAction()
   const [f, setF] = useState({ produit_id: '', mise: '', date_debut: aujourdhui(), date_fin: '' })
   const maj = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
+  const tc = useTypeCycle(client.id, f.produit_id)
   return (
     <FormModal titre={`Nouveau cycle — ${client.nom}`} onClose={onClose} busy={busy} valider="Créer le cycle"
       onSubmit={() => void run(async () => {
-        const c = await api.post<{ id: number }>('/api/cycles', { client_id: client.id, produit_id: Number(f.produit_id), mise: Number(f.mise), date_debut: f.date_debut, date_fin: f.date_fin })
+        const c = await api.post<{ id: number }>('/api/cycles', { client_id: client.id, produit_id: Number(f.produit_id), mise: Number(f.mise), date_debut: f.date_debut, date_fin: f.date_fin, ...tc.corps })
         onFait(c.id)
       }, 'Cycle créé')}>
       <Field label="Produit de tontine">
         <Select value={f.produit_id} onChange={maj('produit_id')} required>
           <option value="">— choisir —</option>
-          {produits.map((x) => <option key={x.id} value={x.id}>{x.libelle} (type {x.type_cycle})</option>)}
+          {produits.map((x) => <option key={x.id} value={x.id}>{x.libelle}</option>)}
         </Select>
       </Field>
+      {f.produit_id && <ChampTypeCycle t={tc} />}
       <Field label="Mise (F)" hint="Montant d'une ligne du livret"><Input type="number" min={1} value={f.mise} onChange={maj('mise')} required /></Field>
       <Field label="Début"><Input type="date" value={f.date_debut} onChange={maj('date_debut')} required /></Field>
       <Field label="Fin"><Input type="date" value={f.date_fin} onChange={maj('date_fin')} required /></Field>

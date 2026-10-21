@@ -263,6 +263,27 @@ class ProduitIn(BaseModel):
     nb_pages_livret: int = Field(default=1, ge=1, le=20)
     taux_interet: float = Field(default=0, ge=0, le=1)
     solde_minimum: int = Field(default=0, ge=0)
+    delai_grace_jours: int | None = Field(default=None, ge=0, le=90)
+
+
+class ProduitPatch(BaseModel):
+    libelle: str | None = Field(default=None, min_length=1)
+    delai_grace_jours: int | None = Field(default=None, ge=0, le=90)
+    nb_pages_livret: int | None = Field(default=None, ge=1, le=20)
+    actif: bool | None = None
+
+
+@router.patch("/produits-epargne/{produit_id}")
+def modifier_produit(produit_id: int, body: ProduitPatch, user: User = Depends(require("ref:write"))):
+    champs = body.model_dump(exclude_unset=True)
+    if not champs:
+        raise HTTPException(status_code=422, detail="Aucune modification")
+    sets = ", ".join(f"{c} = %s" for c in champs)
+    with tx(user.login) as cur:
+        r = one_row(cur, f"UPDATE produit_epargne SET {sets} WHERE id = %s RETURNING *", (*champs.values(), produit_id))
+    if r is None:
+        raise HTTPException(status_code=404, detail="Produit introuvable")
+    return r
 
 
 @router.get("/produits-epargne")
@@ -276,7 +297,7 @@ def creer_produit(body: ProduitIn, user: User = Depends(require("ref:write"))):
     with tx(user.login) as cur:
         return one_row(
             cur,
-            "INSERT INTO produit_epargne(code, libelle, categorie, type_cycle, nb_pages_livret, taux_interet, solde_minimum) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *",
-            (body.code, body.libelle, body.categorie, body.type_cycle, body.nb_pages_livret, body.taux_interet, body.solde_minimum),
+            "INSERT INTO produit_epargne(code, libelle, categorie, type_cycle, nb_pages_livret, taux_interet, solde_minimum, delai_grace_jours) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+            (body.code, body.libelle, body.categorie, body.type_cycle, body.nb_pages_livret, body.taux_interet, body.solde_minimum, body.delai_grace_jours),
         )

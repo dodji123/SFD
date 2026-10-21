@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { aujourdhui, date as fdate, xof } from '../lib/format'
 import { useSession } from '../lib/session'
+import { Agents } from './Grh'
 import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Modal, Page, Select, Statut, Table, Tabs, useAction, useFetch } from '../components/ui'
 
 interface Employe { id: number; matricule: string; nom: string; poste: string | null; date_embauche: string; statut: string; salaire_base: number | null }
@@ -18,8 +19,9 @@ export default function Rh() {
   const [onglet, setOnglet] = useState('employes')
   return (
     <Page title="RH et paie" subtitle="Employés, contrats, bulletins de paie et commissions de collectrices">
-      <Tabs actif={onglet} onChange={setOnglet} tabs={[{ id: 'employes', titre: 'Employés' }, { id: 'bulletins', titre: 'Bulletins' }, { id: 'commissions', titre: 'Commissions' }, { id: 'rubriques', titre: 'Rubriques de paie' }]} />
+      <Tabs actif={onglet} onChange={setOnglet} tabs={[{ id: 'employes', titre: 'Employés' }, { id: 'agents', titre: 'Agents commerciaux' }, { id: 'bulletins', titre: 'Bulletins' }, { id: 'commissions', titre: 'Commissions' }, { id: 'rubriques', titre: 'Rubriques de paie' }]} />
       {onglet === 'employes' && <Employes key={agenceId} />}
+      {onglet === 'agents' && <Agents key={agenceId} />}
       {onglet === 'bulletins' && <Bulletins key={agenceId} />}
       {onglet === 'commissions' && <Commissions key={agenceId} />}
       {onglet === 'rubriques' && <Rubriques key={agenceId} />}

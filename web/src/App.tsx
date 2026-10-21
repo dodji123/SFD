@@ -10,6 +10,7 @@ import Clients from './pages/Clients'
 import Collecte from './pages/Collecte'
 import Comites from './pages/Comites'
 import Recouvrement from './pages/Recouvrement'
+import Grh from './pages/Grh'
 import ProcurationsCheques from './pages/ProcurationsCheques'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
@@ -27,6 +28,7 @@ import Conformite from './pages/Conformite'
 import EspaceClient from './pages/EspaceClient'
 import Etats from './pages/Etats'
 import Login from './pages/Login'
+import MobileApp from './mobile/MobileApp'
 import { ChangementObligatoire, Reinitialiser } from './pages/MotDePasse'
 import Provisions from './pages/Provisions'
 import Rapports from './pages/Rapports'
@@ -39,6 +41,7 @@ export default function App() {
   const { pathname } = useLocation()
   // l'espace client est indépendant de la session du personnel (autre jeton, autre écran)
   if (pathname === '/espace' || pathname.startsWith('/espace/')) return <EspaceClient />
+  if (pathname === '/m' || pathname.startsWith('/m/')) return <MobileApp />   // application de collecte (PWA), écran étroit et hors ligne
   if (pathname === '/reinitialiser') return <Reinitialiser />
   if (chargement) return <Spinner />
   if (!user) return <Login />
@@ -71,6 +74,7 @@ export default function App() {
         <Route path="etats" element={<Garde perm="compta:read"><Etats /></Garde>} />
         <Route path="provisions" element={<Garde perm="provisions:read"><Provisions /></Garde>} />
         <Route path="conformite" element={<Garde perm="lbc:read"><Conformite /></Garde>} />
+        <Route path="grh" element={<Garde perm={['grh:read', 'grh:self']}><Grh /></Garde>} />
         <Route path="rh" element={<Garde perm="rh:read"><Rh /></Garde>} />
         <Route path="admin" element={<Garde perm={['users:manage', 'params:read', 'audit:read', 'ref:write']}><Admin /></Garde>} />
         <Route path="*" element={<Navigate to="/" replace />} />

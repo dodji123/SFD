@@ -1,3 +1,4 @@
+import { ChampTypeCycle, useTypeCycle } from '../components/TypeCycle'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { aujourdhui, xof } from '../lib/format'
@@ -168,7 +169,12 @@ function TableauJour({ jour, onChange }: { jour: string; onChange: () => void })
 
   const apres = () => { setEdit(null); q.reload(); onChange() }
   const supprimer = (l: LigneJour) => {
-    if (window.confirm(`Supprimer la collecte de ${xof(l.montant_collecte)} de ${l.client} ?`)) void run(() => api.del(`/api/collecte/lignes/${l.id}`), 'Collecte supprimée', apres)
+    {
+      const motif = window.prompt(`Supprimer la collecte de ${xof(l.montant_collecte)} de ${l.client} ?
+Elle disparaîtra des écrans mais restera tracée pour l'audit. Motif obligatoire (5 caractères minimum) :`)
+      if (motif && motif.trim().length >= 5) void run(() => api.del(`/api/collecte/lignes/${l.id}?motif=${encodeURIComponent(motif.trim())}`), 'Collecte supprimée (tracée pour l’audit)', apres)
+      else if (motif !== null) window.alert('Motif trop court : suppression annulée.')
+    }
   }
   const rouvrir = () => {
     const motif = window.prompt('Motif de la réouverture de la journée (obligatoire) :')
@@ -265,6 +271,7 @@ function NouvelleMise({ produitInitial, numeroInitial, jour, onClose, onFait }: 
   const [f, setF] = useState({ produit: produitInitial, numero: numeroInitial, mise: '', debut: jour, fin: fin.toISOString().slice(0, 10) })
   const [client, setClient] = useState<{ id: number; numero: string; nom: string } | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
+  const tc = useTypeCycle(client?.id, f.produit)
 
   useEffect(() => {
     setClient(null); setErreur(null)
@@ -280,18 +287,19 @@ function NouvelleMise({ produitInitial, numeroInitial, jour, onClose, onFait }: 
   return (
     <FormModal titre="Nouvelle mise (nouveau cycle)" onClose={onClose} busy={busy || !client} valider="Créer la mise"
       onSubmit={() => { if (!client) return; void run(async () => {
-        await api.post('/api/cycles', { client_id: client.id, produit_id: Number(f.produit), mise: Number(f.mise), date_debut: f.debut, date_fin: f.fin })
+        await api.post('/api/cycles', { client_id: client.id, produit_id: Number(f.produit), mise: Number(f.mise), date_debut: f.debut, date_fin: f.fin, ...tc.corps })
         onFait(f.produit, f.numero)
       }, 'Mise créée : le client peut être collecté') }}>
       <Field label="Produit tontine">
         <Select value={f.produit} onChange={(e) => setF({ ...f, produit: e.target.value })} required>
           <option value="">— choisir un produit —</option>
-          {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle} (type {p.type_cycle})</option>)}
+          {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle}</option>)}
         </Select>
       </Field>
       <ChampClient valeur={f.numero} onChange={(v) => setF({ ...f, numero: v })} />
       <Field label="Client trouvé"><Input readOnly value={client ? `${client.nom} (${client.numero})` : ''} /></Field>
       {erreur && <Alert tone="warn">{erreur}</Alert>}
+      {client && f.produit && <ChampTypeCycle t={tc} />}
       <Field label="Mise (F)" hint="Montant d'une ligne du livret"><Input type="number" min={1} value={f.mise} onChange={(e) => setF({ ...f, mise: e.target.value })} required /></Field>
       <Field label="Début"><Input type="date" value={f.debut} onChange={(e) => setF({ ...f, debut: e.target.value })} required /></Field>
       <Field label="Fin"><Input type="date" value={f.fin} min={f.debut} onChange={(e) => setF({ ...f, fin: e.target.value })} required /></Field>

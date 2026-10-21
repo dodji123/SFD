@@ -1,4 +1,5 @@
 """Paramètres de l'application et consultation de la piste d'audit."""
+import datetime as dt
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -67,4 +68,21 @@ def audit(table_name: str | None = None, ligne_id: str | None = None, utilisateu
             "WHERE (%s::text IS NULL OR table_name = %s) AND (%s::text IS NULL OR ligne_id = %s) "
             "AND (%s::text IS NULL OR utilisateur = %s) ORDER BY id DESC LIMIT %s",
             (table_name, table_name, ligne_id, ligne_id, utilisateur, utilisateur, limit),
+        )
+
+
+@router.get("/audit/operations-supprimees")
+def operations_supprimees(nature: str | None = None, agence_id: int | None = None, utilisateur: str | None = None,
+                          du: dt.date | None = None, au: dt.date | None = None, limit: int = Query(200, ge=1, le=1000),
+                          user: User = Depends(require("audit:read"))):
+    """Opérations supprimées, avec la mention « supprimée », l'auteur, le motif et le contenu d'origine (absentes des écrans courants)."""
+    ag = agence_filter(user, agence_id)
+    with tx() as cur:
+        return all_rows(
+            cur,
+            "SELECT o.id, o.nature, o.ligne_id, o.agence_id, a.code AS agence, o.cycle_id, c.numero AS cycle, o.supprime_par, o.supprime_le, o.motif, o.donnees "
+            "FROM operation_supprimee o LEFT JOIN agence a ON a.id = o.agence_id LEFT JOIN cycle c ON c.id = o.cycle_id "
+            "WHERE (%s::int IS NULL OR o.agence_id = %s) AND (%s::text IS NULL OR o.nature = %s) AND (%s::text IS NULL OR o.supprime_par = %s) "
+            "AND (%s::date IS NULL OR o.supprime_le >= %s) AND (%s::date IS NULL OR o.supprime_le < %s::date + 1) ORDER BY o.id DESC LIMIT %s",
+            (ag, ag, nature, nature, utilisateur, utilisateur, du, du, au, au, limit),
         )

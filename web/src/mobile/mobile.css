@@ -1,0 +1,49 @@
+/* Application mobile du collecteur : écran étroit, grandes cibles tactiles, mêmes jetons de couleur que l'interface bureau. */
+.m-app { max-width: 560px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+.m-app main { padding: 12px 16px; flex: 1; }
+.m-app .muted { color: var(--muted); font-size: 0.85rem; }
+.m-centre { text-align: center; padding: 32px 16px; }
+.m-entete { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--brand); color: var(--brand-contrast); }
+.m-entete > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-entete .btn { min-height: 36px; }
+.m-reseau { font-size: 0.78rem; opacity: 0.95; }
+.m-reseau::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #5ee0a0; }
+.m-reseau.hors::before { background: #ffb020; }
+.m-bandeau { margin: 8px 16px 0; padding: 10px 12px; border-radius: var(--radius); font-size: 0.92rem; display: block; border: 0; text-align: left; width: calc(100% - 32px); font-family: inherit; }
+main .m-bandeau { margin: 0 0 8px; width: auto; }
+.m-bandeau.warn { background: var(--warn-soft); color: var(--warn); }
+.m-bandeau.bad { background: var(--danger-soft); color: var(--danger); }
+.m-bandeau.ok { background: var(--ok-soft); color: var(--ok); }
+.m-bandeau.info { background: var(--info-soft); color: var(--info); }
+.m-sync { cursor: pointer; font-weight: 600; }
+.m-recherche { display: flex; gap: 8px; margin-bottom: 4px; }
+.m-recherche .input { font-size: 1rem; min-height: 44px; }
+.m-recherche .btn { min-height: 44px; min-width: 44px; }
+.m-compte { margin: 4px 0 8px; }
+.m-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.m-carte, .m-op { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: inherit; font: inherit; box-shadow: var(--shadow); }
+.m-carte { cursor: pointer; min-height: 64px; }
+.m-carte:active { background: var(--surface-2); }
+.m-carte-haut, .m-carte-bas { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.m-pastille { display: inline-block; min-width: 20px; padding: 1px 7px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; text-align: center; }
+.m-pastille.warn { background: var(--warn-soft); color: var(--warn); }
+.m-pastille.bad { background: var(--danger); color: #fff; }
+.m-nav { position: fixed; bottom: 0; left: 0; right: 0; max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); }
+.m-nav button { min-height: 56px; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.m-nav button.actif { color: var(--brand); box-shadow: inset 0 3px 0 var(--brand); }
+.m-gros { min-height: 48px; font-size: 1rem; }
+.m-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.m-actions .m-gros { flex: 1; }
+.m-feuille-fond { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+.m-feuille { width: 100%; max-width: 560px; background: var(--surface); border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; max-height: 92dvh; overflow: auto; }
+.m-feuille h2 { margin: 0; font-size: 1.2rem; }
+.m-feuille p { margin: 0; }
+.m-feuille label, .m-login label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 0.9rem; }
+.m-montant { font-size: 1.6rem; min-height: 56px; font-weight: 700; }
+.m-rapide { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.m-rapide .btn { min-height: 44px; }
+.m-login { padding: 24px 16px; justify-content: center; }
+.m-login form { display: flex; flex-direction: column; gap: 12px; }
+.m-login h1 { margin: 0; color: var(--brand); }
+.m-login .m-bandeau { margin: 0; width: auto; }
+.m-app input, .m-app .input { font-size: 16px; }   /* évite le zoom automatique de iOS */
