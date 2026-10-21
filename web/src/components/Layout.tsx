@@ -1,48 +1,70 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { libellesRole } from '../lib/format'
 import { useSession } from '../lib/session'
 import { Button } from './ui'
 
-interface Entree { to: string; titre: string; perm: string | string[] }
+interface Entree { to: string; titre: string; icone: string; perm: string | string[] }
 const SECTIONS: { titre: string; items: Entree[] }[] = [
-  { titre: 'Exploitation', items: [
-    { to: '/', titre: 'Tableau de bord', perm: 'ref:read' },
-    { to: '/clients', titre: 'Clients', perm: 'ref:read' },
-    { to: '/cycles', titre: 'Cycles de tontine', perm: 'collecte:read' },
-    { to: '/collecte', titre: 'Collecte du jour', perm: 'collecte:read' },
-    { to: '/retraits', titre: 'Retraits et écarts', perm: 'collecte:read' },
-    { to: '/adhesion', titre: 'Adhésion et parts', perm: 'epargne:read' },
-    { to: '/epargne', titre: 'Épargne classique', perm: 'epargne:read' },
-    { to: '/liaison', titre: 'Tontine ↔ épargne', perm: 'epargne:read' },
-    { to: '/depots', titre: 'Dépôts garantie et terme', perm: 'epargne:read' },
-    { to: '/deblocages', titre: 'Déblocages', perm: 'epargne:read' },
-    { to: '/pieces', titre: 'Pièces justificatives', perm: 'epargne:read' },
+  { titre: 'Pilotage', items: [
+    { to: '/', titre: 'Tableau de bord', icone: '📊', perm: 'ref:read' },
+    { to: '/rapports', titre: 'Rapports', icone: '📈', perm: 'rapports:read' },
+    { to: '/etats', titre: 'États financiers', icone: '🧾', perm: 'compta:read' },
+    { to: '/conformite', titre: 'Conformité LBC/FT', icone: '🛡️', perm: 'lbc:read' },
   ] },
-  { titre: 'Crédit et caisse', items: [
-    { to: '/credits', titre: 'Crédits', perm: 'credit:read' },
-    { to: '/comites', titre: 'Comité de crédit', perm: 'comite:read' },
-    { to: '/recouvrement', titre: 'Recouvrement', perm: 'recouvrement:read' },
-    { to: '/procurations', titre: 'Procurations et chèques', perm: ['procuration:write', 'cheque:read'] },
-    { to: '/caisse', titre: 'Caisse', perm: 'caisse:read' },
-    { to: '/tresorerie', titre: 'Trésorerie', perm: 'tresorerie:read' },
-    { to: '/provisions', titre: 'Provisions', perm: 'provisions:read' },
+  { titre: 'Clients', items: [
+    { to: '/clients', titre: 'Clients', icone: '👥', perm: 'ref:read' },
+    { to: '/adhesion', titre: 'Adhésion et parts', icone: '🤝', perm: 'epargne:read' },
+    { to: '/pieces', titre: 'Pièces justificatives', icone: '📎', perm: 'epargne:read' },
+    { to: '/procurations', titre: 'Procurations et chèques', icone: '✍️', perm: ['procuration:write', 'cheque:read'] },
   ] },
-  { titre: 'Gestion', items: [
-    { to: '/rapports', titre: 'Rapports', perm: 'rapports:read' },
-    { to: '/compta', titre: 'Comptabilité', perm: 'compta:read' },
-    { to: '/etats', titre: 'États financiers', perm: 'compta:read' },
-    { to: '/conformite', titre: 'Conformité LBC/FT', perm: 'lbc:read' },
-    { to: '/grh', titre: 'GRH', perm: ['grh:read', 'grh:self'] },
-    { to: '/application-mobile', titre: 'Application mobile', perm: 'collecte:read' },
-    { to: '/rh', titre: 'RH et paie', perm: 'rh:read' },
-    { to: '/admin', titre: 'Administration', perm: ['users:manage', 'params:read', 'audit:read', 'ref:write'] },
+  { titre: 'Tontine et collecte', items: [
+    { to: '/collecte', titre: 'Collecte du jour', icone: '💰', perm: 'collecte:read' },
+    { to: '/cycles', titre: 'Cycles de tontine', icone: '🔄', perm: 'collecte:read' },
+    { to: '/retraits', titre: 'Retraits et écarts', icone: '↩️', perm: 'collecte:read' },
+    { to: '/liaison', titre: 'Tontine ↔ épargne', icone: '🔗', perm: 'epargne:read' },
+  ] },
+  { titre: 'Épargne', items: [
+    { to: '/epargne', titre: 'Épargne classique', icone: '🏦', perm: 'epargne:read' },
+    { to: '/depots', titre: 'Dépôts garantie et terme', icone: '🔒', perm: 'epargne:read' },
+    { to: '/deblocages', titre: 'Déblocages', icone: '🔓', perm: 'epargne:read' },
+  ] },
+  { titre: 'Crédit et recouvrement', items: [
+    { to: '/credits', titre: 'Crédits', icone: '💳', perm: 'credit:read' },
+    { to: '/comites', titre: 'Comité de crédit', icone: '⚖️', perm: 'comite:read' },
+    { to: '/recouvrement', titre: 'Recouvrement', icone: '📞', perm: 'recouvrement:read' },
+    { to: '/provisions', titre: 'Provisions', icone: '📉', perm: 'provisions:read' },
+  ] },
+  { titre: 'Caisse et comptabilité', items: [
+    { to: '/caisse', titre: 'Caisse', icone: '🧮', perm: 'caisse:read' },
+    { to: '/tresorerie', titre: 'Trésorerie', icone: '💵', perm: 'tresorerie:read' },
+    { to: '/compta', titre: 'Comptabilité', icone: '📒', perm: 'compta:read' },
+  ] },
+  { titre: 'Ressources humaines', items: [
+    { to: '/grh', titre: 'GRH', icone: '🧑‍💼', perm: ['grh:read', 'grh:self'] },
+    { to: '/rh', titre: 'RH et paie', icone: '🧑‍🤝‍🧑', perm: 'rh:read' },
+  ] },
+  { titre: 'Application et administration', items: [
+    { to: '/application-mobile', titre: 'Application mobile', icone: '📱', perm: 'collecte:read' },
+    { to: '/admin', titre: 'Administration', icone: '⚙️', perm: ['users:manage', 'params:read', 'audit:read', 'ref:write'] },
   ] },
 ]
+
+const CLE_REPLIE = 'sfd.menu.replie'
+function lireReplie(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(CLE_REPLIE) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
 
 export default function Layout() {
   const { user, can, logout, agences, agenceId, choisirAgence } = useSession()
   const [ouvert, setOuvert] = useState(false)
+  const [replie, setReplie] = useState<string[]>(lireReplie)
+  const { pathname } = useLocation()
+  const basculer = (titre: string) => setReplie((r) => {
+    const n = r.includes(titre) ? r.filter((x) => x !== titre) : [...r, titre]
+    try { localStorage.setItem(CLE_REPLIE, JSON.stringify(n)) } catch { /* stockage indisponible : l'état n'est pas conservé */ }
+    return n
+  })
   const autorise = (p: string | string[]) => (Array.isArray(p) ? p.some(can) : can(p))
   return (
     <div className="app">
@@ -55,12 +77,16 @@ export default function Layout() {
           {SECTIONS.map((s) => {
             const items = s.items.filter((i) => autorise(i.perm))
             if (!items.length) return null
+            const actif = items.some((i) => (i.to === '/' ? pathname === '/' : pathname === i.to || pathname.startsWith(`${i.to}/`)))
+            const ferme = replie.includes(s.titre) && !actif
             return (
               <div key={s.titre}>
-                <div className="nav-section">{s.titre}</div>
-                {items.map((i) => (
+                <button type="button" className="nav-section nav-toggle" aria-expanded={!ferme} onClick={() => basculer(s.titre)}>
+                  <span>{s.titre}</span><span aria-hidden>{ferme ? '▸' : '▾'}</span>
+                </button>
+                {!ferme && items.map((i) => (
                   <NavLink key={i.to} to={i.to} end={i.to === '/'} className={({ isActive }) => (isActive ? 'active' : '')} onClick={() => setOuvert(false)}>
-                    {i.titre}
+                    <span className="nav-ico" aria-hidden>{i.icone}</span>{i.titre}
                   </NavLink>
                 ))}
               </div>

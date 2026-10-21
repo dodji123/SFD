@@ -83,6 +83,9 @@ a:hover { text-decoration: underline; }
 .brand small { display: block; font-weight: 400; color: var(--side-text); font-size: 0.75rem; opacity: 0.85; }
 .brand-mark { width: 32px; height: 32px; border-radius: 8px; background: var(--brand); color: var(--brand-contrast); display: grid; place-items: center; font-weight: 800; }
 .nav-section { font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.6; padding: 12px 10px 4px; }
+.nav-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: inherit; cursor: pointer; font-family: inherit; text-align: left; }
+.nav-toggle:hover { opacity: 1; }
+.nav-ico { display: inline-block; width: 1.6em; }
 .nav a { display: block; padding: 8px 10px; border-radius: 6px; color: var(--side-text); }
 .nav a:hover { background: var(--side-active); text-decoration: none; }
 .nav a.active { background: var(--side-active); color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--brand-hover); }
