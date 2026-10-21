@@ -1,3 +1,4 @@
+import { BoutonScanner, lireQr } from '../components/Qr'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -45,7 +46,8 @@ export default function Cycles() {
         </span>
       )}>
         <div className="card-b row">
-          <Field label="Recherche"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Numéro de cycle ou nom du client" /></Field>
+          <Field label="Recherche"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Numéro de cycle ou de client, nom, produit" /></Field>
+          <BoutonScanner onLu={(t) => setQ(lireQr(t).numero)} />
           <Field label="Produit">
             <Select value={produit} onChange={(e) => setProduit(e.target.value)}>
               <option value="">Tous les produits</option>

@@ -1,3 +1,4 @@
+import { QrCode, contenuQr } from '../components/Qr'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -42,6 +43,9 @@ export default function CycleDetail() {
               {enCours && can('collecte:admin') && <Button onClick={() => setModale('cloture')}>Clôturer</Button>}
               {c.statut !== 'retire' && can('retrait:request') && <Button onClick={() => setModale('retrait')}>Demander le retrait</Button>}
             </>}>
+            <Card title="QR code du cycle" actions={<Button small onClick={() => window.print()}>Imprimer</Button>}>
+              <QrCode valeur={contenuQr("CY", c.numero)} legende={c.numero} />
+            </Card>
             <div className="grid-kpi">
               <Kpi label="Collecté" value={xof(c.montant_collecte)} />
               {c.delai_grace ? <Kpi label="Saisie possible jusqu'au" value={fdate(c.date_limite ?? c.date_fin)} /> : null}

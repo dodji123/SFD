@@ -1,3 +1,4 @@
+import { BoutonScanner, lireQr } from '../components/Qr'
 import { ChampTypeCycle, useTypeCycle } from '../components/TypeCycle'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
@@ -139,6 +140,7 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
       </div>
       <div className="row">
         <ChampClient valeur={suffixe} onChange={setSuffixe} inputRef={refNumero} />
+        <BoutonScanner onLu={(t) => setSuffixe(lireQr(t).numero)} libelle="Scanner le QR du client" />
         <Field label="Numéro de base du client"><Input readOnly value={trouve?.client.numero ?? ''} /></Field>
         <Field label="N° de souscription"><Input readOnly value={c?.numero ?? ''} /></Field>
         <Field label="Nom et prénom"><Input readOnly value={trouve?.client.nom ?? ''} /></Field>

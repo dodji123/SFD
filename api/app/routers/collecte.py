@@ -50,9 +50,10 @@ def lister_cycles(
             cur,
             SITUATION + "WHERE (%s::int IS NULL OR s.agence_id = %s) AND (%s::int IS NULL OR s.client_id = %s) "
             "AND (%s::text IS NULL OR s.statut = %s) AND (%s::int IS NULL OR c.produit_id = %s) "
-            "AND (%s::text IS NULL OR s.numero ILIKE '%%' || %s || '%%' OR cl.nom ILIKE '%%' || %s || '%%') "
+            "AND (%s::text IS NULL OR s.numero ILIKE '%%' || %s || '%%' OR cl.nom ILIKE '%%' || %s || '%%' "
+            "     OR cl.numero ILIKE '%%' || %s || '%%' OR pe.code ILIKE '%%' || %s || '%%' OR pe.libelle ILIKE '%%' || %s || '%%') "
             "ORDER BY " + ORDRES[tri] + " LIMIT %s OFFSET %s",
-            (ag, ag, client_id, client_id, statut, statut, produit_id, produit_id, q, q, q, limit, offset),
+            (ag, ag, client_id, client_id, statut, statut, produit_id, produit_id, q, q, q, q, q, q, limit, offset),
         )
 
 

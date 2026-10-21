@@ -83,3 +83,15 @@ def test_suppression_tracee_et_masquee(client, h, base):
     assert t["cycle"] == cy.json()["numero"] and t["agence"]
     assert client.get("/api/audit/operations-supprimees", headers=h("chef1")).status_code == 403
     assert client.get("/api/audit/operations-supprimees", params={"nature": "retrait"}, headers=h("auditeur")).json() == []
+
+
+def test_recherche_cycles_par_produit_numero_client(client, h, base):
+    tous = client.get("/api/cycles", headers=h("chef1")).json()
+    assert tous
+    un = next(c for c in tous if c["produit"] == "TSOUP")
+    par_produit = client.get("/api/cycles", params={"q": "souple"}, headers=h("chef1")).json()              # libellé du produit
+    assert par_produit and all(c["produit"] == "TSOUP" or "souple" in c["client"].lower() for c in par_produit)
+    assert any(c["id"] == un["id"] for c in client.get("/api/cycles", params={"q": "TSOUP"}, headers=h("chef1")).json())    # code du produit
+    assert any(c["id"] == un["id"] for c in client.get("/api/cycles", params={"q": un["numero"]}, headers=h("chef1")).json())  # numéro de cycle
+    num_client = client.get(f"/api/clients/{un['client_id']}", headers=h("chef1")).json()["numero"]
+    assert any(c["id"] == un["id"] for c in client.get("/api/cycles", params={"q": num_client}, headers=h("chef1")).json())   # numéro de client (contenu du QR)

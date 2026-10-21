@@ -1,3 +1,4 @@
+import { QrCode, contenuQr } from '../components/Qr'
 import { ChampTypeCycle, useTypeCycle } from '../components/TypeCycle'
 import { ReleveModal } from '../components/ReleveClient'
 import { useState } from 'react'
@@ -48,6 +49,10 @@ export default function ClientDetail() {
             <Kpi label="Cycles en cours" value={c.cycles.filter((x) => x.statut === 'en_cours').length} />
             <Kpi label="Points de fidélité" value={c.points_fidelite} />
           </div>
+
+          <Card title="QR code du client" actions={<Button small onClick={() => window.print()}>Imprimer</Button>}>
+            <QrCode valeur={contenuQr('CL', c.numero)} legende={c.numero} />
+          </Card>
 
           <KycCard clientId={c.id} />
           <EspaceCard clientId={c.id} />
