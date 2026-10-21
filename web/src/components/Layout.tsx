@@ -34,6 +34,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/etats', titre: 'États financiers', perm: 'compta:read' },
     { to: '/conformite', titre: 'Conformité LBC/FT', perm: 'lbc:read' },
     { to: '/grh', titre: 'GRH', perm: ['grh:read', 'grh:self'] },
+    { to: '/application-mobile', titre: 'Application mobile', perm: 'collecte:read' },
     { to: '/rh', titre: 'RH et paie', perm: 'rh:read' },
     { to: '/admin', titre: 'Administration', perm: ['users:manage', 'params:read', 'audit:read', 'ref:write'] },
   ] },
