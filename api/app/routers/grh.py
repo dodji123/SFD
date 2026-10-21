@@ -280,8 +280,18 @@ def jours_feries(annee: int | None = None, user: User = Depends(require("grh:rea
         return all_rows(cur, "SELECT * FROM jour_ferie WHERE (%s::int IS NULL OR extract(year FROM date_jour) = %s) ORDER BY date_jour", (annee, annee))
 
 
+def _droit_ferie(user: User, agence_id: int | None) -> None:
+    """Un jour férié commun à toutes les agences est réservé au siège ; sinon l'agence doit être dans le périmètre."""
+    if agence_id is None:
+        if not user.siege:
+            raise HTTPException(status_code=403, detail="Un jour férié commun relève du siège")
+    elif not user.peut_agence(agence_id):
+        raise HTTPException(status_code=403, detail="Agence non autorisée")
+
+
 @router.post("/jours-feries", status_code=201)
 def ajouter_ferie(body: FerieIn, user: User = Depends(require("grh:write"))):
+    _droit_ferie(user, body.agence_id)
     with tx(user.login) as cur:
         return one_row(cur, "INSERT INTO jour_ferie(date_jour, libelle, agence_id) VALUES (%s, %s, %s) RETURNING *", (body.date_jour, body.libelle, body.agence_id))
 
@@ -289,6 +299,10 @@ def ajouter_ferie(body: FerieIn, user: User = Depends(require("grh:write"))):
 @router.delete("/jours-feries/{ferie_id}", status_code=204)
 def supprimer_ferie(ferie_id: int, user: User = Depends(require("grh:write"))):
     with tx(user.login) as cur:
+        r = one_row(cur, "SELECT agence_id FROM jour_ferie WHERE id = %s", (ferie_id,))
+        if r is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        _droit_ferie(user, r["agence_id"])
         cur.execute("DELETE FROM jour_ferie WHERE id = %s", (ferie_id,))
 
 

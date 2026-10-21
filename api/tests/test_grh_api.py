@@ -60,7 +60,7 @@ def test_organisation_et_dossier(client, h, base):
     assert {o["matricule"]: o["niveau"] for o in org if o["matricule"].startswith("G-E")}["G-E1"] == 0
 
 
-def test_conges_decision_et_libre_service(client, h, base):
+def test_conges_decision_et_libre_service(client, h, base, agences):
     e = base["emp"]["emp"]
     r = client.post("/api/grh/conges", json={"employe_id": e, "type": "annuel", "date_debut": "2027-03-01", "date_fin": "2027-03-05"}, headers=h("rh1"))
     assert r.status_code == 201 and float(r.json()["jours_ouvres"]) == 5
@@ -77,7 +77,15 @@ def test_conges_decision_et_libre_service(client, h, base):
     assert mien.status_code == 201 and mien.json()["statut"] == "demande"
     assert client.get("/api/grh/mes-conges", headers=h("agent1")).status_code == 404                                                    # pas de fiche reliée
     assert client.post(f"/api/grh/conges/{cid}/annuler", headers=h("rh1")).json()["statut"] == "annule"
-    assert client.post("/api/grh/jours-feries", json={"date_jour": "2027-05-01", "libelle": "Fête du travail"}, headers=h("rh1")).status_code == 201
+    ferie = {"date_jour": "2027-05-01", "libelle": "Fête du travail"}
+    assert client.post("/api/grh/jours-feries", json=ferie, headers=h("rh1")).status_code == 403                                         # commun à toutes les agences : siège seul
+    commun = client.post("/api/grh/jours-feries", json=ferie, headers=h("admin"))
+    assert commun.status_code == 201
+    assert client.delete(f"/api/grh/jours-feries/{commun.json()['id']}", headers=h("rh1")).status_code == 403
+    assert client.delete(f"/api/grh/jours-feries/{commun.json()['id']}", headers=h("admin")).status_code == 204
+    propre = client.post("/api/grh/jours-feries", json={**ferie, "agence_id": agences["a1"]}, headers=h("rh1"))
+    assert propre.status_code == 201
+    assert client.delete(f"/api/grh/jours-feries/{propre.json()['id']}", headers=h("chef2")).status_code == 403                      # autre agence
     p = client.post("/api/grh/presences", json={"employe_id": e, "date_jour": "2026-02-02", "statut": "retard", "heure_arrivee": "09:15:00", "heure_depart": "17:00:00"}, headers=h("rh1"))
     assert p.status_code == 201 and float(p.json()["heures"]) == 7.8
     assert client.get("/api/grh/absenteisme", params={"mois": "2026-02-10"}, headers=h("rh1")).json()[0]["retards"] == 1
