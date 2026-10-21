@@ -1,42 +1,53 @@
-// Application mobile du collecteur (PWA) : cycles à collecter, saisie rapide, file hors ligne, refus à corriger.
+// Application mobile du collecteur (PWA) : clients de la zone, cycles, saisie rapide, création sur le terrain, suivi des validations.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../lib/api'
-import { aujourdhui, date as fdate, xof } from '../lib/format'
+import { aujourdhui, date as fdate, decaler, xof } from '../lib/format'
 import { useSession } from '../lib/session'
-import { MotDePasse } from '../components/ui'
 import { ChangementObligatoire } from '../pages/MotDePasse'
 import {
-  demarrerSynchro, ecrireCache, enregistrer, lireCache, marquerReseau, reessayer, retirer, sessionRetablie, synchroniser, useFile, viderCache,
-  type CycleCollecte, type Operation,
+  appliquerStatuts, demarrerSynchro, ecrireCache, enregistrer, lireCache, marquerReseau, reessayer, retirer, sessionRetablie, synchroniser, useFile, viderCache,
+  type ClientVue, type CycleVue, type EtatOp, type Operation, type Produit, type Ref, type Tournee,
 } from './file'
+import ControleApp from './Controle'
+import { demarrerSynchroConstats, sessionRetablieC } from './fileConstats'
 import './mobile.css'
 
-type Onglet = 'collecte' | 'envoi' | 'refus'
+type Onglet = 'cycles' | 'clients' | 'suivi'
 
 const CODES: Record<string, { titre: string; conseil: string }> = {
-  hors_delai: { titre: 'Hors délai', conseil: 'Le cycle est terminé. Demandez une prolongation au chef d\'agence, puis réessayez.' },
-  cycle_clos: { titre: 'Cycle clos', conseil: 'Ce cycle est clôturé : la collecte ne peut plus y être ajoutée. Voyez le chef d\'agence.' },
-  avant_debut: { titre: 'Avant le début du cycle', conseil: 'La date saisie précède le début du cycle. Abandonnez et ressaisissez avec la bonne date.' },
-  droit_agence: { titre: 'Droit refusé', conseil: 'Ce cycle n\'est pas dans votre périmètre. Abandonnez cette saisie.' },
-  montant_invalide: { titre: 'Montant invalide', conseil: 'Abandonnez et ressaisissez le bon montant.' },
-  depasse_reste: { titre: 'Dépasse l\'encours', conseil: 'Le cycle a déjà reçu d\'autres collectes. Abandonnez ou ressaisissez un montant plus petit.' },
-  date_future: { titre: 'Date dans le futur', conseil: 'L\'horloge du téléphone est peut-être décalée. Abandonnez et ressaisissez.' },
+  rejet_operateur: { titre: 'Rejetée par l\'opérateur', conseil: 'Voyez le motif ci-dessus, puis ressaisissez si besoin.' },
+  hors_delai: { titre: 'Hors délai', conseil: 'Le cycle est terminé. Demandez une prolongation au chef d\'agence, puis ressaisissez.' },
+  cycle_clos: { titre: 'Cycle clos', conseil: 'Ce cycle est clôturé : la collecte ne peut plus y être ajoutée.' },
+  avant_debut: { titre: 'Avant le début du cycle', conseil: 'Ressaisissez avec la bonne date.' },
+  droit_agence: { titre: 'Droit refusé', conseil: 'Cet élément n\'est pas dans votre périmètre. Abandonnez cette saisie.' },
+  hors_zone: { titre: 'Hors de votre zone', conseil: 'Vous ne travaillez que sur les clients de votre zone. Abandonnez cette saisie.' },
+  montant_invalide: { titre: 'Montant invalide', conseil: 'Ressaisissez le bon montant.' },
+  depasse_reste: { titre: 'Dépasse l\'encours', conseil: 'Le cycle a déjà reçu d\'autres collectes. Ressaisissez un montant plus petit.' },
+  date_future: { titre: 'Date dans le futur', conseil: 'L\'horloge du téléphone est peut-être décalée. Ressaisissez.' },
   livret_plein: { titre: 'Livret plein', conseil: 'Toutes les lignes du livret sont utilisées. Voyez le chef d\'agence.' },
+  dependance: { titre: 'Opération liée rejetée', conseil: 'Le client ou le cycle dont elle dépend n\'a pas été accepté.' },
+  format: { titre: 'Saisie incomplète', conseil: 'Ressaisissez en vérifiant les champs.' },
+  produit_invalide: { titre: 'Produit invalide', conseil: 'Choisissez un autre produit.' },
   lot_refuse: { titre: 'Envoi refusé', conseil: 'Le serveur a refusé la demande. Réessayez plus tard ou abandonnez.' },
 }
-const libelleCode = (c?: string) => CODES[c ?? '']?.titre ?? 'Refusée'
+const ETATS: Record<EtatOp, { lib: string; ton: string }> = {
+  attente: { lib: 'À envoyer', ton: 'warn' }, envoyee: { lib: 'En attente de validation', ton: 'info' },
+  validee: { lib: 'Validée', ton: 'ok' }, rejetee: { lib: 'Rejetée', ton: 'bad' }, refusee: { lib: 'Refusée', ton: 'bad' },
+}
 
-interface Donnees { cycles: CycleCollecte[]; majLe: number; horsLigne: boolean }
+interface Donnees { t: Tournee; majLe: number; horsLigne: boolean }
+const actif = (o: Operation) => o.etat === 'attente' || o.etat === 'envoyee'
 
 export default function MobileApp() {
-  const { user, chargement } = useSession()
+  const { user, chargement, can } = useSession()
   useEffect(() => { document.title = 'SFD Collecte' }, [])
-  useEffect(() => { demarrerSynchro() }, [])
+  useEffect(() => { demarrerSynchro(); demarrerSynchroConstats() }, [])
   if (chargement) return <div className="m-centre">Chargement…</div>
   if (!user) return <Connexion />
   if (user.doit_changer_mdp) return <ChangementObligatoire />
-  if (user.role !== 'agent' && user.role !== 'collectrice') return <Interdit />
-  return <Principal />
+  if (user.role === 'agent' || user.role === 'collectrice') return <Principal />
+  if (can('livret:controler')) return <ControleApp />      // contrôleurs de livrets (chef d'agence, directeur, coordinateur…)
+  return <Interdit />
 }
 
 // ------------------------------------------------------------------ connexion
@@ -48,13 +59,13 @@ function Connexion() {
   const [erreur, setErreur] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const attente = f.ops.filter((o) => o.etat === 'attente').length
-  const refus = f.ops.filter((o) => o.etat === 'refusee').length
   async function envoyer() {
     setBusy(true)
     setErreur(null)
     try {
       await login(l.trim(), p)
       sessionRetablie()
+      sessionRetablieC()
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : 'Connexion impossible')
     } finally {
@@ -65,15 +76,10 @@ function Connexion() {
     <div className="m-app m-login">
       <form onSubmit={(e) => { e.preventDefault(); void envoyer() }}>
         <h1>SFD Collecte</h1>
-        {(attente > 0 || refus > 0) && (
-          <p className="m-bandeau warn">
-            {attente > 0 && `${attente} collecte(s) à synchroniser sur ce téléphone. `}
-            {refus > 0 && `${refus} refusée(s) à corriger. `}Connectez-vous pour les envoyer.
-          </p>
-        )}
+        {attente > 0 && <p className="m-bandeau warn">{attente} saisie(s) à synchroniser sur ce téléphone : connectez-vous pour les envoyer.</p>}
         {erreur && <p className="m-bandeau bad" role="alert">{erreur}</p>}
         <label>Identifiant<input className="input" value={l} onChange={(e) => setL(e.target.value)} autoComplete="username" autoCapitalize="none" required /></label>
-        <label>Mot de passe<MotDePasse value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></label>
+        <label>Mot de passe<input className="input" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></label>
         <button className="btn btn-primary m-gros" disabled={busy || !l || !p}>{busy ? 'Connexion…' : 'Se connecter'}</button>
         <p className="muted">La connexion demande le réseau.</p>
       </form>
@@ -86,29 +92,55 @@ function Interdit() {
   return (
     <div className="m-app m-login">
       <h1>SFD Collecte</h1>
-      <p className="m-bandeau warn">Cette application est réservée aux agents et collectrices. Utilisez l'interface bureau.</p>
+      <p className="m-bandeau warn">Cette application est réservée aux agents, collectrices et contrôleurs de livrets. Utilisez l'interface bureau.</p>
       <button className="btn m-gros" onClick={logout}>Se déconnecter</button>
     </div>
   )
+}
+
+// ------------------------------------------------------------------ vue fusionnée : serveur + opérations locales pas encore validées
+function fusionner(t: Tournee | null, ops: Operation[]) {
+  const enCours = ops.filter(actif)
+  const clients: ClientVue[] = [...(t?.clients ?? [])]
+  for (const o of enCours.filter((x) => x.type === 'client')) {
+    const p = o.payload as { nom: string; telephone?: string | null; zone_id?: number }
+    clients.push({ id: o.cle, nom: p.nom, telephone: p.telephone ?? null, zone_id: p.zone_id ?? t?.zones[0]?.id ?? null, local: true })
+  }
+  const nom = (ref: Ref) => clients.find((c) => c.id === ref)?.nom ?? '?'
+  const cycles: CycleVue[] = [...(t?.cycles ?? [])]
+  for (const o of enCours.filter((x) => x.type === 'cycle')) {
+    const p = o.payload as { client: Ref; produit_id: number; mise: number; type_cycle?: number; date_debut: string; date_fin: string }
+    const prod = t?.produits.find((x) => x.id === p.produit_id)
+    cycles.push({ id: o.cle, client_id: p.client, numero: 'Nouveau cycle', client: nom(p.client), produit: prod?.code ?? '?', type_cycle: p.type_cycle ?? prod?.type_cycle ?? 3,
+      mise_courante: p.mise, reste_a_collecter: null, date_debut: p.date_debut, date_fin: p.date_fin, date_limite: p.date_fin, local: true })
+  }
+  const clotures = new Set(enCours.filter((o) => o.type === 'cloture').map((o) => String((o.payload as { cycle: Ref }).cycle)))
+  const enFile = new Map<string, number>()
+  for (const o of enCours.filter((x) => x.type === 'collecte')) {
+    const k = String((o.payload as { cycle: Ref }).cycle)
+    enFile.set(k, (enFile.get(k) ?? 0) + (o.payload as { montant_collecte: number }).montant_collecte)
+  }
+  return { clients, cycles, clotures, enFile }
 }
 
 // ------------------------------------------------------------------ écran principal
 function Principal() {
   const { user, logout } = useSession()
   const f = useFile()
-  const [onglet, setOnglet] = useState<Onglet>('collecte')
+  const [onglet, setOnglet] = useState<Onglet>('cycles')
   const [donnees, setDonnees] = useState<Donnees | null>(null)
   const [chargeErreur, setChargeErreur] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const cle = `cycles:${user?.id}`
+  const cle = `tournee:${user?.id}`
 
   const charger = useCallback(async () => {
     try {
-      const cycles = await api.get<CycleCollecte[]>('/api/cycles', { statut: 'en_cours', limit: 500, tri: 'client' })
-      const d = { cycles, majLe: Date.now(), horsLigne: false }
+      const t = await api.get<Tournee>('/api/collecte/mobile/tournee')
+      const d = { t, majLe: Date.now(), horsLigne: false }
       setDonnees(d)
       setChargeErreur(null)
       void ecrireCache(cle, d).catch(() => {})
+      void appliquerStatuts(t.operations)
     } catch (e) {
       if (e instanceof ApiError && (e.status === 0 || e.status >= 500)) marquerReseau(false)
       const cache = await lireCache<Donnees>(cle).catch(() => null)
@@ -118,106 +150,108 @@ function Principal() {
   }, [cle])
 
   useEffect(() => { void charger() }, [charger])
-  // les restes à collecter changent après une synchro réussie
+  // les restes à collecter et les décisions de l'opérateur changent après une synchro ; on interroge aussi toutes les minutes
   useEffect(() => { if (f.derniereSynchro) void charger() }, [f.derniereSynchro, charger])
+  const attendDecision = f.ops.some((o) => o.etat === 'envoyee')
+  useEffect(() => {
+    if (!attendDecision) return
+    const t = window.setInterval(() => { if (!document.hidden) void charger() }, 60000)
+    return () => window.clearInterval(t)
+  }, [attendDecision, charger])
   useEffect(() => { if (!message) return; const t = window.setTimeout(() => setMessage(null), 3500); return () => window.clearTimeout(t) }, [message])
 
-  const attente = f.ops.filter((o) => o.etat === 'attente')
-  const refus = f.ops.filter((o) => o.etat === 'refusee')
+  const vue = useMemo(() => fusionner(donnees?.t ?? null, f.ops), [donnees, f.ops])
+  const aEnvoyer = f.ops.filter((o) => o.etat === 'attente').length
+  const aRevoir = f.ops.filter((o) => o.etat === 'refusee' || o.etat === 'rejetee').length
 
   async function quitter() {
-    if (attente.length + refus.length > 0 && !window.confirm(`${attente.length + refus.length} saisie(s) restent sur ce téléphone et seront envoyées à votre prochaine connexion. Se déconnecter ?`)) return
+    const restent = f.ops.filter((o) => o.etat === 'attente' || o.etat === 'refusee').length
+    if (restent > 0 && !window.confirm(`${restent} saisie(s) restent sur ce téléphone et seront envoyées à votre prochaine connexion. Se déconnecter ?`)) return
     await viderCache().catch(() => {})       // la file des saisies est conservée, pas la liste des clients
     logout()
   }
 
+  const t = donnees?.t
   return (
     <div className="m-app">
       <header className="m-entete">
         <div>
           <strong>{user?.nom}</strong>
-          <span className={`m-reseau ${f.reseau ? 'ok' : 'hors'}`}>{f.reseau ? 'En ligne' : 'Hors ligne'}</span>
+          <span className={`m-reseau ${f.reseau ? 'ok' : 'hors'}`}>{f.reseau ? 'En ligne' : 'Hors ligne'}{t && t.zones.length > 0 ? ` · zone ${t.zones.map((z) => z.code).join(', ')}` : ''}</span>
         </div>
         <button className="btn btn-sm" onClick={() => void quitter()}>Quitter</button>
       </header>
-      {(attente.length > 0 || f.enCours) && (
+      {(aEnvoyer > 0 || f.enCours) && (
         <button className="m-bandeau warn m-sync" onClick={() => void synchroniser()} disabled={f.enCours}>
-          {f.enCours ? 'Synchronisation…' : `${attente.length} à synchroniser${f.reseau ? ' — envoyer maintenant' : ' — en attente du réseau'}`}
+          {f.enCours ? 'Synchronisation…' : `${aEnvoyer} à synchroniser${f.reseau ? ' — envoyer maintenant' : ' — en attente du réseau'}`}
         </button>
       )}
       {f.sessionExpiree && <p className="m-bandeau bad">Session expirée : reconnectez-vous pour envoyer vos saisies (elles sont conservées).</p>}
       {message && <p className="m-bandeau ok" role="status">{message}</p>}
       <main>
-        {onglet === 'collecte' && (
-          <Collecte donnees={donnees} erreur={chargeErreur} ops={f.ops} onRecharger={() => void charger()}
-            onSaisi={(m) => setMessage(m)} />
-        )}
-        {onglet === 'envoi' && <Envoi ops={attente} />}
-        {onglet === 'refus' && <Refus ops={refus} />}
+        {chargeErreur && <p className="m-bandeau bad">{chargeErreur} <button className="btn btn-sm" onClick={() => void charger()}>Réessayer</button></p>}
+        {!donnees && !chargeErreur && <p className="m-centre">Chargement de votre zone…</p>}
+        {donnees && donnees.horsLigne && <p className="m-bandeau info">Données enregistrées le {new Date(donnees.majLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} (hors ligne).</p>}
+        {donnees && t && t.zones.length === 0 && <p className="m-bandeau warn">Aucune zone ne vous est affectée : voyez le chef d'agence.</p>}
+        {donnees && t && t.zones.length > 0 && onglet === 'cycles' && <Cycles vue={vue} onRecharger={() => void charger()} onSaisi={setMessage} />}
+        {donnees && t && t.zones.length > 0 && onglet === 'clients' && <Clients vue={vue} t={t} onSaisi={setMessage} />}
+        {onglet === 'suivi' && <Suivi ops={f.ops} />}
       </main>
       <nav className="m-nav">
-        <button className={onglet === 'collecte' ? 'actif' : ''} onClick={() => setOnglet('collecte')}>À collecter</button>
-        <button className={onglet === 'envoi' ? 'actif' : ''} onClick={() => setOnglet('envoi')}>
-          À envoyer{attente.length > 0 && <span className="m-pastille warn">{attente.length}</span>}
-        </button>
-        <button className={onglet === 'refus' ? 'actif' : ''} onClick={() => setOnglet('refus')}>
-          Refus{refus.length > 0 && <span className="m-pastille bad">{refus.length}</span>}
+        <button className={onglet === 'cycles' ? 'actif' : ''} onClick={() => setOnglet('cycles')}>Cycles</button>
+        <button className={onglet === 'clients' ? 'actif' : ''} onClick={() => setOnglet('clients')}>Clients</button>
+        <button className={onglet === 'suivi' ? 'actif' : ''} onClick={() => setOnglet('suivi')}>
+          Suivi{aRevoir > 0 ? <span className="m-pastille bad">{aRevoir}</span> : aEnvoyer > 0 ? <span className="m-pastille warn">{aEnvoyer}</span> : null}
         </button>
       </nav>
     </div>
   )
 }
 
-// ------------------------------------------------------------------ cycles du jour et saisie
-function Collecte({ donnees, erreur, ops, onRecharger, onSaisi }: {
-  donnees: Donnees | null; erreur: string | null; ops: Operation[]; onRecharger: () => void; onSaisi: (m: string) => void
-}) {
+type Vue = ReturnType<typeof fusionner>
+
+// ------------------------------------------------------------------ cycles et saisie de collecte
+function Cycles({ vue, onRecharger, onSaisi }: { vue: Vue; onRecharger: () => void; onSaisi: (m: string) => void }) {
   const [q, setQ] = useState('')
-  const [choisi, setChoisi] = useState<CycleCollecte | null>(null)
+  const [choisi, setChoisi] = useState<CycleVue | null>(null)
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return (donnees?.cycles ?? []).filter((c) => !s || c.client.toLowerCase().includes(s) || c.numero.toLowerCase().includes(s))
-  }, [donnees, q])
-  const enFile = useMemo(() => {
-    const m = new Map<number, number>()
-    for (const o of ops) m.set(o.cycle_id, (m.get(o.cycle_id) ?? 0) + o.montant_collecte)
-    return m
-  }, [ops])
-
-  if (erreur) return <p className="m-bandeau bad">{erreur} <button className="btn btn-sm" onClick={onRecharger}>Réessayer</button></p>
-  if (!donnees) return <p className="m-centre">Chargement des cycles…</p>
+    return vue.cycles.filter((c) => !s || c.client.toLowerCase().includes(s) || c.numero.toLowerCase().includes(s))
+  }, [vue.cycles, q])
   return (
     <>
-      {donnees.horsLigne && <p className="m-bandeau info">Liste enregistrée le {new Date(donnees.majLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} (hors ligne).</p>}
       <div className="m-recherche">
         <input className="input" type="search" placeholder="Client ou n° de cycle" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn" onClick={onRecharger} aria-label="Actualiser">↻</button>
       </div>
-      <p className="muted m-compte">{filtres.length} cycle(s) en cours</p>
+      <p className="muted m-compte">{filtres.length} cycle(s) en cours dans votre zone</p>
       <ul className="m-liste">
-        {filtres.map((c) => {
-          const local = enFile.get(c.id)
-          return (
-            <li key={c.id}>
-              <button className="m-carte" onClick={() => setChoisi(c)}>
-                <span className="m-carte-haut"><strong>{c.client}</strong><span>{xof(c.mise_courante)}</span></span>
-                <span className="muted">{c.numero} · {c.produit}{c.type_cycle === 3 ? ' · libre' : ''}</span>
-                <span className="m-carte-bas">
-                  <span>Reste {c.reste_a_collecter === null ? '—' : xof(c.reste_a_collecter)}</span>
-                  {local ? <span className="m-pastille warn">+{xof(local)} à envoyer</span> : null}
-                </span>
-              </button>
-            </li>
-          )
-        })}
+        {filtres.map((c) => <li key={String(c.id)}><CarteCycle c={c} vue={vue} onClick={() => setChoisi(c)} /></li>)}
       </ul>
       {filtres.length === 0 && <p className="m-centre muted">Aucun cycle.</p>}
-      {choisi && <Saisie cycle={choisi} onFermer={() => setChoisi(null)} onSaisi={(m) => { setChoisi(null); onSaisi(m) }} />}
+      {choisi && <Saisie cycle={choisi} cloturePrevue={vue.clotures.has(String(choisi.id))} onFermer={() => setChoisi(null)} onSaisi={(m) => { setChoisi(null); onSaisi(m) }} />}
     </>
   )
 }
 
-function Saisie({ cycle, onFermer, onSaisi }: { cycle: CycleCollecte; onFermer: () => void; onSaisi: (m: string) => void }) {
+function CarteCycle({ c, vue, onClick }: { c: CycleVue; vue: Vue; onClick: () => void }) {
+  const local = vue.enFile.get(String(c.id))
+  return (
+    <button className="m-carte" onClick={onClick}>
+      <span className="m-carte-haut"><strong>{c.client}</strong><span>{xof(c.mise_courante)}</span></span>
+      <span className="muted">{c.numero} · {c.produit} · type {c.type_cycle}</span>
+      <span className="m-carte-bas">
+        <span>{c.local ? 'À valider' : `Reste ${c.reste_a_collecter === null ? '—' : xof(c.reste_a_collecter)}`}</span>
+        <span>
+          {vue.clotures.has(String(c.id)) && <span className="m-pastille bad">Clôture à valider</span>}
+          {local ? <span className="m-pastille warn">+{xof(local)} à valider</span> : null}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function Saisie({ cycle, cloturePrevue, onFermer, onSaisi }: { cycle: CycleVue; cloturePrevue: boolean; onFermer: () => void; onSaisi: (m: string) => void }) {
   const [montant, setMontant] = useState(String(cycle.mise_courante))
   const [jour, setJour] = useState(aujourdhui())
   const [erreur, setErreur] = useState<string | null>(null)
@@ -231,7 +265,7 @@ function Saisie({ cycle, onFermer, onSaisi }: { cycle: CycleCollecte; onFermer: 
     if (jour > aujourdhui()) return setErreur('La date ne peut pas être dans le futur.')
     setBusy(true)
     try {
-      await enregistrer({ cycle_id: cycle.id, date_collecte: jour, montant_collecte: n, client: cycle.client, cycle: cycle.numero, produit: cycle.produit })
+      await enregistrer('collecte', { cycle: cycle.id, date_collecte: jour, montant_collecte: n }, `Collecte ${xof(n)} — ${cycle.client}`)
       onSaisi(`${xof(n)} enregistré pour ${cycle.client}`)
     } catch {
       setErreur('Impossible d\'écrire sur le téléphone (stockage plein ou bloqué).')
@@ -239,11 +273,19 @@ function Saisie({ cycle, onFermer, onSaisi }: { cycle: CycleCollecte; onFermer: 
     }
   }
 
+  async function cloturer() {
+    if (!window.confirm(`Clôturer le cycle de ${cycle.client} ? La clôture sera validée par l'opérateur.`)) return
+    setBusy(true)
+    await enregistrer('cloture', { cycle: cycle.id }, `Clôture du cycle ${cycle.numero} — ${cycle.client}`)
+    onSaisi(`Clôture de ${cycle.client} enregistrée`)
+  }
+
   return (
     <div className="m-feuille-fond" onClick={onFermer}>
       <form className="m-feuille" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void valider() }}>
         <h2>{cycle.client}</h2>
-        <p className="muted">{cycle.numero} · {cycle.produit} · mise {xof(cycle.mise_courante)}</p>
+        <p className="muted">{cycle.numero} · {cycle.produit} · mise {xof(cycle.mise_courante)} · type {cycle.type_cycle}</p>
+        {cloturePrevue && <p className="m-bandeau warn">Une clôture de ce cycle attend la validation.</p>}
         {erreur && <p className="m-bandeau bad" role="alert">{erreur}</p>}
         <label>Montant collecté (F)
           <input className="input m-montant" inputMode="numeric" pattern="[0-9]*" value={montant} onChange={(e) => setMontant(e.target.value.replace(/\D/g, ''))} autoFocus />
@@ -256,57 +298,179 @@ function Saisie({ cycle, onFermer, onSaisi }: { cycle: CycleCollecte; onFermer: 
         <label>Date de collecte
           <input className="input" type="date" value={jour} max={aujourdhui()} onChange={(e) => setJour(e.target.value)} />
         </label>
-        {jour > cycle.date_limite && <p className="m-bandeau warn">Après la fin du cycle ({fdate(cycle.date_limite)}) : le serveur la refusera.</p>}
+        {jour > cycle.date_limite && <p className="m-bandeau warn">Après la fin du cycle ({fdate(cycle.date_limite)}) : l'opérateur ne pourra pas la valider.</p>}
         <div className="m-actions">
           <button type="button" className="btn m-gros" onClick={onFermer}>Annuler</button>
           <button className="btn btn-primary m-gros" disabled={busy}>Enregistrer</button>
+        </div>
+        {!cloturePrevue && <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void cloturer()}>Clôturer ce cycle</button>}
+      </form>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------ clients, nouveau client, nouveau cycle
+function Clients({ vue, t, onSaisi }: { vue: Vue; t: Tournee; onSaisi: (m: string) => void }) {
+  const [q, setQ] = useState('')
+  const [nouveau, setNouveau] = useState(false)
+  const [choisi, setChoisi] = useState<ClientVue | null>(null)
+  const filtres = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return vue.clients.filter((c) => !s || c.nom.toLowerCase().includes(s) || (c.numero ?? '').toLowerCase().includes(s) || (c.telephone ?? '').includes(s))
+  }, [vue.clients, q])
+  return (
+    <>
+      <div className="m-recherche">
+        <input className="input" type="search" placeholder="Nom, numéro ou téléphone" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn btn-primary" onClick={() => setNouveau(true)}>+ Client</button>
+      </div>
+      <p className="muted m-compte">{filtres.length} client(s) de votre zone</p>
+      <ul className="m-liste">
+        {filtres.map((c) => {
+          const n = vue.cycles.filter((x) => x.client_id === c.id).length
+          return (
+            <li key={String(c.id)}>
+              <button className="m-carte" onClick={() => setChoisi(c)}>
+                <span className="m-carte-haut"><strong>{c.nom}</strong>{c.local && <span className="m-pastille warn">Nouveau</span>}</span>
+                <span className="muted">{c.numero ?? 'Numéro attribué à la validation'}{c.telephone ? ` · ${c.telephone}` : ''}</span>
+                <span className="muted">{n} cycle(s) en cours</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      {nouveau && <NouveauClient zones={t.zones} onFermer={() => setNouveau(false)} onFait={(m) => { setNouveau(false); onSaisi(m) }} />}
+      {choisi && <FicheClient client={choisi} vue={vue} produits={t.produits} onFermer={() => setChoisi(null)} onSaisi={(m) => { setChoisi(null); onSaisi(m) }} />}
+    </>
+  )
+}
+
+function NouveauClient({ zones, onFermer, onFait }: { zones: Tournee['zones']; onFermer: () => void; onFait: (m: string) => void }) {
+  const [nom, setNom] = useState('')
+  const [tel, setTel] = useState('')
+  const [zone, setZone] = useState(String(zones[0]?.id ?? ''))
+  const [erreur, setErreur] = useState<string | null>(null)
+  async function valider() {
+    if (nom.trim().length < 2) return setErreur('Saisissez le nom du client.')
+    await enregistrer('client', { nom: nom.trim(), telephone: tel.trim() || null, zone_id: Number(zone) }, `Nouveau client — ${nom.trim()}`)
+    onFait(`Client ${nom.trim()} enregistré`)
+  }
+  return (
+    <div className="m-feuille-fond" onClick={onFermer}>
+      <form className="m-feuille" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void valider() }}>
+        <h2>Nouveau client</h2>
+        {erreur && <p className="m-bandeau bad" role="alert">{erreur}</p>}
+        <label>Nom et prénoms<input className="input" value={nom} onChange={(e) => setNom(e.target.value)} autoFocus /></label>
+        <label>Téléphone<input className="input" type="tel" inputMode="tel" value={tel} onChange={(e) => setTel(e.target.value)} /></label>
+        {zones.length > 1 && (
+          <label>Zone<select className="input" value={zone} onChange={(e) => setZone(e.target.value)}>{zones.map((z) => <option key={z.id} value={z.id}>{z.code} — {z.libelle}</option>)}</select></label>
+        )}
+        <p className="muted">Le numéro du client est attribué quand l'opérateur valide.</p>
+        <div className="m-actions">
+          <button type="button" className="btn m-gros" onClick={onFermer}>Annuler</button>
+          <button className="btn btn-primary m-gros">Enregistrer</button>
         </div>
       </form>
     </div>
   )
 }
 
-// ------------------------------------------------------------------ file d'attente et refus
-function Ligne({ o, children }: { o: Operation; children?: React.ReactNode }) {
+function FicheClient({ client, vue, produits, onFermer, onSaisi }: { client: ClientVue; vue: Vue; produits: Produit[]; onFermer: () => void; onSaisi: (m: string) => void }) {
+  const [cycle, setCycle] = useState(false)
+  const [saisie, setSaisie] = useState<CycleVue | null>(null)
+  const siens = vue.cycles.filter((c) => c.client_id === client.id)
+  if (cycle) return <NouveauCycle client={client} produits={produits} onFermer={() => setCycle(false)} onFait={onSaisi} />
+  if (saisie) return <Saisie cycle={saisie} cloturePrevue={vue.clotures.has(String(saisie.id))} onFermer={() => setSaisie(null)} onSaisi={onSaisi} />
   return (
-    <li className="m-op">
-      <span className="m-carte-haut"><strong>{o.client}</strong><span>{xof(o.montant_collecte)}</span></span>
-      <span className="muted">{o.cycle} · {o.produit} · collecte du {fdate(o.date_collecte)}</span>
-      {children}
-    </li>
+    <div className="m-feuille-fond" onClick={onFermer}>
+      <div className="m-feuille" onClick={(e) => e.stopPropagation()}>
+        <h2>{client.nom}</h2>
+        <p className="muted">{client.numero ?? 'Numéro attribué à la validation'}{client.telephone ? ` · ${client.telephone}` : ''}</p>
+        <button className="btn btn-primary m-gros" onClick={() => setCycle(true)}>Ouvrir un nouveau cycle</button>
+        <p className="muted">Cycles en cours</p>
+        <ul className="m-liste">
+          {siens.map((c) => <li key={String(c.id)}><CarteCycle c={c} vue={vue} onClick={() => setSaisie(c)} /></li>)}
+        </ul>
+        {siens.length === 0 && <p className="muted">Aucun cycle en cours.</p>}
+        <button className="btn m-gros" onClick={onFermer}>Fermer</button>
+      </div>
+    </div>
   )
 }
 
-function Envoi({ ops }: { ops: Operation[] }) {
-  if (ops.length === 0) return <p className="m-centre muted">Tout est synchronisé.</p>
+function NouveauCycle({ client, produits, onFermer, onFait }: { client: ClientVue; produits: Produit[]; onFermer: () => void; onFait: (m: string) => void }) {
+  const [produit, setProduit] = useState(String(produits[0]?.id ?? ''))
+  const prod = produits.find((p) => String(p.id) === produit)
+  const [type, setType] = useState('')
+  const [mise, setMise] = useState('')
+  const [debut, setDebut] = useState(aujourdhui())
+  const [fin, setFin] = useState(decaler(aujourdhui(), 30))
+  const [erreur, setErreur] = useState<string | null>(null)
+  const typeEffectif = prod?.type_cycle ? String(prod.type_cycle) : type
+  async function valider() {
+    const m = Number(mise)
+    if (!prod) return setErreur('Choisissez un produit.')
+    if (!typeEffectif) return setErreur('Choisissez le type de cycle.')
+    if (!Number.isInteger(m) || m <= 0) return setErreur('Saisissez une mise entière positive.')
+    if (fin < debut) return setErreur('La fin ne peut pas précéder le début.')
+    await enregistrer('cycle', { client: client.id, produit_id: prod.id, mise: m, date_debut: debut, date_fin: fin, ...(prod.type_cycle ? {} : { type_cycle: Number(type) }) },
+      `Nouveau cycle ${prod.code} type ${typeEffectif} — ${client.nom}`)
+    onFait(`Cycle de ${client.nom} enregistré`)
+  }
   return (
-    <ul className="m-liste">
-      {ops.map((o) => (
-        <Ligne key={o.cle} o={o}>
-          <span className="m-carte-bas">
-            <span className="muted">Saisi à {new Date(o.cree_le).toLocaleTimeString('fr-FR', { timeStyle: 'short' })}</span>
-            <button className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Annuler cette saisie ?')) void retirer(o.cle) }}>Annuler</button>
-          </span>
-        </Ligne>
-      ))}
-    </ul>
+    <div className="m-feuille-fond" onClick={onFermer}>
+      <form className="m-feuille" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void valider() }}>
+        <h2>Nouveau cycle</h2>
+        <p className="muted">{client.nom}</p>
+        {erreur && <p className="m-bandeau bad" role="alert">{erreur}</p>}
+        <label>Produit<select className="input" value={produit} onChange={(e) => setProduit(e.target.value)}>{produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle}</option>)}</select></label>
+        <label>Type de cycle
+          <select className="input" value={typeEffectif} disabled={!!prod?.type_cycle} onChange={(e) => setType(e.target.value)}>
+            <option value="">— choisir —</option>
+            <option value="1">Type 1 — mise fixe</option>
+            <option value="2">Type 2 — mise modifiable</option>
+            <option value="3">Type 3 — mise finale calculée</option>
+          </select>
+        </label>
+        {prod?.type_cycle ? <p className="muted">Type imposé par le produit.</p> : <p className="muted">Libre à chaque cycle.</p>}
+        <label>Mise (F)<input className="input" inputMode="numeric" pattern="[0-9]*" value={mise} onChange={(e) => setMise(e.target.value.replace(/\D/g, ''))} /></label>
+        <label>Début<input className="input" type="date" value={debut} onChange={(e) => setDebut(e.target.value)} /></label>
+        <label>Fin<input className="input" type="date" value={fin} onChange={(e) => setFin(e.target.value)} /></label>
+        <div className="m-actions">
+          <button type="button" className="btn m-gros" onClick={onFermer}>Annuler</button>
+          <button className="btn btn-primary m-gros">Enregistrer</button>
+        </div>
+      </form>
+    </div>
   )
 }
 
-function Refus({ ops }: { ops: Operation[] }) {
-  if (ops.length === 0) return <p className="m-centre muted">Aucune saisie refusée.</p>
+// ------------------------------------------------------------------ suivi : état de chaque opération
+function Suivi({ ops }: { ops: Operation[] }) {
+  const liste = [...ops].sort((a, b) => b.cree_le - a.cree_le)
+  if (liste.length === 0) return <p className="m-centre muted">Aucune opération en cours.</p>
   return (
     <ul className="m-liste">
-      {ops.map((o) => (
-        <Ligne key={o.cle} o={o}>
-          <span className="m-bandeau bad"><strong>{libelleCode(o.code)}</strong> — {o.motif}</span>
-          <span className="muted">{CODES[o.code ?? '']?.conseil}</span>
-          <span className="m-actions">
-            <button className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Abandonner cette saisie ? Elle ne sera pas enregistrée.')) void retirer(o.cle) }}>Abandonner</button>
-            <button className="btn btn-sm btn-primary" onClick={() => void reessayer(o.cle)}>Réessayer</button>
-          </span>
-        </Ligne>
-      ))}
+      {liste.map((o) => {
+        const e = ETATS[o.etat]
+        const c = CODES[o.code ?? '']
+        return (
+          <li key={o.cle} className="m-op">
+            <span className="m-carte-haut"><strong>{o.libelle}</strong><span className={`m-pastille ${e.ton}`}>{e.lib}</span></span>
+            <span className="muted">Saisi le {new Date(o.cree_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+            {(o.etat === 'rejetee' || o.etat === 'refusee') && (
+              <span className="m-bandeau bad"><strong>{c?.titre ?? 'Refusée'}</strong>{o.motif ? ` — ${o.motif}` : ''}</span>
+            )}
+            {(o.etat === 'rejetee' || o.etat === 'refusee') && c && <span className="muted">{c.conseil}</span>}
+            <span className="m-actions">
+              {o.etat === 'attente' && <button className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Annuler cette saisie ?')) void retirer(o.cle) }}>Annuler</button>}
+              {o.etat === 'refusee' && <button className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Abandonner cette saisie ? Elle ne sera pas enregistrée.')) void retirer(o.cle) }}>Abandonner</button>}
+              {o.etat === 'refusee' && <button className="btn btn-sm btn-primary" onClick={() => void reessayer(o.cle)}>Réessayer</button>}
+              {(o.etat === 'rejetee' || o.etat === 'validee') && <button className="btn btn-sm" onClick={() => void retirer(o.cle)}>Retirer de la liste</button>}
+            </span>
+          </li>
+        )
+      })}
     </ul>
   )
 }

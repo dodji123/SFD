@@ -47,3 +47,10 @@ main .m-bandeau { margin: 0 0 8px; width: auto; }
 .m-login h1 { margin: 0; color: var(--brand); }
 .m-login .m-bandeau { margin: 0; width: auto; }
 .m-app input, .m-app .input { font-size: 16px; }   /* évite le zoom automatique de iOS */
+.m-pastille.ok { background: var(--ok-soft); color: var(--ok); }
+.m-pastille.info { background: var(--info-soft); color: var(--info); }
+.m-op .m-carte-haut { align-items: flex-start; }
+.m-lignes { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.82rem; max-height: 140px; overflow: auto; padding: 8px; background: var(--surface-2); border-radius: var(--radius); }
+.m-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.m-ecart { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); }
+.m-feuille textarea.input { font: inherit; }

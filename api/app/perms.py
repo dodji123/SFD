@@ -31,6 +31,7 @@ PERMS: dict[str, set[str]] = {
     "collecte:read": {ADMIN, DIR, CHEF, CAIS, AGENT, COLL, AUD},
     "collecte:write": {ADMIN, CHEF, AGENT, COLL},
     "collecte:admin": {ADMIN, CHEF},
+    "collecte:valider": {ADMIN, CHEF, CAIS},     # valide ou rejette les synchronisations de l'application mobile
     "cycle:prolongation-decider": {ADMIN, DIR, CHEF},
     "livret:controler": {ADMIN, DIR, CHEF, COORD},
     "livret:read": {ADMIN, DIR, CHEF, COORD, AUD},

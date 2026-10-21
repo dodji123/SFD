@@ -20,6 +20,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
   ] },
   { titre: 'Tontine et collecte', items: [
     { to: '/collecte', titre: 'Collecte du jour', icone: '💰', perm: 'collecte:read' },
+    { to: '/sync-validation', titre: 'Synchronisations à valider', icone: '📲', perm: 'collecte:valider' },
     { to: '/cycles', titre: 'Cycles de tontine', icone: '🔄', perm: 'collecte:read' },
     { to: '/retraits', titre: 'Retraits et écarts', icone: '↩️', perm: 'collecte:read' },
     { to: '/controle-livrets', titre: 'Contrôle des livrets', icone: '📖', perm: 'livret:read' },

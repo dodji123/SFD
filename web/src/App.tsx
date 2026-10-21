@@ -31,6 +31,7 @@ import EspaceClient from './pages/EspaceClient'
 import Etats from './pages/Etats'
 import Login from './pages/Login'
 import MobileApp from './mobile/MobileApp'
+import SyncValidation from './pages/SyncValidation'
 import { ChangementObligatoire, Reinitialiser } from './pages/MotDePasse'
 import Provisions from './pages/Provisions'
 import Rapports from './pages/Rapports'
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="cycles" element={<Garde perm="collecte:read"><Cycles /></Garde>} />
         <Route path="cycles/:id" element={<Garde perm="collecte:read"><CycleDetail /></Garde>} />
         <Route path="collecte" element={<Garde perm="collecte:read"><Collecte /></Garde>} />
+        <Route path="sync-validation" element={<Garde perm="collecte:valider"><SyncValidation /></Garde>} />
         <Route path="epargne" element={<Garde perm="epargne:read"><Epargne /></Garde>} />
         <Route path="adhesion" element={<Garde perm="epargne:read"><Adhesion /></Garde>} />
         <Route path="liaison" element={<Garde perm="epargne:read"><Liaison /></Garde>} />
