@@ -1,6 +1,6 @@
 import pytest
 
-# Module sous test : type de cycle choisi à la première mise, délai de grâce, prolongation autorisée, suppression tracée
+# Module sous test : type de cycle libre à chaque cycle, délai de grâce, prolongation autorisée, suppression tracée
 # (routers/collecte.py, referentiels.py, admin.py)
 
 
@@ -19,17 +19,16 @@ def _cycle(client, h, base, cle="c1", **kw):
     return client.post("/api/cycles", json=corps, headers=h("chef1"))
 
 
-def test_produit_sans_type_et_type_a_la_premiere_mise(client, h, base):
+def test_produit_sans_type_et_type_libre_a_chaque_cycle(client, h, base):
     assert base["produit"]["type_cycle"] is None
     propose = {"client_id": base["c1"]["id"], "produit_id": base["produit"]["id"]}
     assert client.get("/api/cycles/type-propose", params=propose, headers=h("chef1")).json() == {"type_cycle": None, "impose_par": None}
-    assert _cycle(client, h, base).status_code == 422                                           # première mise : le type est obligatoire
+    assert _cycle(client, h, base).status_code == 422                                           # le type est obligatoire
     ok = _cycle(client, h, base, type_cycle=2)
     assert ok.status_code == 201 and ok.json()["type_cycle"] == 2
-    assert client.get("/api/cycles/type-propose", params=propose, headers=h("chef1")).json() == {"type_cycle": 2, "impose_par": "premiere_mise"}
-    assert _cycle(client, h, base, type_cycle=3, date_debut="2026-11-01", date_fin="2026-11-30").status_code == 422           # le type est fixé
-    suite = _cycle(client, h, base, date_debut="2026-11-01", date_fin="2026-11-30")
-    assert suite.status_code == 201 and suite.json()["type_cycle"] == 2                       # hérité de la première mise
+    assert client.get("/api/cycles/type-propose", params=propose, headers=h("chef1")).json() == {"type_cycle": None, "impose_par": None}   # rien n'est verrouillé
+    suite = _cycle(client, h, base, type_cycle=3, date_debut="2026-11-01", date_fin="2026-11-30")
+    assert suite.status_code == 201 and suite.json()["type_cycle"] == 3                       # un autre type au cycle suivant
     libre = _cycle(client, h, base, cle="c2", type_cycle=3)
     assert libre.status_code == 201 and libre.json()["type_cycle"] == 3 and libre.json()["objectif"] is None                 # un autre client choisit librement
 
@@ -38,7 +37,7 @@ def test_delai_de_grace_et_prolongation(client, h, base):
     pid = base["produit"]["id"]
     assert client.patch(f"/api/produits-epargne/{pid}", json={"delai_grace_jours": 120}, headers=h("chef1")).status_code == 422
     assert client.patch(f"/api/produits-epargne/{pid}", json={"delai_grace_jours": 3}, headers=h("chef1")).json()["delai_grace_jours"] == 3
-    cy = _cycle(client, h, base, cle="c2", date_debut="2026-12-01", date_fin="2026-12-10")      # type 3 hérité de la première mise du client
+    cy = _cycle(client, h, base, cle="c2", type_cycle=3, date_debut="2026-12-01", date_fin="2026-12-10")
     assert cy.status_code == 201, cy.text
     cid = cy.json()["id"]
     assert cy.json()["delai_grace"] == 3 and cy.json()["date_limite"] == "2026-12-13"
@@ -68,7 +67,7 @@ def test_delai_de_grace_et_prolongation(client, h, base):
 
 
 def test_suppression_tracee_et_masquee(client, h, base):
-    cy = _cycle(client, h, base, cle="c1", date_debut="2027-01-01", date_fin="2027-01-31")
+    cy = _cycle(client, h, base, cle="c1", type_cycle=2, date_debut="2027-01-01", date_fin="2027-01-31")
     assert cy.status_code == 201, cy.text
     cid = cy.json()["id"]
     lignes = [{"date_collecte": "2027-01-05", "montant_collecte": 2000, "agent_id": base["agent"]["id"]}, {"date_collecte": "2027-01-06", "montant_collecte": 2000, "agent_id": base["agent"]["id"]}]

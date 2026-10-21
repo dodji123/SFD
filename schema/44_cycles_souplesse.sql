@@ -1,7 +1,7 @@
 -- =====================================================================
 -- 44_cycles_souplesse.sql
 -- Tontine : souplesse de gestion des cycles.
---   * le type de cycle n'est plus porté par le produit : il est choisi à la première mise du client sur le produit
+--   * le type de cycle n'est plus porté par le produit : il est choisi librement à chaque nouveau cycle (un produit peut encore en imposer un)
 --     et reste le même ensuite (les produits existants qui imposent un type continuent de le faire)
 --   * délai de grâce après la date de fin (par produit, sinon paramètre) : la clôture automatique et le refus de
 --     saisie n'interviennent qu'après fin + grâce
@@ -17,14 +17,14 @@ INSERT INTO parametre(cle, valeur, description) VALUES
   ('cycle_prolongation_max_jours', '60', 'Prolongation maximale (jours) accordée en une fois pour un cycle'),
   ('cycle_prolongations_max', '2', 'Nombre maximal de prolongations autorisées pour un même cycle');
 
--- ---------------------------------------------------------------- type de cycle choisi à la première mise
+-- ---------------------------------------------------------------- type de cycle choisi à chaque cycle
 ALTER TABLE produit_epargne DROP CONSTRAINT produit_epargne_check;
 ALTER TABLE produit_epargne ADD CONSTRAINT produit_type_selon_categorie CHECK (categorie = 'collecte' OR type_cycle IS NULL);
 ALTER TABLE produit_epargne ADD COLUMN delai_grace_jours smallint CHECK (delai_grace_jours IS NULL OR delai_grace_jours BETWEEN 0 AND 90);
 
 CREATE OR REPLACE FUNCTION trg_cycle_avant() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE p mf.produit_epargne; c mf.client; v_type smallint;
+DECLARE p mf.produit_epargne; c mf.client;
 BEGIN
   SELECT * INTO p FROM mf.produit_epargne WHERE id = NEW.produit_id;
   IF p.categorie <> 'collecte' THEN
@@ -32,13 +32,6 @@ BEGIN
   END IF;
   IF p.type_cycle IS NOT NULL AND NEW.type_cycle <> p.type_cycle THEN
     RAISE EXCEPTION 'type de cycle % incompatible avec le produit % (type %)', NEW.type_cycle, p.code, p.type_cycle;
-  END IF;
-  -- produit sans type imposé : le type est fixé par la première mise du client sur ce produit
-  IF p.type_cycle IS NULL THEN
-    SELECT type_cycle INTO v_type FROM mf.cycle WHERE client_id = NEW.client_id AND produit_id = NEW.produit_id ORDER BY id LIMIT 1;
-    IF v_type IS NOT NULL AND v_type <> NEW.type_cycle THEN
-      RAISE EXCEPTION 'Le type de cycle de ce client sur le produit % est fixé à sa première mise (type %)', p.code, v_type;
-    END IF;
   END IF;
   SELECT * INTO c FROM mf.client WHERE id = NEW.client_id;
   IF c.agence_id <> NEW.agence_id THEN

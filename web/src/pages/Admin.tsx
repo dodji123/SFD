@@ -157,7 +157,7 @@ function Referentiels() {
         {type === 'collectrice' && <Charge q={colls}>{(r) => <Table rows={r.filter((a) => contient(texte, a.matricule, a.nom))} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
         {type === 'produit' && <Charge q={produits}>{(r) => <Table rows={r.filter((p) => contient(texte, p.code, p.libelle) && (!nature || p.categorie === nature))} cols={[
           { titre: 'Code', render: (p) => p.code }, { titre: 'Libellé', render: (p) => p.libelle },
-          { titre: 'Nature', render: (p) => (p.categorie === 'collecte' ? (p.type_cycle ? `Tontine — type ${p.type_cycle} imposé` : 'Tontine — type choisi à la première mise') : 'Épargne classique') },
+          { titre: 'Nature', render: (p) => (p.categorie === 'collecte' ? (p.type_cycle ? `Tontine — type ${p.type_cycle} imposé` : 'Tontine — type choisi à chaque cycle') : 'Épargne classique') },
           { titre: 'Délai de grâce', num: true, render: (p) => (p.categorie === 'collecte' ? (p.delai_grace_jours === null ? 'paramètre commun' : `${p.delai_grace_jours} j`) : '') },
           { titre: 'Solde minimum', num: true, render: (p) => p.solde_minimum },
           { titre: '', render: (p) => can('ref:write') && p.categorie === 'collecte' && <Button small disabled={busy} onClick={() => changerGrace(p)}>Délai de grâce</Button> },
@@ -188,7 +188,7 @@ function AjoutReferentiel({ type, onClose, onFait }: { type: string; onClose: ()
         <>
           <Field label="Nature"><Select value={f.categorie} onChange={maj('categorie')}><option value="collecte">Tontine (collecte)</option><option value="classique">Épargne classique</option></Select></Field>
           {f.categorie === 'collecte'
-            ? <><Alert tone="info">Le type de cycle (1, 2 ou 3) n'est pas lié au produit : il est choisi à la première mise de chaque client, puis reste le même.</Alert>
+            ? <><Alert tone="info">Le type de cycle (1, 2 ou 3) n'est pas lié au produit : il est choisi à chaque nouveau cycle.</Alert>
               <Field label="Délai de grâce (jours)" hint="Après la date de fin d'un cycle : saisie encore acceptée, clôture automatique différée. Vide : paramètre commun."><Input type="number" min={0} max={90} value={f.grace} onChange={maj('grace')} /></Field></>
             : <Field label="Solde minimum (F)"><Input type="number" min={0} value={f.solde_minimum} onChange={maj('solde_minimum')} /></Field>}
         </>

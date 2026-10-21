@@ -9,13 +9,14 @@ INSERT INTO utilisateur(login,nom,role,agence_id) VALUES ('chef','Chef','chef_ag
 INSERT INTO produit_epargne(code,libelle,categorie) VALUES ('TON','Tontine souple','collecte');
 INSERT INTO produit_epargne(code,libelle,categorie,type_cycle) VALUES ('TON1','Tontine type 1 imposé','collecte',1);
 
--- ===== A. Type de cycle choisi à la première mise =====
+-- ===== A. Type de cycle choisi librement à chaque cycle =====
 SELECT t.refuse('A épargne classique avec un type de cycle', 'INSERT INTO mf.produit_epargne(code,libelle,categorie,type_cycle) VALUES (''CL'',''Classique'',''classique'',1)');
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
   VALUES (1,'CY-1',1,1,2,1000,1000,31000,'2026-10-01','2026-10-31');
 SELECT t.eq('A première mise : type 2 choisi', type_cycle::text, '2') FROM cycle WHERE numero = 'CY-1';
 UPDATE cycle SET statut = 'clos', date_cloture = '2026-10-31', mise_finale = 1000 WHERE numero = 'CY-1';
-SELECT t.refuse('A le type reste celui de la première mise', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''CY-2'',1,1,3,1000,1000,''2026-11-01'',''2026-11-30'')');
+INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,'CY-2',1,1,3,1000,1000,'2027-06-01','2027-06-30');
+SELECT t.eq('A le type n''est pas fixé par la première mise : type 3 accepté', type_cycle::text, '3') FROM cycle WHERE numero = 'CY-2';
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
   VALUES (1,'CY-3',1,1,2,2000,2000,62000,'2026-11-01','2026-11-30');
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin)

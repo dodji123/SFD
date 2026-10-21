@@ -30,7 +30,7 @@
 | Intérêts de l'épargne, frais de tenue de compte | E | Le taux existe, aucun calcul |
 | Dépôts à terme, épargne bloquée, comptes dormants | C | Dépôt de garantie (bloqué, rattachable à un crédit) et dépôt à terme (taux, échéance, déblocage, rupture anticipée avec pénalité) avec pages de saisie et de déblocage. Non couvert : renouvellement automatique, retenue fiscale, comptes dormants, écritures comptables spécifiques |
 | Cycles de tontine (types 1, 2, 3), livret de 31 lignes, changement de mise, clôture | A | Valeurs de calcul à faire valider par le client |
-| Type de cycle choisi à la première mise (non lié au produit), délai de grâce, prolongation de cycle avec autorisation | A | Le type (1, 2, 3) est fixé à la première mise du client sur le produit puis verrouillé ; grâce par produit ou paramètre commun (0 à 90 j) ; prolongation demandée par la saisie, autorisée par un responsable (60 j et 2 prolongations au plus, valeurs paramétrables) |
+| Type de cycle libre à chaque cycle (non lié au produit), délai de grâce, prolongation de cycle avec autorisation | A | Le type (1, 2, 3) se choisit à chaque nouveau cycle, pour tout produit ; grâce par produit ou paramètre commun (0 à 90 j) ; prolongation demandée par la saisie, autorisée par un responsable (60 j et 2 prolongations au plus, valeurs paramétrables) |
 | Suppression d'une opération avec motif obligatoire | A | L'opération disparaît des écrans et des calculs ; auteur, date, motif et contenu d'origine restent dans Administration › Piste d'audit › Opérations supprimées (inaltérable) |
 | Collecte du jour, versement de fin de tournée, écarts des agents, surplus | A | |
 | Retraits de tontine avec écarts, exécution et régularisation | A | |

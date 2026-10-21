@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { Field, Select } from './ui'
 
-/** Type de cycle : choisi à la première mise du client sur le produit, puis verrouillé (GET /api/cycles/type-propose). */
+/** Type de cycle : libre à chaque cycle, sauf si le produit en impose un (GET /api/cycles/type-propose). */
 export function useTypeCycle(clientId: number | null | undefined, produitId: string) {
   const [type, setType] = useState('')
   const [verrou, setVerrou] = useState<string | null>(null)
@@ -19,14 +19,13 @@ export function useTypeCycle(clientId: number | null | undefined, produitId: str
 }
 
 function messageVerrou(par: string | null) {
-  if (par === 'premiere_mise') return 'Verrouillé : type fixé à la première mise de ce client.'
   if (par === 'produit') return 'Verrouillé : type imposé par le produit.'
   return par ? 'Verrouillé.' : null
 }
 
 export function ChampTypeCycle({ t }: { t: ReturnType<typeof useTypeCycle> }) {
   return (
-    <Field label="Type de cycle" hint={messageVerrou(t.verrou) ?? 'Choisi à la première mise : il restera le même pour les prochains cycles de ce client sur ce produit.'}>
+    <Field label="Type de cycle" hint={messageVerrou(t.verrou) ?? 'Choisi pour ce cycle : un même client peut prendre un autre type au cycle suivant, sur n’importe quel produit.'}>
       <Select value={t.type} disabled={t.verrou !== null} onChange={(e) => t.setType(e.target.value)} required={t.verrou === null}>
         <option value="">— choisir —</option>
         <option value="1">Type 1 — mise fixe</option>

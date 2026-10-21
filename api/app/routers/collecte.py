@@ -34,7 +34,7 @@ class CycleIn(BaseModel):
     objectif: int | None = Field(default=None, gt=0)
     nb_lignes_prevues: int | None = Field(default=None, gt=0, le=620)
     numero: str | None = Field(default=None, max_length=25)  # vide : numérotation automatique
-    type_cycle: Literal[1, 2, 3] | None = None   # choisi à la première mise du client sur le produit (ignoré si le produit impose un type)
+    type_cycle: Literal[1, 2, 3] | None = None   # choisi à chaque nouveau cycle (ignoré si le produit impose un type)
 
 
 @router.get("/cycles")
@@ -57,29 +57,23 @@ def lister_cycles(
 
 
 def _type_du_cycle(cur, client_id: int, produit_id: int, type_produit: int | None, demande: int | None) -> int:
-    """Type imposé par le produit, sinon celui de la première mise du client sur ce produit, sinon celui qu'on choisit maintenant."""
+    """Type imposé par le produit, sinon celui qu'on choisit pour ce cycle (libre à chaque cycle)."""
     if type_produit is not None:
         return type_produit
-    premier = one_row(cur, "SELECT type_cycle FROM cycle WHERE client_id = %s AND produit_id = %s ORDER BY id LIMIT 1", (client_id, produit_id))
-    if premier is not None:
-        if demande is not None and demande != premier["type_cycle"]:
-            raise HTTPException(status_code=422, detail=f"Le type de cycle de ce client sur ce produit est fixé à sa première mise (type {premier['type_cycle']})")
-        return premier["type_cycle"]
     if demande is None:
-        raise HTTPException(status_code=422, detail="Première mise du client sur ce produit : choisissez le type de cycle (1, 2 ou 3)")
+        raise HTTPException(status_code=422, detail="Choisissez le type de cycle (1, 2 ou 3)")
     return demande
 
 
 @router.get("/cycles/type-propose")
 def type_propose(client_id: int, produit_id: int, user: User = Depends(require("collecte:read"))):
-    """Type de cycle déjà fixé (par le produit ou par la première mise du client), ou null si c'est une première mise."""
+    """Type de cycle imposé par le produit, ou null : il se choisit alors librement pour chaque cycle."""
     with tx() as cur:
         verifier_agence(cur, user, "client", client_id)
         p = one_row(cur, "SELECT type_cycle FROM produit_epargne WHERE id = %s", (produit_id,))
         if p is None:
             raise HTTPException(status_code=404, detail="Produit introuvable")
-        premier = one_row(cur, "SELECT type_cycle FROM cycle WHERE client_id = %s AND produit_id = %s ORDER BY id LIMIT 1", (client_id, produit_id))
-        return {"type_cycle": p["type_cycle"] or (premier["type_cycle"] if premier else None), "impose_par": "produit" if p["type_cycle"] else ("premiere_mise" if premier else None)}
+        return {"type_cycle": p["type_cycle"], "impose_par": "produit" if p["type_cycle"] else None}
 
 
 @router.post("/cycles", status_code=201)
