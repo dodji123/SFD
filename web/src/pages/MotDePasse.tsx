@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import { useSession } from '../lib/session'
-import { Alert, Button, Field, Input } from '../components/ui'
+import { Alert, Button, Field, Input, MotDePasse } from '../components/ui'
 
 const REGLES = '10 caractères au moins, avec majuscule, minuscule, chiffre et caractère spécial ; différent des 5 derniers mots de passe.'
 
@@ -36,8 +36,8 @@ export function ChangementObligatoire() {
           <p className="muted" style={{ margin: 0 }}>{user?.nom}, votre mot de passe est temporaire : choisissez-en un nouveau avant de continuer.</p>
         </div>
         {erreur && <Alert>{erreur}</Alert>}
-        <Field label="Mot de passe actuel"><Input type="password" value={ancien} onChange={(e) => setAncien(e.target.value)} autoComplete="current-password" autoFocus required /></Field>
-        <Field label="Nouveau mot de passe" hint={REGLES}><Input type="password" value={nouveau} onChange={(e) => setNouveau(e.target.value)} autoComplete="new-password" minLength={10} required /></Field>
+        <Field label="Mot de passe actuel"><MotDePasse value={ancien} onChange={(e) => setAncien(e.target.value)} autoComplete="current-password" autoFocus required /></Field>
+        <Field label="Nouveau mot de passe" hint={REGLES}><MotDePasse value={nouveau} onChange={(e) => setNouveau(e.target.value)} autoComplete="new-password" minLength={10} required /></Field>
         <Field label="Confirmer le nouveau mot de passe"><Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required /></Field>
         <Button variant="primary" type="submit" disabled={busy || !ancien || !nouveau || !confirm}>{busy ? 'Enregistrement…' : 'Enregistrer'}</Button>
         <Button type="button" onClick={logout}>Se déconnecter</Button>

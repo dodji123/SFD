@@ -197,6 +197,17 @@ function injecterId(children: ReactNode, id: string): ReactNode {
 }
 
 export const Input = (p: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) => <input className="input" {...p} />
+
+/** Champ de mot de passe avec bouton pour afficher / masquer la saisie. */
+export function MotDePasse(p: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <div className="mdp-champ">
+      <input className="input" {...p} type={visible ? 'text' : 'password'} />
+      <button type="button" className="mdp-voir" onClick={() => setVisible((v) => !v)} aria-pressed={visible} aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>{visible ? 'Masquer' : 'Voir'}</button>
+    </div>
+  )
+}
 export const Select = (p: SelectHTMLAttributes<HTMLSelectElement>) => <select className="input" {...p} />
 
 export function Button({ variant, small, className, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'danger'; small?: boolean }) {

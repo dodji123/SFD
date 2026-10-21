@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import { useSession } from '../lib/session'
-import { Alert, Button, Field, Input } from '../components/ui'
+import { Alert, Button, Field, Input, MotDePasse } from '../components/ui'
 
 export default function Login() {
   const { login } = useSession()
@@ -55,7 +55,7 @@ export default function Login() {
           </>
         ) : (
           <>
-            <Field label="Mot de passe"><Input type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></Field>
+            <Field label="Mot de passe"><MotDePasse value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></Field>
             <Button variant="primary" type="submit" disabled={busy || !l || !p}>{busy ? 'Connexion…' : 'Se connecter'}</Button>
             <Button type="button" onClick={() => { setOubli(true); setInfo(null); setErreur(null) }}>Mot de passe oublié ?</Button>
           </>

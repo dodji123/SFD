@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../lib/api'
 import { aujourdhui, date as fdate, xof } from '../lib/format'
 import { useSession } from '../lib/session'
+import { MotDePasse } from '../components/ui'
 import { ChangementObligatoire } from '../pages/MotDePasse'
 import {
   demarrerSynchro, ecrireCache, enregistrer, lireCache, marquerReseau, reessayer, retirer, sessionRetablie, synchroniser, useFile, viderCache,
@@ -72,7 +73,7 @@ function Connexion() {
         )}
         {erreur && <p className="m-bandeau bad" role="alert">{erreur}</p>}
         <label>Identifiant<input className="input" value={l} onChange={(e) => setL(e.target.value)} autoComplete="username" autoCapitalize="none" required /></label>
-        <label>Mot de passe<input className="input" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></label>
+        <label>Mot de passe<MotDePasse value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></label>
         <button className="btn btn-primary m-gros" disabled={busy || !l || !p}>{busy ? 'Connexion…' : 'Se connecter'}</button>
         <p className="muted">La connexion demande le réseau.</p>
       </form>

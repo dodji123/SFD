@@ -207,3 +207,7 @@ table.t th.num, table.t td.num { text-align: right; }
   .user-chip { margin-left: auto; }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+
+.mdp-champ { position: relative; display: flex; }
+.mdp-champ .input { width: 100%; padding-right: 76px; }
+.mdp-voir { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--brand, #0f766e); font: inherit; font-size: 0.85rem; cursor: pointer; padding: 4px 8px; }
