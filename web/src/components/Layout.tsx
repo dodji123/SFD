@@ -22,6 +22,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/collecte', titre: 'Collecte du jour', icone: '💰', perm: 'collecte:read' },
     { to: '/cycles', titre: 'Cycles de tontine', icone: '🔄', perm: 'collecte:read' },
     { to: '/retraits', titre: 'Retraits et écarts', icone: '↩️', perm: 'collecte:read' },
+    { to: '/controle-livrets', titre: 'Contrôle des livrets', icone: '📖', perm: 'livret:read' },
     { to: '/liaison', titre: 'Tontine ↔ épargne', icone: '🔗', perm: 'epargne:read' },
   ] },
   { titre: 'Épargne', items: [

@@ -12,6 +12,7 @@ import Comites from './pages/Comites'
 import Recouvrement from './pages/Recouvrement'
 import Grh from './pages/Grh'
 import ApplicationMobile from './pages/ApplicationMobile'
+import ControleLivrets from './pages/ControleLivrets'
 import ProcurationsCheques from './pages/ProcurationsCheques'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="conformite" element={<Garde perm="lbc:read"><Conformite /></Garde>} />
         <Route path="grh" element={<Garde perm={['grh:read', 'grh:self']}><Grh /></Garde>} />
         <Route path="application-mobile" element={<Garde perm="collecte:read"><ApplicationMobile /></Garde>} />
+        <Route path="controle-livrets" element={<Garde perm="livret:read"><ControleLivrets /></Garde>} />
         <Route path="rh" element={<Garde perm="rh:read"><Rh /></Garde>} />
         <Route path="admin" element={<Garde perm={['users:manage', 'params:read', 'audit:read', 'ref:write']}><Admin /></Garde>} />
         <Route path="*" element={<Navigate to="/" replace />} />
