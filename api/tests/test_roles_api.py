@@ -31,7 +31,8 @@ def test_matrice_et_roles(client, h, base):
     m = client.get("/api/roles/matrice", headers=h("chef1")).json()
     gerer = next(p for p in m["permissions"] if p["code"] == "roles:gerer")
     assert gerer["roles"] == ["admin"]
-    assert len(m["permissions"]) == 99
+    from app.perms import PERMS
+    assert len(m["permissions"]) == len(PERMS)
 
 
 def test_garde_fous_administrateur_et_roles(client, h, base):

@@ -115,6 +115,11 @@ PERMS: dict[str, set[str]] = {
     "roles:gerer": {ADMIN},
     "roles:demander": {ADMIN, DIR, CHEF},
     "roles:valider": {ADMIN, DIR},
+    # immobilisations et maintenance (module 52)
+    "immobilisation:read": {ADMIN, DIR, CHEF, COMPTA, AUD, COORD},
+    "immobilisation:gerer": {ADMIN, DIR, CHEF, COMPTA},
+    "maintenance:signaler": {ADMIN, DIR, CHEF, CAIS, COMPTA, COORD},
+    "maintenance:gerer": {ADMIN, DIR, CHEF, COMPTA},
 }
 
 # Le coordinateur de réseau a les droits du directeur, dans son réseau seulement (le cloisonnement vient du périmètre).

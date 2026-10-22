@@ -12683,7 +12683,7 @@ DECLARE i mf.immobilisation; v_tiers text; v_op bigint;
 BEGIN
   SELECT * INTO i FROM mf.immobilisation WHERE id = NEW.immobilisation_id;
   IF TG_OP = 'INSERT' OR NEW.statut IS DISTINCT FROM OLD.statut THEN
-    IF NEW.statut = 'en_cours' AND i.statut = 'en_service' THEN
+    IF NEW.statut = 'en_cours' AND i.statut IN ('en_service','hors_service') THEN
       UPDATE mf.immobilisation SET statut = 'en_maintenance' WHERE id = i.id;
     ELSIF NEW.statut IN ('terminee','annulee') AND i.statut IN ('en_maintenance','hors_service')
           AND NOT EXISTS (SELECT 1 FROM mf.intervention WHERE immobilisation_id = i.id AND id <> NEW.id AND statut = 'en_cours') THEN
@@ -13484,3 +13484,41 @@ INSERT INTO droit_role(role_code, perm) VALUES
   ('admin', 'versement:write'),
   ('caissier', 'versement:write'),
   ('chef_agence', 'versement:write');
+
+-- =====================================================================
+-- MODULE 54_permissions_immobilisations.sql
+-- =====================================================================
+-- =====================================================================
+-- 54_permissions_immobilisations.sql
+-- Permissions des immobilisations et de la maintenance (module 52), enregistrées dans la matrice de droits (module 53).
+-- Dépend de : 53 (permission, droit_role).
+-- =====================================================================
+SET search_path = mf, public;
+INSERT INTO permission(code, categorie) VALUES
+  ('immobilisation:read', 'immobilisation'),
+  ('immobilisation:gerer', 'immobilisation'),
+  ('maintenance:signaler', 'maintenance'),
+  ('maintenance:gerer', 'maintenance');
+INSERT INTO droit_role(role_code, perm) VALUES
+  ('admin', 'immobilisation:read'),
+  ('auditeur', 'immobilisation:read'),
+  ('chef_agence', 'immobilisation:read'),
+  ('comptable', 'immobilisation:read'),
+  ('coordinateur', 'immobilisation:read'),
+  ('directeur', 'immobilisation:read'),
+  ('admin', 'immobilisation:gerer'),
+  ('chef_agence', 'immobilisation:gerer'),
+  ('comptable', 'immobilisation:gerer'),
+  ('coordinateur', 'immobilisation:gerer'),
+  ('directeur', 'immobilisation:gerer'),
+  ('admin', 'maintenance:signaler'),
+  ('caissier', 'maintenance:signaler'),
+  ('chef_agence', 'maintenance:signaler'),
+  ('comptable', 'maintenance:signaler'),
+  ('coordinateur', 'maintenance:signaler'),
+  ('directeur', 'maintenance:signaler'),
+  ('admin', 'maintenance:gerer'),
+  ('chef_agence', 'maintenance:gerer'),
+  ('comptable', 'maintenance:gerer'),
+  ('coordinateur', 'maintenance:gerer'),
+  ('directeur', 'maintenance:gerer');

@@ -18,6 +18,7 @@ import PaiementsMobile from './pages/PaiementsMobile'
 import OperationsCaisse from './pages/OperationsCaisse'
 import ChargesProduits from './pages/ChargesProduits'
 import Roles from './pages/Roles'
+import Immobilisations from './pages/Immobilisations'
 import ProcurationsCheques from './pages/ProcurationsCheques'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="operations" element={<Garde perm="operation:read"><OperationsCaisse /></Garde>} />
         <Route path="charges-produits" element={<Garde perm="operation:read"><ChargesProduits /></Garde>} />
         <Route path="roles" element={<Garde perm="roles:demander"><Roles /></Garde>} />
+        <Route path="immobilisations" element={<Garde perm="immobilisation:read"><Immobilisations /></Garde>} />
         <Route path="rh" element={<Garde perm="rh:read"><Rh /></Garde>} />
         <Route path="admin" element={<Garde perm={['users:manage', 'params:read', 'audit:read', 'ref:write']}><Admin /></Garde>} />
         <Route path="*" element={<Navigate to="/" replace />} />

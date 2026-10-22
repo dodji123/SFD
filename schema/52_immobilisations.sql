@@ -289,7 +289,7 @@ DECLARE i mf.immobilisation; v_tiers text; v_op bigint;
 BEGIN
   SELECT * INTO i FROM mf.immobilisation WHERE id = NEW.immobilisation_id;
   IF TG_OP = 'INSERT' OR NEW.statut IS DISTINCT FROM OLD.statut THEN
-    IF NEW.statut = 'en_cours' AND i.statut = 'en_service' THEN
+    IF NEW.statut = 'en_cours' AND i.statut IN ('en_service','hors_service') THEN
       UPDATE mf.immobilisation SET statut = 'en_maintenance' WHERE id = i.id;
     ELSIF NEW.statut IN ('terminee','annulee') AND i.statut IN ('en_maintenance','hors_service')
           AND NOT EXISTS (SELECT 1 FROM mf.intervention WHERE immobilisation_id = i.id AND id <> NEW.id AND statut = 'en_cours') THEN
