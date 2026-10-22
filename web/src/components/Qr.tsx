@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { Button, FormModal, Field, Input } from './ui'
 
-/** Contenu des QR codes générés par le système : `SFD|CY|<numéro de cycle>` ou `SFD|CL|<numéro de client>`. */
-export const contenuQr = (nature: 'CY' | 'CL', numero: string) => `SFD|${nature}|${numero}`
+/** Contenu des QR codes générés par le système : `SFD|CY|<numéro de cycle>`, `SFD|CL|<numéro de client>` ou `SFD|CA|<numéro de carnet>`. */
+export const contenuQr = (nature: 'CY' | 'CL' | 'CA', numero: string) => `SFD|${nature}|${numero}`
 
 /** Décode le texte d'un QR du système ; un texte libre (numéro saisi à la main) est renvoyé tel quel. */
-export function lireQr(texte: string): { nature: 'CY' | 'CL' | null; numero: string } {
-  const m = /^SFD\|(CY|CL)\|(.+)$/.exec(texte.trim())
-  return m ? { nature: m[1] as 'CY' | 'CL', numero: m[2] } : { nature: null, numero: texte.trim() }
+export function lireQr(texte: string): { nature: 'CY' | 'CL' | 'CA' | null; numero: string } {
+  const m = /^SFD\|(CY|CL|CA)\|(.+)$/.exec(texte.trim())
+  return m ? { nature: m[1] as 'CY' | 'CL' | 'CA', numero: m[2] } : { nature: null, numero: texte.trim() }
 }
 
 /** QR code généré localement (aucune donnée n'est envoyée à un service externe). */

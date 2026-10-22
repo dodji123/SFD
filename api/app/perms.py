@@ -36,6 +36,8 @@ PERMS: dict[str, set[str]] = {
     "livret:controler": {ADMIN, DIR, CHEF, COORD},
     "livret:read": {ADMIN, DIR, CHEF, COORD, AUD},
     "livret:valider": {ADMIN, DIR, CHEF},
+    "carnet:read": {ADMIN, DIR, CHEF, CAIS, COORD, AUD},
+    "carnet:write": {ADMIN, DIR, CHEF},
     "versement:write": {ADMIN, CHEF, CAIS},
     "retrait:request": {ADMIN, CHEF, CAIS, AGENT, COLL},
     "retrait:ecart": {ADMIN, DIR, CHEF},
