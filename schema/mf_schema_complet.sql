@@ -12907,8 +12907,10 @@ BEGIN
     SELECT * INTO r FROM mf.role_droit WHERE code = NEW.role_code;
     IF r.code IS NULL OR NOT r.actif THEN RAISE EXCEPTION 'Rôle inconnu ou inactif'; END IF;
     IF u.role::text = NEW.role_code THEN RAISE EXCEPTION 'L''utilisateur a déjà ce rôle de base'; END IF;
-    IF u.agence_id IS NOT NULL AND u.agence_id <> NEW.agence_id THEN
-      RAISE EXCEPTION 'Une affectation ne peut viser qu''une agence de l''utilisateur (agence de base : %)', u.agence_id;
+    -- une affectation a le périmètre d'une seule agence : elle ne vaut que pour une personne rattachée à cette agence
+    IF u.agence_id IS NULL THEN RAISE EXCEPTION 'Une affectation temporaire ne concerne qu''une personne rattachée à une agence'; END IF;
+    IF u.agence_id <> NEW.agence_id THEN
+      RAISE EXCEPTION 'Une affectation ne peut viser que l''agence de l''utilisateur (agence de base : %)', u.agence_id;
     END IF;
     IF NEW.date_debut < current_date THEN RAISE EXCEPTION 'La date de début ne peut être dans le passé'; END IF;
     NEW.statut := 'demandee';
@@ -12962,7 +12964,7 @@ LANGUAGE sql STABLE AS $$
     SELECT u.role::text FROM mf.utilisateur u WHERE u.id = p_utilisateur AND u.actif
     UNION
     SELECT a.role_code FROM mf.affectation_role a
-     JOIN mf.utilisateur u ON u.id = a.utilisateur_id AND u.actif AND (u.agence_id IS NULL OR u.agence_id = a.agence_id)
+     JOIN mf.utilisateur u ON u.id = a.utilisateur_id AND u.actif AND u.agence_id = a.agence_id
      WHERE a.utilisateur_id = p_utilisateur AND a.statut = 'active' AND p_date BETWEEN a.date_debut AND a.date_fin)
 $$;
 
