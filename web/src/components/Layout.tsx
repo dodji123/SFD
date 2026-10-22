@@ -23,6 +23,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/sync-validation', titre: 'Synchronisations à valider', icone: '📲', perm: 'collecte:valider' },
     { to: '/cycles', titre: 'Cycles de tontine', icone: '🔄', perm: 'collecte:read' },
     { to: '/retraits', titre: 'Retraits et écarts', icone: '↩️', perm: 'collecte:read' },
+    { to: '/paiements-mobile', titre: 'Mobile money et demandes', icone: '📲', perm: 'paiement-mobile:read' },
     { to: '/carnets', titre: 'Carnets et stock', icone: '📦', perm: 'carnet:read' },
     { to: '/controle-livrets', titre: 'Contrôle des livrets', icone: '📖', perm: 'livret:read' },
     { to: '/liaison', titre: 'Tontine ↔ épargne', icone: '🔗', perm: 'epargne:read' },

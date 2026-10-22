@@ -24,7 +24,7 @@ INSERT INTO participation_formation(session_id,employe_id) SELECT s.id, e.id FRO
 SELECT t.refuse('A présence d''une session à venir', 'UPDATE mf.participation_formation SET statut = ''present'' WHERE session_id = (SELECT id FROM mf.session_formation WHERE date_debut > current_date)');
 SELECT t.eq('A heures et validations par employé', formations_validees || '/' || heures_suivies, '1/8.0') FROM v_formation_employe WHERE matricule = 'E2';
 -- congé approuvé pendant la session
-INSERT INTO conge(employe_id,type,date_debut,date_fin,statut,decide_par) VALUES ((SELECT id FROM employe WHERE matricule='E3'),'annuel', current_date + 30, current_date + 31, 'approuve', (SELECT id FROM utilisateur WHERE login='chef'));
+INSERT INTO conge(employe_id,type,date_debut,date_fin,statut,decide_par) VALUES ((SELECT id FROM employe WHERE matricule='E3'),'annuel', current_date + 30, current_date + 37, 'approuve', (SELECT id FROM utilisateur WHERE login='chef'));
 SELECT t.refuse('A inscription pendant un congé approuvé', 'INSERT INTO mf.participation_formation(session_id,employe_id) SELECT s.id, e.id FROM mf.session_formation s, mf.employe e WHERE s.date_debut > current_date AND e.matricule = ''E3''');
 
 -- ===== B. Évaluation =====

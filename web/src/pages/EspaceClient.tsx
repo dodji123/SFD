@@ -208,10 +208,25 @@ function Comptes({ onExpire }: { onExpire: () => void }) {
   )
 }
 
+interface PaiementMobile { reference: string; cycle: string; produit: string; operateur: string; operateur_libelle: string; montant: number; statut: string; motif: string | null; cree_le: string; expire_le: string }
+interface LigneSuivi extends Ligne { origine: string }
+interface Suivi {
+  id: number; numero: string; statut: string; type_cycle: number; nb_lignes: number; montant_collecte: number; reste_a_collecter: number | null
+  date_debut: string; date_fin: string; date_limite: string; nb_lignes_prevues: number; objectif: number | null; mise_courante: number; produit: string; produit_libelle: string
+  lignes: LigneSuivi[]; paiements: PaiementMobile[]; progression: number | null
+  demande_retrait: { id: number; statut: string; canal: string; cree_le: string; commentaire: string | null } | null
+  retrait: { statut: string; montant: number; date_demande: string } | null
+}
+interface Operateurs { mode: string; operateurs: { code: string; libelle: string }[] }
+
+const LIB_ORIGINE: Record<string, string> = { collecte: 'Collecte par l’agent', virement: 'Virement depuis l’épargne', mobile: 'Mobile money' }
+const LIB_PAIEMENT: Record<string, string> = { initie: 'En attente de confirmation', reussi: 'Réussi', echoue: 'Échoué', expire: 'Expiré', a_rembourser: 'À rembourser', rembourse: 'Remboursé' }
+const LIB_DEMANDE: Record<string, string> = { en_attente: 'En attente d’examen par l’agence', acceptee: 'Acceptée', refusee: 'Refusée', annulee: 'Annulée' }
+const LIB_RETRAIT: Record<string, string> = { demande: 'Retrait demandé', ecart_en_traitement: 'Retrait en cours de traitement', fonds_disponibles: 'Fonds disponibles à l’agence', execute: 'Retrait payé' }
+
 function Tontine({ onExpire }: { onExpire: () => void }) {
   const { d, err } = useDonnees<Cycle[]>('/api/espace/cycles', onExpire)
   const [ouvert, setOuvert] = useState<number | null>(null)
-  const carnet = useDonnees<Ligne[]>(ouvert ? `/api/espace/cycles/${ouvert}/carnet` : null, onExpire)
   if (err) return <div className="alert bad">{err}</div>
   if (!d) return <p>Chargement…</p>
   if (d.length === 0) return <p className="muted">Aucun cycle de tontine.</p>
@@ -221,15 +236,147 @@ function Tontine({ onExpire }: { onExpire: () => void }) {
         <div key={c.id} className="card" style={{ padding: 12 }}>
           <div className="actions" style={{ justifyContent: 'space-between' }}><strong>Cycle {c.numero}</strong><span className="muted">{c.statut === 'en_cours' ? 'En cours' : c.statut === 'clos' ? 'Clos' : 'Retiré'}</span></div>
           <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{xof(c.montant_collecte)}</div>
-          <button className="btn" onClick={() => setOuvert(ouvert === c.id ? null : c.id)}>{ouvert === c.id ? 'Masquer mon carnet' : 'Voir mon carnet'}</button>
-          {ouvert === c.id && carnet.d && (
-            <table className="t" style={{ marginTop: 8 }}><tbody>
-              {carnet.d.map((l, i) => <tr key={i}><td>Page {l.page} · ligne {l.no_ligne}</td><td>{fdate(l.date_collecte)}</td><td className="num">{xof(l.montant_collecte)}</td></tr>)}
-            </tbody></table>
-          )}
+          <button className="btn" onClick={() => setOuvert(ouvert === c.id ? null : c.id)}>{ouvert === c.id ? 'Masquer' : 'Suivre ma collecte'}</button>
+          {ouvert === c.id && <SuiviCycle id={c.id} onExpire={onExpire} />}
         </div>
       ))}
     </div>
+  )
+}
+
+function SuiviCycle({ id, onExpire }: { id: number; onExpire: () => void }) {
+  const [version, setVersion] = useState(0)
+  const [d, setD] = useState<Suivi | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [mode, setMode] = useState<null | 'verser' | 'retrait'>(null)
+  const recharger = () => setVersion((v) => v + 1)
+  useEffect(() => {
+    let actif = true
+    appel<Suivi>('GET', `/api/espace/cycles/${id}/suivi`).then((x) => actif && setD(x)).catch((e) => { if (!actif) return; if (e instanceof ErreurClient && e.status === 401) onExpire(); else setErr(e.message) })
+    return () => { actif = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, version])
+  if (err) return <div className="alert bad" style={{ marginTop: 8 }}>{err}</div>
+  if (!d) return <p>Chargement…</p>
+  const peutVerser = d.statut === 'en_cours'
+  const peutDemander = d.statut !== 'retire' && !d.retrait && d.demande_retrait?.statut !== 'en_attente'
+  return (
+    <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+      <div className="muted">{d.produit_libelle} · du {fdate(d.date_debut)} au {fdate(d.date_fin)}{d.date_limite !== d.date_fin ? ` (saisie possible jusqu’au ${fdate(d.date_limite)})` : ''}</div>
+      {d.progression !== null && (
+        <div>
+          <div style={{ height: 10, borderRadius: 5, background: 'var(--line, #e5e7eb)', overflow: 'hidden' }}><div style={{ width: `${d.progression}%`, height: '100%', background: 'var(--brand, #0f766e)' }} /></div>
+          <div className="muted">{d.progression} % de l’objectif ({xof(d.objectif ?? 0)})</div>
+        </div>
+      )}
+      <div className="actions" style={{ justifyContent: 'space-between' }}>
+        <span>Collecté : <strong>{xof(d.montant_collecte)}</strong> sur {d.nb_lignes} ligne(s)</span>
+        {d.reste_a_collecter !== null && <span className="muted">Reste : {xof(d.reste_a_collecter)}</span>}
+      </div>
+      {d.retrait && <div className="alert info">{LIB_RETRAIT[d.retrait.statut] ?? d.retrait.statut} — {xof(d.retrait.montant)}</div>}
+      {d.demande_retrait && !d.retrait && (
+        <div className="alert info">Demande de retrait : {LIB_DEMANDE[d.demande_retrait.statut] ?? d.demande_retrait.statut}{d.demande_retrait.commentaire ? ` — ${d.demande_retrait.commentaire}` : ''}
+          {d.demande_retrait.statut === 'en_attente' && <> <button className="btn" onClick={() => void appel('POST', `/api/espace/demandes-retrait/${d.demande_retrait?.id}/annuler`).then(recharger).catch((e) => setErr(e.message))}>Annuler la demande</button></>}
+        </div>
+      )}
+      <div className="actions">
+        {peutVerser && <button className="btn primary" onClick={() => setMode(mode === 'verser' ? null : 'verser')}>Verser par mobile money</button>}
+        {peutDemander && <button className="btn" onClick={() => setMode(mode === 'retrait' ? null : 'retrait')}>Demander un retrait</button>}
+        <button className="btn" onClick={recharger}>Actualiser</button>
+      </div>
+      {mode === 'verser' && <VersementMobile suivi={d} onFait={() => { setMode(null); recharger() }} onExpire={onExpire} />}
+      {mode === 'retrait' && <DemandeRetrait suivi={d} onFait={() => { setMode(null); recharger() }} />}
+      {d.paiements.length > 0 && (
+        <div>
+          <strong>Mes paiements mobile money</strong>
+          <table className="t"><tbody>
+            {d.paiements.map((p) => <tr key={p.reference}><td>{fdate(p.cree_le)}</td><td>{p.operateur_libelle}</td><td className="num">{xof(p.montant)}</td><td>{LIB_PAIEMENT[p.statut] ?? p.statut}</td></tr>)}
+          </tbody></table>
+        </div>
+      )}
+      <div>
+        <strong>Mon carnet</strong>
+        <table className="t"><tbody>
+          {d.lignes.map((l, i) => <tr key={i}><td>Page {l.page} · ligne {l.no_ligne}</td><td>{fdate(l.date_collecte)}</td><td>{LIB_ORIGINE[l.origine] ?? l.origine}</td><td className="num">{xof(l.montant_collecte)}</td></tr>)}
+          {d.lignes.length === 0 && <tr><td className="muted">Aucune ligne pour le moment</td></tr>}
+        </tbody></table>
+      </div>
+    </div>
+  )
+}
+
+type PaiementSuivi = PaiementMobile & { simulation: boolean; message: string | null }
+
+function VersementMobile({ suivi, onFait, onExpire }: { suivi: Suivi; onFait: () => void; onExpire: () => void }) {
+  const ops = useDonnees<Operateurs>('/api/espace/operateurs', onExpire)
+  const { erreur, occupe, lancer } = useEnvoi()
+  const [f, setF] = useState({ operateur: '', telephone: '', montant: suivi.type_cycle === 3 ? '' : String(suivi.mise_courante) })
+  const [cle] = useState(() => `cl-${crypto.randomUUID()}`)
+  const [paiement, setPaiement] = useState<PaiementSuivi | null>(null)
+  const termine = (statut: string) => { if (statut === 'reussi') window.setTimeout(onFait, 1500) }
+  useEffect(() => {
+    if (!paiement || paiement.statut !== 'initie') return
+    const t = window.setInterval(() => {
+      void appel<PaiementMobile>('GET', `/api/espace/paiements/${paiement.reference}`).then((p) => { setPaiement((x) => (x ? { ...x, ...p } : x)); termine(p.statut) }).catch(() => {})
+    }, 3000)
+    return () => window.clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paiement?.reference, paiement?.statut])
+  const simuler = (issue: 'succes' | 'echec') => void lancer(async () => {
+    if (!paiement) return
+    const p = await appel<PaiementMobile>('POST', `/api/espace/paiements/${paiement.reference}/simuler`, { issue })
+    setPaiement({ ...paiement, ...p })
+    termine(p.statut)
+  })
+  if (paiement) {
+    return (
+      <div className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
+        <strong>Paiement {paiement.reference} — {LIB_PAIEMENT[paiement.statut] ?? paiement.statut}</strong>
+        <div>{xof(paiement.montant)} via {paiement.operateur_libelle}</div>
+        {paiement.statut === 'initie' && <div className="alert info">{paiement.message ?? 'Confirmez le paiement sur votre téléphone.'}</div>}
+        {paiement.statut === 'initie' && paiement.simulation && (
+          <div className="actions"><button className="btn primary" disabled={occupe} onClick={() => simuler('succes')}>Simuler : paiement réussi</button><button className="btn" disabled={occupe} onClick={() => simuler('echec')}>Simuler : paiement refusé</button></div>
+        )}
+        {paiement.statut === 'reussi' && <div className="alert info">Versement inscrit sur votre carnet.</div>}
+        {['echoue', 'expire'].includes(paiement.statut) && <div className="alert bad">{paiement.motif ?? 'Le paiement n’a pas abouti.'}</div>}
+        {paiement.statut === 'a_rembourser' && <div className="alert bad">Votre versement n’a pas pu être inscrit au carnet : l’agence va vous le rembourser.</div>}
+        {erreur && <div className="alert bad" role="alert">{erreur}</div>}
+        {paiement.statut !== 'initie' && <button className="btn" onClick={onFait}>Fermer</button>}
+      </div>
+    )
+  }
+  return (
+    <Formulaire titre="Verser par mobile money" erreur={erreur} occupe={occupe} bouton="Payer"
+      onSubmit={() => void lancer(async () => { setPaiement(await appel<PaiementSuivi>('POST', '/api/espace/paiements', { cycle_id: suivi.id, operateur: f.operateur, telephone: f.telephone.replace(/\s/g, ''), montant: Number(f.montant), cle })) })}>
+      {ops.d?.mode === 'simulation' && <div className="alert info">Mode démonstration : aucun argent réel n’est débité.</div>}
+      <label>Opérateur<select className="input" value={f.operateur} onChange={(e) => setF({ ...f, operateur: e.target.value })} required><option value="">— choisir —</option>{ops.d?.operateurs.map((o) => <option key={o.code} value={o.code}>{o.libelle}</option>)}</select></label>
+      <label>Numéro mobile money<input className="input" inputMode="tel" value={f.telephone} onChange={(e) => setF({ ...f, telephone: e.target.value })} placeholder="+228 90 12 34 56" required /></label>
+      <label>Montant (F)<input className="input" type="number" min={suivi.type_cycle === 3 ? 1 : suivi.mise_courante} step={suivi.type_cycle === 3 ? 1 : suivi.mise_courante} value={f.montant} onChange={(e) => setF({ ...f, montant: e.target.value })} required /></label>
+      {suivi.type_cycle !== 3 && <div className="muted">Le montant doit être un multiple de votre mise ({xof(suivi.mise_courante)}).</div>}
+    </Formulaire>
+  )
+}
+
+function DemandeRetrait({ suivi, onFait }: { suivi: Suivi; onFait: () => void }) {
+  const ops = useDonnees<Operateurs>('/api/espace/operateurs', () => {})
+  const { erreur, occupe, lancer } = useEnvoi()
+  const [f, setF] = useState({ canal: 'agence', operateur: '', telephone: '', motif: '' })
+  return (
+    <Formulaire titre="Demander un retrait" erreur={erreur} occupe={occupe} bouton="Envoyer ma demande"
+      onSubmit={() => void lancer(async () => {
+        await appel('POST', '/api/espace/demandes-retrait', { cycle_id: suivi.id, canal: f.canal, operateur: f.canal === 'mobile_money' ? f.operateur : null, telephone: f.canal === 'mobile_money' ? f.telephone.replace(/\s/g, '') : null, motif: f.motif.trim() || null })
+        onFait()
+      })}>
+      <div className="muted">Votre demande est examinée par l’agence : votre cycle n’est clôturé qu’après son accord.{suivi.statut === 'en_cours' ? ' Un retrait avant la fin du cycle le clôture.' : ''}</div>
+      <label>Paiement souhaité<select className="input" value={f.canal} onChange={(e) => setF({ ...f, canal: e.target.value })}><option value="agence">En agence</option><option value="mobile_money">Par mobile money</option></select></label>
+      {f.canal === 'mobile_money' && (
+        <>
+          <label>Opérateur<select className="input" value={f.operateur} onChange={(e) => setF({ ...f, operateur: e.target.value })} required><option value="">— choisir —</option>{ops.d?.operateurs.map((o) => <option key={o.code} value={o.code}>{o.libelle}</option>)}</select></label>
+          <label>Numéro mobile money<input className="input" inputMode="tel" value={f.telephone} onChange={(e) => setF({ ...f, telephone: e.target.value })} required /></label>
+        </>
+      )}
+      <label>Motif (facultatif)<input className="input" value={f.motif} onChange={(e) => setF({ ...f, motif: e.target.value })} maxLength={300} /></label>
+    </Formulaire>
   )
 }
 

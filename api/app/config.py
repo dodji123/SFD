@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     client_max_failed_pin: int = 5
     ip_max_attempts_10min: int = 30      # tentatives de connexion par adresse IP
     sms_mode: str = "console"            # console (développement : le code est journalisé) | disabled
+    # mobile money
+    mobile_money_mode: str = "simulation"  # simulation (démo : l'issue se simule dans l'espace client) | live (passerelle réelle, à brancher) | disabled
+    mobile_money_webhook_secret: str = ""  # secret partagé avec l'opérateur pour signer les notifications (HMAC-SHA256)
 
     def secret(self) -> str:
         """Secret JWT : obligatoire hors développement."""

@@ -39,7 +39,7 @@
 | Commission des collectrices | B | Taux et plafond provisoires |
 | Tontine rotative, à enchères, groupes solidaires avec bureau et parts | E | Le type de client « groupe » existe seulement dans la fiche |
 | Application mobile du collecteur hors ligne, reçus, géolocalisation des collectes | E | L'interface s'adapte aux écrans étroits |
-| Collecte par mobile money | E | |
+| Espace client : collecte par mobile money, suivi de sa collecte, demande de retrait | B | Le client verse sur un cycle en cours (opérateur, numéro, montant multiple de la mise, limites et plafond journalier paramétrables) ; le versement n'est inscrit au livret (origine « mobile ») que lorsque l'opérateur confirme (webhook signé HMAC, idempotent) ; versement reçu sur un cycle devenu clos : à rembourser ; suivi du cycle (progression, lignes, paiements) ; demande de retrait examinée par le personnel (le client ne clôture jamais son cycle). Passerelle : simulation en démo, opérateur réel (T-Money, Flooz, Wave…) à brancher avec vos accès ; écritures comptables des flux mobile money et paiement du retrait par mobile money non couverts |
 | Plafond de fonds détenus par collecteur, alertes de doublons et de retards | E | |
 
 ## Crédit
