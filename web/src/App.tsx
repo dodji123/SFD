@@ -15,6 +15,7 @@ import ApplicationMobile from './pages/ApplicationMobile'
 import ControleLivrets from './pages/ControleLivrets'
 import Carnets from './pages/Carnets'
 import PaiementsMobile from './pages/PaiementsMobile'
+import OperationsCaisse from './pages/OperationsCaisse'
 import ProcurationsCheques from './pages/ProcurationsCheques'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
@@ -85,6 +86,7 @@ export default function App() {
         <Route path="controle-livrets" element={<Garde perm="livret:read"><ControleLivrets /></Garde>} />
         <Route path="carnets" element={<Garde perm="carnet:read"><Carnets /></Garde>} />
         <Route path="paiements-mobile" element={<Garde perm="paiement-mobile:read"><PaiementsMobile /></Garde>} />
+        <Route path="operations" element={<Garde perm="operation:read"><OperationsCaisse /></Garde>} />
         <Route path="rh" element={<Garde perm="rh:read"><Rh /></Garde>} />
         <Route path="admin" element={<Garde perm={['users:manage', 'params:read', 'audit:read', 'ref:write']}><Admin /></Garde>} />
         <Route path="*" element={<Navigate to="/" replace />} />

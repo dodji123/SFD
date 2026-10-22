@@ -41,6 +41,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
   ] },
   { titre: 'Caisse et comptabilité', items: [
     { to: '/caisse', titre: 'Caisse', icone: '🧮', perm: 'caisse:read' },
+    { to: '/operations', titre: 'Opérations et transferts', icone: '🔁', perm: 'operation:read' },
     { to: '/tresorerie', titre: 'Trésorerie', icone: '💵', perm: 'tresorerie:read' },
     { to: '/compta', titre: 'Comptabilité', icone: '📒', perm: 'compta:read' },
   ] },
