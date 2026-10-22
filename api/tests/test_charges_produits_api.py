@@ -30,25 +30,25 @@ def test_tiers_et_droits(client, h, base, agences):
 
 
 def test_budget_realise_synthese_et_alertes(client, h, base, agences):
-    annee = dt.date.today().year
-    mois = dt.date.today().month
+    # mois passé et isolé : les autres tests n'y écrivent pas
+    annee = dt.date.today().year - 1
+    mois = 1
     ligne = {"mois": mois, "code_operation": "facture_loyer_a_payer", "montant_prevu": 90000}
     assert client.put("/api/budget-charges-produits", json={"annee": annee, "lignes": [ligne]}, headers=h("caissier1")).status_code == 403
     assert client.put("/api/budget-charges-produits", json={"annee": annee, "lignes": [{**ligne, "code_operation": "virement_fournisseur"}]}, headers=h("chef1")).status_code == 422   # ni charge ni produit
     assert client.put("/api/budget-charges-produits", json={"annee": annee, "lignes": [ligne]}, headers=h("chef1")).json() == {"enregistrees": 1}
     assert client.put("/api/budget-charges-produits", json={"annee": annee, "lignes": [{**ligne, "montant_prevu": 95000}]}, headers=h("chef1")).status_code == 200   # mise à jour
-    corps = {"code_operation": "facture_loyer_a_payer", "montant": 100000, "reference_justificatif": "LOY-API", "tiers_id": base["tiers"], "agence_id": agences["a1"]}
+    corps = {"code_operation": "facture_loyer_a_payer", "montant": 100000, "reference_justificatif": "LOY-API", "tiers_id": base["tiers"], "agence_id": agences["a1"], "date_operation": f"{annee}-01-15"}
     op = client.post("/api/operations-generales", json=corps, headers=h("chef1"))
     assert op.status_code == 201, op.text
     assert op.json()["tiers_nom"] == "Bailleur Test"
-    client.post("/api/operations-generales", json={"code_operation": "produit_divers", "montant": 20000, "caisse_id": base["caisse"], "tiers": "Vente"}, headers=h("caissier1"))
     b = client.get("/api/budget-charges-produits", params={"annee": annee, "mois": mois}, headers=h("auditeur")).json()
     loyer = next(x for x in b if x["code_operation"] == "facture_loyer_a_payer")
     assert float(loyer["prevu"]) == 95000 and float(loyer["realise"]) == 100000 and loyer["depassement"] is True and float(loyer["taux"]) == 105.3
     assert [x["code_operation"] for x in client.get("/api/budget-charges-produits", params={"annee": annee, "depassement": "true"}, headers=h("chef1")).json()] == ["facture_loyer_a_payer"]
     s = client.get("/api/charges-produits/synthese", params={"annee": annee}, headers=h("chef1")).json()
     mm = next(m for m in s["mensuel"] if m["mois"] == mois)
-    assert mm["charges"] == 100000 and mm["produits"] == 20000 and mm["resultat"] == -80000 and s["total"]["charges_prevues"] == 95000
+    assert mm["charges"] == 100000 and mm["produits"] == 0 and mm["resultat"] == -100000 and s["total"]["charges_prevues"] == 95000
     al = client.get("/api/charges-produits/alertes", headers=h("chef1")).json()
     assert any(a["type"] == "depassement_budget" for a in al)
     assert client.get("/api/charges-produits/alertes", headers=h("chef2")).json() == []                                                     # autre agence

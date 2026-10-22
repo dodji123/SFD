@@ -36,6 +36,8 @@ SELECT t.eq('B opération au-dessus du seuil en attente : hors réalisé', count
 UPDATE operation_generale SET saisi_le = now() - interval '5 days' WHERE cle = 'k-b-3';
 SELECT t.eq('B alerte d''opération en attente depuis trop longtemps', count(*)::text, '1') FROM v_alerte_charge_produit WHERE type = 'operation_a_valider';
 
+SELECT t.refuse('B clé d''opération rejouée par un autre utilisateur', 'SELECT mf.saisir_operation_generale(1::smallint, ''frais_communication'', ''2026-10-20'', 7000, ''Togocel'', NULL, NULL, 1, 2, ''k-b-1'')');
+
 -- ===== C. Opérations récurrentes =====
 SELECT t.refuse('C opération de caisse non récurrente', 'INSERT INTO mf.operation_recurrente(agence_id,code_operation,montant,periodicite,prochaine_date) VALUES (1,''paiement_loyer'',100000,''mensuelle'',''2026-09-01'')');
 SELECT t.refuse('C jour du mois invalide', 'INSERT INTO mf.operation_recurrente(agence_id,code_operation,montant,periodicite,prochaine_date,jour_du_mois) VALUES (1,''facture_loyer_a_payer'',100000,''mensuelle'',''2026-09-01'',29)');

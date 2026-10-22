@@ -37,7 +37,13 @@ DECLARE s mf.operation_standard; v_id bigint; v_statut text; v_tiers mf.tiers;
 BEGIN
   IF p_cle IS NOT NULL THEN
     SELECT id INTO v_id FROM mf.operation_generale WHERE cle = p_cle;
-    IF v_id IS NOT NULL THEN RETURN v_id; END IF;
+    IF v_id IS NOT NULL THEN
+      -- une clé ne se rejoue que par son auteur, dans la même agence ; sinon elle ne donne rien à un tiers
+      IF NOT EXISTS (SELECT 1 FROM mf.operation_generale WHERE id = v_id AND saisi_par IS NOT DISTINCT FROM p_utilisateur AND agence_id = p_agence) THEN
+        RAISE EXCEPTION 'Clé d''opération déjà utilisée';
+      END IF;
+      RETURN v_id;
+    END IF;
   END IF;
   SELECT * INTO s FROM mf.operation_standard WHERE code = p_code AND actif;
   IF s.code IS NULL THEN RAISE EXCEPTION 'Opération standard % inconnue ou inactive', p_code; END IF;
