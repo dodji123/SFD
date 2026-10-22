@@ -149,6 +149,10 @@ class RecurrenteIn(BaseModel):
 def creer_recurrente(body: RecurrenteIn, user: User = Depends(require("charge:gerer"))):
     ag = agence_scope(user, body.agence_id)
     with tx(user.login) as cur:
+        if body.tiers_id is not None:
+            t = one_row(cur, "SELECT agence_id FROM tiers WHERE id = %s AND actif", (body.tiers_id,))
+            if t is None or (t["agence_id"] is not None and t["agence_id"] != ag):
+                raise HTTPException(status_code=422, detail="Tiers inconnu, inactif ou d'une autre agence")
         return one_row(cur, "INSERT INTO operation_recurrente(agence_id, code_operation, montant, tiers_id, libelle, periodicite, jour_du_mois, prochaine_date, date_fin, cree_par) "
                             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
                        (ag, body.code_operation, body.montant, body.tiers_id, body.libelle, body.periodicite, body.jour_du_mois, body.prochaine_date, body.date_fin, user.id))

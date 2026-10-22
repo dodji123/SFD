@@ -39,6 +39,7 @@ SELECT t.eq('B alerte d''opération en attente depuis trop longtemps', count(*):
 -- ===== C. Opérations récurrentes =====
 SELECT t.refuse('C opération de caisse non récurrente', 'INSERT INTO mf.operation_recurrente(agence_id,code_operation,montant,periodicite,prochaine_date) VALUES (1,''paiement_loyer'',100000,''mensuelle'',''2026-09-01'')');
 SELECT t.refuse('C jour du mois invalide', 'INSERT INTO mf.operation_recurrente(agence_id,code_operation,montant,periodicite,prochaine_date,jour_du_mois) VALUES (1,''facture_loyer_a_payer'',100000,''mensuelle'',''2026-09-01'',29)');
+SELECT t.refuse('C tiers d''une autre agence', 'INSERT INTO mf.operation_recurrente(agence_id,code_operation,montant,tiers_id,periodicite,prochaine_date) VALUES (1,''facture_loyer_a_payer'',1000,(SELECT id FROM mf.tiers WHERE agence_id = 2),''mensuelle'',''2026-09-01'')');
 SELECT t.refuse('C périodicité inconnue', 'INSERT INTO mf.operation_recurrente(agence_id,code_operation,montant,periodicite,prochaine_date) VALUES (1,''facture_loyer_a_payer'',100000,''hebdomadaire'',''2026-09-01'')');
 INSERT INTO operation_recurrente(agence_id,code_operation,montant,tiers_id,libelle,periodicite,jour_du_mois,prochaine_date,cree_par) VALUES (1,'facture_loyer_a_payer',100000,(SELECT id FROM tiers WHERE agence_id = 1),'Loyer du bureau','mensuelle',1,'2026-07-01',1);
 SELECT t.refuse('C génération sans utilisateur', 'SELECT mf.generer_operations_recurrentes(''2026-09-15'')');

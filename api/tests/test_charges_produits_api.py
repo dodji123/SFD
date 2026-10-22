@@ -60,6 +60,8 @@ def test_operations_recurrentes(client, h, base, agences):
     corps = {"code_operation": "facture_loyer_a_payer", "montant": 100000, "periodicite": "mensuelle", "prochaine_date": debut.isoformat(), "libelle": "Loyer récurrent", "tiers_id": base["tiers"]}
     assert client.post("/api/operations-recurrentes", json=corps, headers=h("caissier1")).status_code == 403
     assert client.post("/api/operations-recurrentes", json={**corps, "code_operation": "paiement_loyer"}, headers=h("chef1")).status_code == 422   # de caisse : refusé
+    autre = client.post("/api/tiers", json={"nom": "Tiers agence 2", "agence_id": agences["a2"]}, headers=h("comptable")).json()["id"]
+    assert client.post("/api/operations-recurrentes", json={**corps, "tiers_id": autre}, headers=h("chef1")).status_code == 422                 # tiers d'une autre agence
     r = client.post("/api/operations-recurrentes", json=corps, headers=h("chef1"))
     assert r.status_code == 201, r.text
     assert client.post("/api/operations-recurrentes/generer", json={}, headers=h("chef1")).status_code == 403                                  # relève du siège

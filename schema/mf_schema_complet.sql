@@ -12330,6 +12330,9 @@ BEGIN
   SELECT * INTO s FROM mf.operation_standard WHERE code = NEW.code_operation;
   IF s.famille <> 'hors_caisse' THEN RAISE EXCEPTION 'Seule une opération hors caisse peut être récurrente : une opération de caisse exige une session ouverte'; END IF;
   IF TG_OP = 'INSERT' AND NEW.date_fin IS NOT NULL AND NEW.date_fin < NEW.prochaine_date THEN RAISE EXCEPTION 'La date de fin précède la première échéance'; END IF;
+  IF NEW.tiers_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mf.tiers WHERE id = NEW.tiers_id AND actif AND (agence_id IS NULL OR agence_id = NEW.agence_id)) THEN
+    RAISE EXCEPTION 'Tiers inconnu, inactif ou rattaché à une autre agence';
+  END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER operation_recurrente_regles BEFORE INSERT OR UPDATE ON operation_recurrente FOR EACH ROW EXECUTE FUNCTION trg_operation_recurrente_regles();
