@@ -111,6 +111,10 @@ PERMS: dict[str, set[str]] = {
     "evaluation:valider": {ADMIN, DIR, RH},
     "sortie:write": {ADMIN, DIR, RH},
     "grh:self": ALL,
+    # gestion des rôles et des affectations (module 53)
+    "roles:gerer": {ADMIN},
+    "roles:demander": {ADMIN, DIR, CHEF},
+    "roles:valider": {ADMIN, DIR},
 }
 
 # Le coordinateur de réseau a les droits du directeur, dans son réseau seulement (le cloisonnement vient du périmètre).

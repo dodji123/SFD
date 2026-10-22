@@ -113,7 +113,10 @@ def require(perm: str):
         if user.doit_changer_mdp:
             # mot de passe temporaire : aucune opération avant son remplacement (guide du contrôle interne)
             raise HTTPException(status_code=403, detail="Vous devez d'abord changer votre mot de passe temporaire")
-        if user.role not in PERMS[perm]:
+        # matrice de droits en base (module 53) : rôle de base et affectations temporaires en cours
+        with tx() as cur:
+            ok = one_row(cur, "SELECT 1 AS x FROM droits_utilisateur(%s) AS d(perm) WHERE d.perm = %s", (user.id, perm))
+        if ok is None:
             raise HTTPException(status_code=403, detail="Droits insuffisants pour cette opération")
         return user
 
