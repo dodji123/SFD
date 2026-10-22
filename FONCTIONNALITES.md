@@ -1,6 +1,6 @@
 # Fonctionnalités et niveau de fonctionnalité
 
-État au 19/10/2026. Vérifié par 635 assertions SQL, 116 tests API, `tsc` et build web ; les écrans ont été essayés dans le navigateur sauf mention contraire. Aucun test automatique de l'interface ; parcours de bout en bout vérifié à la main dans Chrome le 19/10/2026 (voir ci-dessous).
+État au 22/10/2026. Vérifié par 1 322 assertions SQL sur 45 fichiers de test, 234 tests API, `tsc` et build web ; les écrans ont été essayés dans le navigateur sauf mention contraire. Aucun test automatique de l'interface ; parcours de bout en bout vérifié à la main dans Chrome le 19/10/2026 (voir ci-dessous).
 
 **Niveaux**
 - **A – Complet** : règles dans la base, API, écran, tests automatiques.
@@ -34,13 +34,15 @@
 | Carnets (livrets papier) : stock, remise aux agents, attribution aux membres | A | Chaque produit a son livret : lots reçus par agence et produit, numéros continus (AGENCE-PRODUIT-000001), un carnet attribué par cycle et seulement à un cycle du même produit, perte/abîmé avec motif et carnet de remplacement lié, journal inaltérable, alerte de réapprovisionnement (seuil paramétrable), QR du carnet |
 | Opérations standard de caisse / hors caisse, validation, transfert de fonds avec accusé de réception | B | Catalogue paramétrable (famille, catégorie, sens, comptes, justificatif obligatoire, seuil de validation par un second responsable) ; une opération de caisse mouvemente une session ouverte, une opération hors caisse non ; comptes reliés aux règles comptables (événement « op_<code> »), à faire valider par le comptable ; transfert de fonds en deux temps (fonds en transit, réception par un autre utilisateur avec écart expliqué et comptabilisé, ou refus avec retour), inter-agences possible, alerte de retard. Les comptes proposés sont à valider par le comptable |
 | Charges et produits : tiers, budget mensuel prévu / réalisé, opérations récurrentes, alertes | B | Registre des tiers (fournisseurs, bailleurs…) relié aux opérations ; budget par agence, mois et opération standard (charge ou produit) comparé au réalisé (opérations validées) avec taux et dépassements ; opérations récurrentes hors caisse (loyer, abonnement) générées à échéance sans doublon ; synthèse annuelle produits / charges / résultat ; alertes (dépassement de budget, opération en attente de validation, récurrente en retard) |
+| Immobilisations : registre, amortissement linéaire mensuel, sortie (cession, rebut, perte) | B | Base et tests SQL seulement ; écran et API à faire |
+| Maintenance préventive et réparations : plans, interventions, coûts, dépense à payer, alertes | B | Base et tests SQL seulement ; écran et API à faire |
 | Contrôle des livrets sur le terrain | A | Constat du contrôleur (état du livret, lignes et total constatés) rapproché d'un instantané du système, écarts ligne à ligne, validation par un responsable (le contrôleur ne valide pas son propre contrôle), contrôle décidé inaltérable ; écran web Contrôle des livrets avec filtres et scan de QR ; écran mobile à venir dans la PWA |
 | Suppression d'une opération avec motif obligatoire | A | L'opération disparaît des écrans et des calculs ; auteur, date, motif et contenu d'origine restent dans Administration › Piste d'audit › Opérations supprimées (inaltérable) |
 | Collecte du jour, versement de fin de tournée, écarts des agents, surplus | A | |
 | Retraits de tontine avec écarts, exécution et régularisation | A | |
 | Commission des collectrices | B | Taux et plafond provisoires |
 | Tontine rotative, à enchères, groupes solidaires avec bureau et parts | E | Le type de client « groupe » existe seulement dans la fiche |
-| Application mobile du collecteur hors ligne, reçus, géolocalisation des collectes | E | L'interface s'adapte aux écrans étroits |
+| Application mobile du collecteur (PWA `/m`) : zone de l'agent, création de client et de cycle sur le terrain, file de validation, contrôle des livrets hors ligne | B | Installable ; validation des synchronisations par l'opérateur de saisie. Reçus et géolocalisation des collectes non faits |
 | Espace client : collecte par mobile money, suivi de sa collecte, demande de retrait | B | Le client verse sur un cycle en cours (opérateur, numéro, montant multiple de la mise, limites et plafond journalier paramétrables) ; le versement n'est inscrit au livret (origine « mobile ») que lorsque l'opérateur confirme (webhook signé HMAC, idempotent) ; versement reçu sur un cycle devenu clos : à rembourser ; suivi du cycle (progression, lignes, paiements) ; demande de retrait examinée par le personnel (le client ne clôture jamais son cycle). Passerelle : simulation en démo, opérateur réel (T-Money, Flooz, Wave…) à brancher avec vos accès ; écritures comptables des flux mobile money et paiement du retrait par mobile money non couverts |
 | Plafond de fonds détenus par collecteur, alertes de doublons et de retards | E | |
 
@@ -92,6 +94,7 @@
 | Fonctionnalité | Niveau | Précisions |
 |---|---|---|
 | Employés, contrats, rubriques, commissions, bulletins de paie | B | Taux de cotisations et d'impôt non fournis |
+| Congés, absences, présences, recrutement, formation, évaluations, sanctions, sorties, certificat de travail, agents commerciaux | B | Base, API et écrans ; tests SQL et API |
 
 ## Sécurité et administration
 | Fonctionnalité | Niveau | Précisions |
@@ -102,6 +105,7 @@
 | Paramétrage (taux, plafonds, seuils, hypothèses) | B | Paramètres regroupés par rubrique (tontine, épargne, crédit, provisions, comptabilité, RH) avec filtres par texte, rubrique et portée ; filtres sur chaque tableau des référentiels |
 | Authentification forte du personnel (second facteur) | E | |
 | Principe des quatre yeux généralisé, alertes d'opérations atypiques | E | |
+| Attribution des rôles : matrice de droits éditable, rôles personnalisés, affectations temporaires (6 mois au plus) validées par un autre responsable | B | Matrice lue en base par toutes les routes protégées ; écran « Rôles et droits ». Les règles métier qui regardent le rôle de base restent inchangées |
 | Sauvegardes, chiffrement au repos, TLS, plan de reprise | E | Relèvent de l'hébergement ; décrits dans SECURITE.md |
 
 ## Spécifique UEMOA
