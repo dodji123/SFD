@@ -46,6 +46,8 @@ PERMS: dict[str, set[str]] = {
     "operation:comptes-valider": {ADMIN, COMPTA},
     "operation:saisir": {ADMIN, CHEF, CAIS, COMPTA},
     "operation:valider": {ADMIN, DIR, CHEF},
+    "charge:gerer": {ADMIN, DIR, CHEF, COMPTA},
+    "budget:gerer": {ADMIN, DIR, CHEF, COMPTA},
     "versement:write": {ADMIN, CHEF, CAIS},
     "retrait:request": {ADMIN, CHEF, CAIS, AGENT, COLL},
     "retrait:ecart": {ADMIN, DIR, CHEF},

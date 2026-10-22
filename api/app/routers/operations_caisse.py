@@ -95,6 +95,7 @@ class OperationIn(BaseModel):
     montant: int = Field(gt=0, le=10_000_000_000)
     date_operation: dt.date | None = None
     tiers: str | None = Field(default=None, max_length=200)
+    tiers_id: int | None = None
     reference_justificatif: str | None = Field(default=None, max_length=120)
     libelle: str | None = Field(default=None, max_length=300)
     caisse_id: int | None = None          # pour une opération de caisse : la session ouverte de cette caisse à la date de l'opération
@@ -126,8 +127,8 @@ def saisir_operation(body: OperationIn, user: User = Depends(require("operation:
             session_id, ag = s["id"], s["agence_id"]
         else:
             ag = agence_scope(user, body.agence_id)
-        r = one_row(cur, "SELECT saisir_operation_generale(%s::smallint, %s, %s, %s, %s, %s, %s, %s, %s, %s) AS id",
-                    (ag, body.code_operation, jour, body.montant, body.tiers, body.reference_justificatif, body.libelle, session_id, user.id, body.cle))
+        r = one_row(cur, "SELECT saisir_operation_generale(%s::smallint, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) AS id",
+                    (ag, body.code_operation, jour, body.montant, body.tiers, body.reference_justificatif, body.libelle, session_id, user.id, body.cle, body.tiers_id))
         return one_row(cur, "SELECT * FROM v_operation_generale WHERE id = %s", (r["id"],))
 
 

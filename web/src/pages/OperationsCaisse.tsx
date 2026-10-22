@@ -84,8 +84,9 @@ function SaisieOperation({ onClose, onFait }: { onClose: () => void; onFait: () 
   const { agenceId } = useSession()
   const catalogue = useFetch(() => api.get<OperationStandard[]>('/api/operations-standard', { actif: 'true' }), [])
   const caisses = useFetch(() => api.get<Caisse[]>('/api/caisses'), [agenceId])
+  const tiersListe = useFetch(() => api.get<{ id: number; nom: string }[]>('/api/tiers', { actif: 'true' }), [agenceId])
   const { run, busy } = useAction()
-  const [f, setF] = useState({ code: '', montant: '', tiers: '', reference: '', libelle: '', caisse_id: '', date: aujourdhui() })
+  const [f, setF] = useState({ code: '', montant: '', tiers_id: '', tiers: '', reference: '', libelle: '', caisse_id: '', date: aujourdhui() })
   const [cle] = useState(() => `op-${crypto.randomUUID()}`)
   const op = catalogue.data?.find((o) => o.code === f.code)
   const montant = Number(f.montant)
@@ -93,7 +94,7 @@ function SaisieOperation({ onClose, onFait }: { onClose: () => void; onFait: () 
   return (
     <FormModal titre="Nouvelle opération" onClose={onClose} busy={busy} valider="Enregistrer" large
       onSubmit={() => void run(() => api.post('/api/operations-generales', {
-        code_operation: f.code, montant, date_operation: f.date, tiers: f.tiers.trim() || null, reference_justificatif: f.reference.trim() || null, libelle: f.libelle.trim() || null,
+        code_operation: f.code, montant, date_operation: f.date, tiers: f.tiers.trim() || null, tiers_id: f.tiers_id ? Number(f.tiers_id) : null, reference_justificatif: f.reference.trim() || null, libelle: f.libelle.trim() || null,
         caisse_id: op?.famille === 'caisse' ? Number(f.caisse_id) : null, agence_id: agenceId, cle,
       }), auDessusDuSeuil ? 'Opération enregistrée : elle attend la validation d’un second responsable' : 'Opération enregistrée', onFait)}>
       <Field label="Opération">
@@ -117,7 +118,10 @@ function SaisieOperation({ onClose, onFait }: { onClose: () => void; onFait: () 
         <Field label="Montant (F)"><Input type="number" min={1} value={f.montant} onChange={(e) => setF({ ...f, montant: e.target.value })} required /></Field>
         <Field label="Date"><Input type="date" value={f.date} max={aujourdhui()} onChange={(e) => setF({ ...f, date: e.target.value })} required /></Field>
       </div>
-      <Field label="Tiers (fournisseur, bailleur…)"><Input value={f.tiers} onChange={(e) => setF({ ...f, tiers: e.target.value })} /></Field>
+      <div className="row">
+        <Field label="Tiers du registre"><Select value={f.tiers_id} onChange={(e) => setF({ ...f, tiers_id: e.target.value })}><option value="">—</option>{tiersListe.data?.map((t) => <option key={t.id} value={t.id}>{t.nom}</option>)}</Select></Field>
+        <Field label="Ou tiers libre"><Input value={f.tiers} onChange={(e) => setF({ ...f, tiers: e.target.value })} /></Field>
+      </div>
       <Field label="Référence du justificatif (facture, quittance…)"><Input value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} required={!!op?.justificatif_obligatoire} /></Field>
       <Field label="Libellé complémentaire"><Input value={f.libelle} onChange={(e) => setF({ ...f, libelle: e.target.value })} /></Field>
     </FormModal>
