@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [jour, setJour] = useState(aujourdhui())
   const tdb = useFetch(() => api.get<Tdb>('/api/tableau-de-bord', { date: jour }), [jour, agenceId])
   const rapport = useFetch(() => (can('rapports:read') ? api.get<{ rubriques: Rubrique[] }>('/api/rapports/journalier', { date: jour }) : Promise.resolve({ rubriques: [] })), [jour, agenceId])
-  const retraits = useFetch(() => api.get<Retrait[]>('/api/retraits', { limit: 100 }), [agenceId])
+  const retraits = useFetch(() => (can('collecte:read') ? api.get<Retrait[]>('/api/retraits', { limit: 100 }) : Promise.resolve([] as Retrait[])), [agenceId])
   const echus = useFetch(() => (can('rapports:read') ? api.get<Echu[]>('/api/rapports/credits/echus', { date: jour }) : Promise.resolve([] as Echu[])), [jour, agenceId])
 
   const valeurs = new Map((rapport.data?.rubriques ?? []).map((r) => [r.rubrique, r.valeur]))
