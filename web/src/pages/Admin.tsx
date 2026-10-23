@@ -8,7 +8,7 @@ import ReseauxAdmin from './ReseauxAdmin'
 import SecuriteAdmin from './SecuriteAdmin'
 import { Alert, Badge, Button, Card, Charge, Field, FormModal, Input, Modal, Page, Select, Table, Tabs, useAction, useFetch } from '../components/ui'
 
-interface Utilisateur { id: number; login: string; nom: string; role: string; agence_id: number | null; reseau_id: number | null; email: string | null; telephone: string | null; doit_changer_mdp: boolean; actif: boolean; derniere_connexion: string | null; verrouille_jusqua: string | null }
+interface Utilisateur { id: number; login: string; nom: string; role: string; agence_id: number | null; reseau_id: number | null; email: string | null; telephone: string | null; doit_changer_mdp: boolean; totp_actif: boolean; actif: boolean; derniere_connexion: string | null; verrouille_jusqua: string | null }
 interface ReseauLigne { id: number; code: string; libelle: string }
 interface Audit { id: number; horodatage: string; utilisateur: string; table_name: string; operation: string; ligne_id: string | null; avant: unknown; apres: unknown }
 
@@ -47,7 +47,7 @@ function Utilisateurs() {
   const q = useFetch(() => api.get<Utilisateur[]>('/api/utilisateurs'), [])
   const reseaux = useFetch(() => api.get<ReseauLigne[]>('/api/reseaux'), [])
   const { run, busy } = useAction()
-  const [modale, setModale] = useState<null | 'nouveau' | Utilisateur>(null)
+  const [modale, setModale] = useState<null | 'nouveau' | Utilisateur | { totp: Utilisateur }>(null)
   const fin = () => { setModale(null); q.reload() }
   return (
     <Card flush actions={<Button variant="primary" onClick={() => setModale('nouveau')}>Nouvel utilisateur</Button>}>
@@ -65,6 +65,7 @@ function Utilisateurs() {
               <span className="actions">
                 <Button small onClick={() => setModale(u)}>Mot de passe</Button>
                 {u.verrouille_jusqua && new Date(u.verrouille_jusqua) > new Date() && <Button small disabled={busy} onClick={() => void run(() => api.post(`/api/utilisateurs/${u.id}/deverrouiller`), 'Compte déverrouillé', q.reload)}>Déverrouiller</Button>}
+                {u.totp_actif && u.id !== user?.id && <Button small disabled={busy} onClick={() => setModale({ totp: u })}>Réinit. 2FA</Button>}
                 {u.id !== user?.id && <Button small variant={u.actif ? 'danger' : undefined} disabled={busy} onClick={() => void run(() => api.patch(`/api/utilisateurs/${u.id}`, { actif: !u.actif }), u.actif ? 'Compte désactivé' : 'Compte réactivé', q.reload)}>{u.actif ? 'Désactiver' : 'Réactiver'}</Button>}
               </span>
             ) },
@@ -72,7 +73,8 @@ function Utilisateurs() {
         )}
       </Charge>
       {modale === 'nouveau' && <NouvelUtilisateur reseaux={reseaux.data ?? []} onClose={() => setModale(null)} onFait={fin} />}
-      {modale && typeof modale === 'object' && <Reinit u={modale} onClose={() => setModale(null)} onFait={fin} />}
+      {modale && typeof modale === 'object' && 'totp' in modale && <ReinitTotp u={modale.totp} onClose={() => setModale(null)} onFait={fin} />}
+      {modale && typeof modale === 'object' && !('totp' in modale) && <Reinit u={modale} onClose={() => setModale(null)} onFait={fin} />}
     </Card>
   )
 }
@@ -107,6 +109,18 @@ function NouvelUtilisateur({ reseaux, onClose, onFait }: { reseaux: ReseauLigne[
       <Field label="Adresse e-mail" hint="Sert à la récupération du mot de passe"><Input type="email" value={f.email} onChange={maj('email')} /></Field>
       <Field label="Téléphone"><Input value={f.telephone} onChange={maj('telephone')} /></Field>
       <Field label="Mot de passe provisoire" hint="10 caractères, avec majuscule, minuscule, chiffre et caractère spécial. L'intéressé devra le changer à sa première connexion."><Input type="password" value={f.mdp} onChange={maj('mdp')} minLength={10} autoComplete="new-password" required /></Field>
+    </FormModal>
+  )
+}
+
+function ReinitTotp({ u, onClose, onFait }: { u: Utilisateur; onClose: () => void; onFait: () => void }) {
+  const { run, busy } = useAction()
+  const [motif, setMotif] = useState('')
+  return (
+    <FormModal titre={`Second facteur — ${u.login}`} onClose={onClose} busy={busy} valider="Réinitialiser"
+      onSubmit={() => void run(() => api.post(`/api/utilisateurs/${u.id}/totp/reinitialiser`, { motif }), 'Second facteur réinitialisé : sessions coupées, nouvel enrôlement à la prochaine connexion', onFait)}>
+      <p className="muted">À faire seulement après avoir vérifié l'identité de la personne (téléphone perdu, codes de secours épuisés). L'opération est journalisée et signalée comme alerte de sécurité.</p>
+      <Field label="Motif"><Input value={motif} onChange={(e) => setMotif(e.target.value)} minLength={5} required autoFocus /></Field>
     </FormModal>
   )
 }

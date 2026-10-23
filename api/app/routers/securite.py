@@ -5,6 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .. import totp
 from ..auth import User, require
 from ..config import settings
 from ..db import all_rows, one_row, tx
@@ -129,6 +130,11 @@ def etat(user: User = Depends(require("securite:read"))):
             "FROM utilisateur",
             (settings.password_max_age_days, settings.password_max_age_days),
         )
+        sans_totp = one_row(
+            cur,
+            "SELECT count(*) AS n FROM utilisateur u WHERE u.actif AND u.role::text = ANY(%s) "
+            "AND NOT EXISTS (SELECT 1 FROM utilisateur_totp t WHERE t.utilisateur_id = u.id AND t.actif)",
+            (sorted(totp.roles_obligatoires()),))["n"]
         alertes_ouvertes = one_row(cur, "SELECT count(*) AS n, count(*) FILTER (WHERE gravite = 'elevee') AS elevees FROM alerte_securite WHERE traitee_le IS NULL")
     maintenant = dt.datetime.now(dt.timezone.utc)
     constats = []
@@ -136,6 +142,8 @@ def etat(user: User = Depends(require("securite:read"))):
         constats.append({"gravite": "elevee", "texte": f"Aucune sauvegarde enregistrée depuis plus de {SAUVEGARDE_MAX_JOURS} jours"})
     if sauv["dernier_test_reussi"] is None or sauv["dernier_test_reussi"] < maintenant - dt.timedelta(days=RESTAURATION_MAX_JOURS):
         constats.append({"gravite": "elevee", "texte": f"Aucun test de restauration réussi depuis {RESTAURATION_MAX_JOURS} jours : une sauvegarde non testée n'est pas fiable"})
+    if sans_totp:
+        constats.append({"gravite": "elevee", "texte": f"{sans_totp} compte(s) à rôle sensible sans second facteur actif"})
     if comptes["sans_contact"]:
         constats.append({"gravite": "moyenne", "texte": f"{comptes['sans_contact']} compte(s) sans adresse de contact : récupération du mot de passe impossible"})
     if comptes["mot_de_passe_perime"]:
@@ -146,4 +154,6 @@ def etat(user: User = Depends(require("securite:read"))):
             "politique": {"session_minutes": settings.session_inactivity_minutes, "mdp_longueur_min": settings.password_min_length,
                           "mdp_validite_jours": settings.password_max_age_days, "mdp_historique": settings.password_history,
                           "verrouillage": f"{settings.max_failed_logins} échecs / {settings.lockout_minutes} min",
-                          "heures_ouvrables": settings.heures_ouvrables}}
+                          "heures_ouvrables": settings.heures_ouvrables,
+                          "totp_obligatoire": settings.totp_obligatoire, "totp_roles": sorted(totp.roles_obligatoires())},
+            "comptes_sans_totp": sans_totp}

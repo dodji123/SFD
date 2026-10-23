@@ -10,6 +10,7 @@ from .db import close_pool, init_pool, one_row, tx
 from .routers import admin as r_admin
 from .routers import adhesion as r_adhesion
 from .routers import auth as r_auth
+from .routers import totp as r_totp
 from .routers import caisse as r_caisse
 from .routers import capacite as r_capacite
 from .routers import collecte as r_collecte
@@ -47,10 +48,11 @@ from .routers import operations_caisse as r_operations_caisse
 from .routers import charges_produits as r_charges_produits
 from .routers import roles as r_roles
 from .routers import immobilisations as r_immobilisations
+from .routers import stock as r_stock
 from .routers import procurations_cheques as r_procchq
 
-ROUTERS = [r_auth.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_collecte_sync.router, r_adhesion.router, r_depots.router, r_pieces.router, r_institution.router, r_capacite.router,
-           r_caisse.router, r_retraits.router, r_credits.router, r_rapports.router, r_compta.router, r_admin.router, r_rh.router, r_tresorerie.router, r_transferts.router, r_etats.router, r_kyc.router, r_espace.router, r_espace.admin_router, r_reglementaire.router, r_provisions.router, r_rapprochement.router, r_securite.router, r_reseaux.router, r_comites.router, r_recouvrement.router, r_procchq.router, r_releves.router, r_grh.router, r_grh_cycle.router, r_controle_livrets.router, r_carnets.router, r_espace_paiements.router, r_espace_paiements.admin_router, r_operations_caisse.router, r_charges_produits.router, r_roles.router, r_immobilisations.router]
+ROUTERS = [r_auth.router, r_totp.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_collecte_sync.router, r_adhesion.router, r_depots.router, r_pieces.router, r_institution.router, r_capacite.router,
+           r_caisse.router, r_retraits.router, r_credits.router, r_rapports.router, r_compta.router, r_admin.router, r_rh.router, r_tresorerie.router, r_transferts.router, r_etats.router, r_kyc.router, r_espace.router, r_espace.admin_router, r_reglementaire.router, r_provisions.router, r_rapprochement.router, r_securite.router, r_reseaux.router, r_comites.router, r_recouvrement.router, r_procchq.router, r_releves.router, r_grh.router, r_grh_cycle.router, r_controle_livrets.router, r_carnets.router, r_espace_paiements.router, r_espace_paiements.admin_router, r_operations_caisse.router, r_charges_produits.router, r_roles.router, r_immobilisations.router, r_stock.router]
 
 
 @asynccontextmanager

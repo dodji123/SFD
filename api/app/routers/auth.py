@@ -1,10 +1,12 @@
 """Connexion, profil, changement et récupération du mot de passe."""
 import datetime as dt
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from ..auth import (DUMMY_HASH, USER_COLS, User, charger_user, create_token, get_current_user, hash_password,
+from .. import totp
+from ..auth import (DUMMY_HASH, USER_COLS, User, charger_user, create_defi, create_token, get_current_user, hash_password,
                     verify_password)
 from ..config import settings
 from ..db import one_row, tx
@@ -14,6 +16,7 @@ from ..securite import (alerter, envoyer_message, hacher_jeton, hors_heures, ip_
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 MSG_ECHEC = "Identifiants incorrects"
+MSG_TOTP = "Code incorrect"
 MSG_OUBLI = "Si ce compte existe et possède une adresse de contact, un lien de réinitialisation vient d'être envoyé."
 
 
@@ -22,17 +25,56 @@ class LoginIn(BaseModel):
     mot_de_passe: str = Field(min_length=1, max_length=200)
 
 
+def _finaliser_connexion(cur, u: dict, ip: str | None) -> tuple[str, "User"]:
+    """Mot de passe (et second facteur s'il existe) acceptés : compteurs remis à zéro, journal, jeton de session."""
+    perime = (settings.password_max_age_days > 0
+              and u["mdp_change_le"] < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=settings.password_max_age_days))
+    cur.execute(
+        "UPDATE utilisateur SET echecs_connexion = 0, verrouille_jusqua = NULL, derniere_connexion = now(), "
+        "       doit_changer_mdp = doit_changer_mdp OR %s WHERE id = %s RETURNING doit_changer_mdp",
+        (perime, u["id"]),
+    )
+    u["doit_changer_mdp"] = cur.fetchone()["doit_changer_mdp"]
+    journaliser(cur, u["login"], u["id"], "succes", ip, "mot de passe expiré" if perime else None)
+    if hors_heures():
+        journaliser(cur, u["login"], u["id"], "hors_heures", ip, "connexion hors des heures ouvrables")
+        alerter(cur, "connexion_hors_heures", f"Connexion de {u['login']} hors des heures ouvrables ({settings.heures_ouvrables})",
+                "faible", u["id"], u["agence_id"])
+    return create_token(u["id"], u["role"], u["agence_id"]), charger_user(cur, u)
+
+
+def _compter_echec(cur, u: dict, ip: str | None, evenement: str, detail: str) -> None:
+    """Un échec (mot de passe ou second facteur) : même compteur, même verrouillage, même alerte."""
+    cur.execute(
+        "UPDATE utilisateur SET echecs_connexion = echecs_connexion + 1, "
+        "  verrouille_jusqua = CASE WHEN echecs_connexion + 1 >= %s "
+        "                           THEN now() + make_interval(mins => %s) ELSE verrouille_jusqua END "
+        "WHERE id = %s RETURNING COALESCE(verrouille_jusqua > now(), false) AS verrouille, echecs_connexion",
+        (settings.max_failed_logins, settings.lockout_minutes, u["id"]),
+    )
+    etat = cur.fetchone()
+    journaliser(cur, u["login"], u["id"], evenement, ip, f"{detail} n°{etat['echecs_connexion']}")
+    if etat["verrouille"] and etat["echecs_connexion"] == settings.max_failed_logins:
+        journaliser(cur, u["login"], u["id"], "verrouille", ip, f"verrouillé {settings.lockout_minutes} min")
+        alerter(cur, "verrouillage", f"Compte {u['login']} verrouillé après {settings.max_failed_logins} échecs (IP {ip})",
+                "moyenne", u["id"], u["agence_id"])
+
+
 @router.post("/login")
 def login(body: LoginIn, request: Request):
-    verdict = "echec"  # echec | verrouille | ok
+    """Mot de passe. Si le compte a un second facteur actif, la réponse est un défi (`totp_requis`) à compléter par
+    POST /login/totp : aucun jeton de session n'est délivré avant."""
+    verdict = "echec"  # echec | verrouille | ok | totp
     token = None
     user = None
+    defi = None
     ip = ip_client(request)
     with tx() as cur:
         u = one_row(
             cur,
             f"SELECT {USER_COLS}, actif, mot_de_passe_hash, mdp_change_le, "
-            "       COALESCE(verrouille_jusqua > now(), false) AS verrouille "
+            "       COALESCE(verrouille_jusqua > now(), false) AS verrouille, "
+            "       EXISTS (SELECT 1 FROM utilisateur_totp t WHERE t.utilisateur_id = utilisateur.id AND t.actif) AS totp "
             "FROM utilisateur WHERE login = %s FOR UPDATE",
             (body.login,),
         )
@@ -43,43 +85,79 @@ def login(body: LoginIn, request: Request):
         elif u["verrouille"]:
             verdict = "verrouille"
             journaliser(cur, body.login, u["id"], "verrouille", ip, "tentative pendant le verrouillage")
+        elif ok and u["totp"]:
+            verdict = "totp"
+            defi = create_defi(u["id"])
         elif ok:
-            perime = (settings.password_max_age_days > 0
-                      and u["mdp_change_le"] < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=settings.password_max_age_days))
-            cur.execute(
-                "UPDATE utilisateur SET echecs_connexion = 0, verrouille_jusqua = NULL, derniere_connexion = now(), "
-                "       doit_changer_mdp = doit_changer_mdp OR %s WHERE id = %s RETURNING doit_changer_mdp",
-                (perime, u["id"]),
-            )
-            u["doit_changer_mdp"] = cur.fetchone()["doit_changer_mdp"]
             verdict = "ok"
-            journaliser(cur, body.login, u["id"], "succes", ip, "mot de passe expiré" if perime else None)
-            if hors_heures():
-                journaliser(cur, body.login, u["id"], "hors_heures", ip, "connexion hors des heures ouvrables")
-                alerter(cur, "connexion_hors_heures", f"Connexion de {body.login} hors des heures ouvrables ({settings.heures_ouvrables})",
-                        "faible", u["id"], u["agence_id"])
-            user = charger_user(cur, u)
-            token = create_token(u["id"], u["role"], u["agence_id"])
+            token, user = _finaliser_connexion(cur, u, ip)
         else:
-            cur.execute(
-                "UPDATE utilisateur SET echecs_connexion = echecs_connexion + 1, "
-                "  verrouille_jusqua = CASE WHEN echecs_connexion + 1 >= %s "
-                "                           THEN now() + make_interval(mins => %s) ELSE verrouille_jusqua END "
-                "WHERE id = %s RETURNING COALESCE(verrouille_jusqua > now(), false) AS verrouille, echecs_connexion",
-                (settings.max_failed_logins, settings.lockout_minutes, u["id"]),
-            )
-            etat = cur.fetchone()
             verdict = "echec"
-            journaliser(cur, body.login, u["id"], "echec", ip, f"échec n°{etat['echecs_connexion']}")
-            if etat["verrouille"] and etat["echecs_connexion"] == settings.max_failed_logins:
-                journaliser(cur, body.login, u["id"], "verrouille", ip, f"verrouillé {settings.lockout_minutes} min")
-                alerter(cur, "verrouillage", f"Compte {body.login} verrouillé après {settings.max_failed_logins} échecs (IP {ip})",
-                        "moyenne", u["id"], u["agence_id"])
+            _compter_echec(cur, u, ip, "echec", "échec")
     # les compteurs d'échecs sont validés (sortie du bloc tx) avant de lever l'erreur
     if verdict == "verrouille":
         raise HTTPException(status_code=429, detail="Trop de tentatives : compte verrouillé temporairement")
+    if verdict == "totp":
+        return {"totp_requis": True, "defi": defi, "defi_minutes": settings.totp_defi_minutes}
     if verdict != "ok":
         raise HTTPException(status_code=401, detail=MSG_ECHEC)
+    return {"access_token": token, "token_type": "bearer", "user": user, "session_minutes": settings.session_inactivity_minutes}
+
+
+class LoginTotpIn(BaseModel):
+    defi: str = Field(min_length=10, max_length=2000)
+    code: str = Field(min_length=6, max_length=20)      # code à 6 chiffres, ou code de secours
+
+
+@router.post("/login/totp")
+def login_totp(body: LoginTotpIn, request: Request):
+    """Deuxième temps : code TOTP (ou code de secours, à usage unique). Les échecs comptent comme ceux du mot de passe."""
+    try:
+        payload = jwt.decode(body.defi, settings.secret(), algorithms=["HS256"])
+        if payload.get("typ") != "totp":
+            raise ValueError
+        uid = int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Défi expiré : recommencez la connexion")
+    ip = ip_client(request)
+    verdict, token, user = "echec", None, None
+    with tx() as cur:
+        u = one_row(
+            cur,
+            f"SELECT {USER_COLS}, actif, mdp_change_le, COALESCE(verrouille_jusqua > now(), false) AS verrouille "
+            "FROM utilisateur WHERE id = %s FOR UPDATE", (uid,))
+        t = one_row(cur, "SELECT secret_chiffre, dernier_pas FROM utilisateur_totp WHERE utilisateur_id = %s AND actif FOR UPDATE", (uid,))
+        if u is None or not u["actif"] or t is None:
+            raise HTTPException(status_code=401, detail="Défi expiré : recommencez la connexion")
+        if u["verrouille"]:
+            verdict = "verrouille"
+            journaliser(cur, u["login"], uid, "verrouille", ip, "tentative pendant le verrouillage")
+        else:
+            ok, secours = False, False
+            if totp.est_code_secours(body.code):
+                r = one_row(cur, "UPDATE code_secours_totp SET utilise_le = now() WHERE id = ("
+                                 "  SELECT id FROM code_secours_totp WHERE utilisateur_id = %s AND code_hash = %s AND utilise_le IS NULL FOR UPDATE)"
+                                 " RETURNING id", (uid, totp.hacher_secours(body.code)))
+                ok = secours = r is not None
+            else:
+                pas = totp.verifier(totp.dechiffrer(t["secret_chiffre"]), body.code, t["dernier_pas"])
+                if pas is not None:
+                    cur.execute("UPDATE utilisateur_totp SET dernier_pas = %s WHERE utilisateur_id = %s", (pas, uid))
+                    ok = True
+            if ok:
+                verdict = "ok"
+                if secours:
+                    reste = one_row(cur, "SELECT count(*) AS n FROM code_secours_totp WHERE utilisateur_id = %s AND utilise_le IS NULL", (uid,))["n"]
+                    journaliser(cur, u["login"], uid, "totp_secours", ip, f"code de secours utilisé, {reste} restant(s)")
+                    if reste <= 2:
+                        alerter(cur, "totp_secours_bas", f"{u['login']} : il reste {reste} code(s) de secours", "faible", uid, u["agence_id"])
+                token, user = _finaliser_connexion(cur, u, ip)
+            else:
+                _compter_echec(cur, u, ip, "totp_echec", "code du second facteur incorrect")
+    if verdict == "verrouille":
+        raise HTTPException(status_code=429, detail="Trop de tentatives : compte verrouillé temporairement")
+    if verdict != "ok":
+        raise HTTPException(status_code=401, detail=MSG_TOTP)
     return {"access_token": token, "token_type": "bearer", "user": user, "session_minutes": settings.session_inactivity_minutes}
 
 

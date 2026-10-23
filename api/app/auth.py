@@ -23,6 +23,8 @@ class User(BaseModel):
     agent_id: int | None = None
     collectrice_id: int | None = None
     doit_changer_mdp: bool = False
+    totp_actif: bool = False          # second facteur enrôlé et actif
+    totp_a_enroler: bool = False      # rôle sensible sans second facteur : seul l'enrôlement est permis
     # agences accessibles : None = toutes (siège) ; sinon la liste (une agence, ou celles d'un réseau)
     agences: list[int] | None = None
 
@@ -51,6 +53,13 @@ def verify_password(password: str, hashed: str | None) -> bool:
 DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt(12)).decode()
 
 
+def create_defi(user_id: int) -> str:
+    """Jeton de défi (type « totp ») : preuve que le mot de passe vient d'être accepté ; n'ouvre aucune route."""
+    now = dt.datetime.now(dt.timezone.utc)
+    return jwt.encode({"sub": str(user_id), "typ": "totp", "iat": now, "exp": now + dt.timedelta(minutes=settings.totp_defi_minutes)},
+                      settings.secret(), algorithm=ALGO)
+
+
 def create_token(user_id: int, role: str, agence_id: int | None, expires: dt.timedelta | None = None, ori: int | None = None) -> str:
     """Jeton de session du personnel. Durée = inactivité maximale (renouvelée à l'usage, voir get_current_user)."""
     now = dt.datetime.now(dt.timezone.utc)
@@ -69,7 +78,12 @@ def charger_user(cur, row: dict) -> "User":
     cur.execute("SELECT agences_utilisateur(%s) AS a", (row["id"],))
     agences = cur.fetchone()["a"]
     data = {k: row[k] for k in ("id", "login", "nom", "role", "agence_id", "reseau_id", "agent_id", "collectrice_id", "doit_changer_mdp")}
-    return User(**data, agences=agences)
+    cur.execute("SELECT actif FROM utilisateur_totp WHERE utilisateur_id = %s", (row["id"],))
+    t = cur.fetchone()
+    actif = bool(t and t["actif"])
+    a_enroler = (not actif and settings.totp_obligatoire
+                 and row["role"] in {r.strip() for r in settings.totp_roles.split(",") if r.strip()})
+    return User(**data, agences=agences, totp_actif=actif, totp_a_enroler=a_enroler)
 
 
 def _unauthorized(msg: str = "Authentification requise") -> HTTPException:
@@ -89,13 +103,15 @@ def get_current_user(response: Response, authorization: str | None = Header(defa
     if payload.get("typ", "staff") != "staff":
         raise _unauthorized("Session invalide ou expirée")
     with tx() as cur:
-        row = one_row(cur, f"SELECT {USER_COLS}, mdp_change_le FROM utilisateur WHERE id = %s AND actif", (user_id,))
+        row = one_row(cur, f"SELECT {USER_COLS}, mdp_change_le, sessions_depuis FROM utilisateur WHERE id = %s AND actif", (user_id,))
         user = charger_user(cur, row) if row else None
     if user is None:
         raise _unauthorized("Compte désactivé ou inconnu")
     # un changement ou une réinitialisation du mot de passe invalide les sessions ouvertes avant lui
     if float(payload.get("t", 0)) < row["mdp_change_le"].timestamp():
         raise _unauthorized("Session invalidée : mot de passe modifié")
+    if float(payload.get("t", 0)) < row["sessions_depuis"].timestamp():
+        raise _unauthorized("Session invalidée : second facteur réinitialisé")
     ori = int(payload.get("ori", payload.get("iat", 0)))
     if dt.datetime.now(dt.timezone.utc).timestamp() - ori > MAX_SESSION_HEURES * 3600:
         raise _unauthorized("Session expirée : reconnectez-vous")
@@ -113,6 +129,9 @@ def require(perm: str):
         if user.doit_changer_mdp:
             # mot de passe temporaire : aucune opération avant son remplacement (guide du contrôle interne)
             raise HTTPException(status_code=403, detail="Vous devez d'abord changer votre mot de passe temporaire")
+        if user.totp_a_enroler:
+            # rôle sensible sans second facteur : aucune opération avant l'enrôlement (routes /api/auth/totp/*)
+            raise HTTPException(status_code=403, detail="Vous devez d'abord activer votre second facteur (application d'authentification)")
         # matrice de droits en base (module 53) : rôle de base et affectations temporaires en cours
         with tx() as cur:
             ok = one_row(cur, "SELECT 1 AS x FROM droits_utilisateur(%s) AS d(perm) WHERE d.perm = %s", (user.id, perm))

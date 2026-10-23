@@ -4,13 +4,15 @@ import { useSession } from '../lib/session'
 import { Alert, Button, Field, Input, MotDePasse } from '../components/ui'
 
 export default function Login() {
-  const { login } = useSession()
+  const { login, loginTotp } = useSession()
   const [l, setL] = useState('')
   const [p, setP] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [oubli, setOubli] = useState(false)
   const [info, setInfo] = useState<string | null>(null)
+  const [etape2, setEtape2] = useState(false)       // mot de passe accepté, second facteur attendu
+  const [code, setCode] = useState('')
 
   async function demanderLien() {
     setBusy(true)
@@ -29,9 +31,15 @@ export default function Login() {
     setBusy(true)
     setErreur(null)
     try {
-      await login(l.trim(), p)
+      if (etape2) {
+        await loginTotp(code.trim())
+      } else if (await login(l.trim(), p) === 'totp') {
+        setEtape2(true)
+        setP('')
+      }
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : 'Connexion impossible')
+      if (etape2 && e instanceof ApiError && (e.status === 429 || e.message.startsWith('Défi'))) { setEtape2(false); setCode('') }
     } finally {
       setBusy(false)
     }
@@ -46,6 +54,14 @@ export default function Login() {
         </div>
         {erreur && <Alert>{erreur}</Alert>}
         {info && <Alert tone="info">{info}</Alert>}
+        {etape2 ? (
+          <>
+            <p className="muted" style={{ margin: 0 }}>Second facteur : saisissez le code à 6 chiffres de votre application d'authentification, ou un code de secours.</p>
+            <Field label="Code"><Input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" autoFocus required /></Field>
+            <Button variant="primary" type="submit" disabled={busy || code.trim().length < 6}>{busy ? 'Vérification…' : 'Valider'}</Button>
+            <Button type="button" onClick={() => { setEtape2(false); setCode(''); setErreur(null) }}>Retour</Button>
+          </>
+        ) : (<>
         <Field label="Identifiant"><Input value={l} onChange={(e) => setL(e.target.value)} autoComplete="username" autoFocus required /></Field>
         {oubli ? (
           <>
@@ -60,6 +76,7 @@ export default function Login() {
             <Button type="button" onClick={() => { setOubli(true); setInfo(null); setErreur(null) }}>Mot de passe oublié ?</Button>
           </>
         )}
+        </>)}
       </form>
     </div>
   )

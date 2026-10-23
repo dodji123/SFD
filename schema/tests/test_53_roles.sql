@@ -10,7 +10,7 @@ INSERT INTO utilisateur(login,nom,role,agence_id) VALUES
   ('aud1','Auditeur','auditeur',NULL);
 
 -- ===== A. Matrice d'origine =====
-SELECT t.eq('A permissions reprises (dont celles des modules 52 et 54)', count(*)::text, '103') FROM permission;
+SELECT t.eq('A permissions reprises (au moins les 103 des modules 53, 52 et 54)', (count(*) >= 103)::text, 'true') FROM permission;
 SELECT t.eq('A rôles d''origine', count(*)::text, '10') FROM role_droit WHERE systeme;
 SELECT t.eq('A l''administrateur gère les rôles', count(*)::text, '1') FROM droit_role WHERE role_code = 'admin' AND perm = 'roles:gerer';
 SELECT t.eq('A le caissier ne gère pas les rôles', count(*)::text, '0') FROM droit_role WHERE role_code = 'caissier' AND perm = 'roles:gerer';

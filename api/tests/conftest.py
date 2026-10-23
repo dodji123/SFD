@@ -17,6 +17,7 @@ os.environ["SFD_DATABASE_URL"] = TEST_URL
 os.environ["SFD_JWT_SECRET"] = "secret-de-test-assez-long-0123456789abcdef"
 os.environ["SFD_ENV"] = "test"
 os.environ["SFD_MAX_FAILED_LOGINS"] = "5"
+os.environ["SFD_TOTP_OBLIGATOIRE"] = "false"      # les tests TOTP l'activent explicitement ; les autres se connectent par mot de passe seul
 
 from tests.helpers import PWD, make_user  # noqa: E402
 

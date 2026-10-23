@@ -4,6 +4,7 @@ import { api, ApiError } from '../lib/api'
 import { aujourdhui, date as fdate, decaler, xof } from '../lib/format'
 import { useSession } from '../lib/session'
 import { ChangementObligatoire } from '../pages/MotDePasse'
+import { EnrolementTotp } from '../pages/Totp'
 import {
   appliquerStatuts, demarrerSynchro, ecrireCache, enregistrer, lireCache, marquerReseau, reessayer, retirer, sessionRetablie, synchroniser, useFile, viderCache,
   type ClientVue, type CycleVue, type EtatOp, type Operation, type Produit, type Ref, type Tournee,
@@ -45,6 +46,7 @@ export default function MobileApp() {
   if (chargement) return <div className="m-centre">Chargement…</div>
   if (!user) return <Connexion />
   if (user.doit_changer_mdp) return <ChangementObligatoire />
+  if (user.totp_a_enroler) return <EnrolementTotp />
   if (user.role === 'agent' || user.role === 'collectrice') return <Principal />
   if (can('livret:controler')) return <ControleApp />      // contrôleurs de livrets (chef d'agence, directeur, coordinateur…)
   return <Interdit />
@@ -52,22 +54,26 @@ export default function MobileApp() {
 
 // ------------------------------------------------------------------ connexion
 function Connexion() {
-  const { login } = useSession()
+  const { login, loginTotp } = useSession()
   const f = useFile()
   const [l, setL] = useState('')
   const [p, setP] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [etape2, setEtape2] = useState(false)
+  const [code, setCode] = useState('')
   const attente = f.ops.filter((o) => o.etat === 'attente').length
   async function envoyer() {
     setBusy(true)
     setErreur(null)
     try {
-      await login(l.trim(), p)
+      if (etape2) await loginTotp(code.trim())
+      else if (await login(l.trim(), p) === 'totp') { setEtape2(true); setP(''); return }
       sessionRetablie()
       sessionRetablieC()
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : 'Connexion impossible')
+      if (etape2 && e instanceof ApiError && (e.status === 429 || e.message.startsWith('Défi'))) { setEtape2(false); setCode('') }
     } finally {
       setBusy(false)
     }
@@ -78,9 +84,16 @@ function Connexion() {
         <h1>SFD Collecte</h1>
         {attente > 0 && <p className="m-bandeau warn">{attente} saisie(s) à synchroniser sur ce téléphone : connectez-vous pour les envoyer.</p>}
         {erreur && <p className="m-bandeau bad" role="alert">{erreur}</p>}
+        {etape2 ? (<>
+          <p className="muted">Second facteur : code à 6 chiffres de votre application d'authentification, ou code de secours.</p>
+          <label>Code<input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" autoCapitalize="characters" autoFocus required /></label>
+          <button className="btn btn-primary m-gros" disabled={busy || code.trim().length < 6}>{busy ? 'Vérification…' : 'Valider'}</button>
+          <button type="button" className="btn m-gros" onClick={() => { setEtape2(false); setCode(''); setErreur(null) }}>Retour</button>
+        </>) : (<>
         <label>Identifiant<input className="input" value={l} onChange={(e) => setL(e.target.value)} autoComplete="username" autoCapitalize="none" required /></label>
         <label>Mot de passe<input className="input" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" required /></label>
         <button className="btn btn-primary m-gros" disabled={busy || !l || !p}>{busy ? 'Connexion…' : 'Se connecter'}</button>
+        </>)}
         <p className="muted">La connexion demande le réseau.</p>
       </form>
     </div>

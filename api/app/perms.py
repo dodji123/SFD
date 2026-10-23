@@ -81,6 +81,7 @@ PERMS: dict[str, set[str]] = {
     "securite:read": {ADMIN, DIR, AUD},
     "securite:write": {ADMIN},
     "securite:alertes": {ADMIN, DIR, AUD},
+    "totp:reinitialiser": {ADMIN, DIR},
     "sauvegarde:write": {ADMIN},
     "sauvegarde:tester": {AUD, DIR},
     # réseaux d'agences
@@ -120,13 +121,20 @@ PERMS: dict[str, set[str]] = {
     "immobilisation:gerer": {ADMIN, DIR, CHEF, COMPTA},
     "maintenance:signaler": {ADMIN, DIR, CHEF, CAIS, COMPTA, COORD},
     "maintenance:gerer": {ADMIN, DIR, CHEF, COMPTA},
+    # stock des fournitures (module 57) ; la décision sur une demande vient toujours d'une autre personne que le demandeur
+    "stock:read": {ADMIN, DIR, CHEF, CAIS, COMPTA, AUD},
+    "stock:gerer": {ADMIN, DIR, CHEF},
+    "stock:mouvoir": {ADMIN, DIR, CHEF, CAIS, COMPTA},
+    "stock:valider": {ADMIN, DIR, CHEF, COMPTA},
+    "appareil:read": {ADMIN, DIR, CHEF, AUD, COORD},
+    "appareil:gerer": {ADMIN, DIR, CHEF, COORD},
 }
 
 # Le coordinateur de réseau a les droits du directeur, dans son réseau seulement (le cloisonnement vient du périmètre).
 # Exceptions : ce qui relève de l'institution entière.
 _SIEGE_SEUL = {"etats:consolide", "ratios:enregistrer", "ratios:saisir", "ratios:parametrer", "ratios:valider",
                "lbc:write", "lbc:listes", "params:write", "clients:transfer-agence", "provisions:parametrer", "audit:read",
-               "securite:read", "securite:write", "securite:alertes", "sauvegarde:write", "sauvegarde:tester", "cheque:sign", "cheque:read"}
+               "securite:read", "securite:write", "securite:alertes", "totp:reinitialiser", "sauvegarde:write", "sauvegarde:tester", "cheque:sign", "cheque:read"}
 for _perm, _roles in PERMS.items():
     if DIR in _roles and COORD not in _roles and _perm not in _SIEGE_SEUL:
         _roles.add(COORD)

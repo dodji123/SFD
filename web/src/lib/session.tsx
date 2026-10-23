@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, session } from './api'
 
 // Instantané du profil (sans jeton) : permet de rouvrir l'application mobile hors réseau tant que le jeton de la session est valide.
@@ -21,6 +21,8 @@ export interface Utilisateur {
   agent_id: number | null
   collectrice_id: number | null
   doit_changer_mdp: boolean
+  totp_actif: boolean
+  totp_a_enroler: boolean
   agences: number[] | null
 }
 export interface Agence { id: number; code: string; libelle: string; siege?: boolean }
@@ -32,7 +34,8 @@ interface Ctx {
   agenceId: number | null          // agence de travail (fixe pour un utilisateur d'agence, au choix pour le siège)
   chargement: boolean
   can: (p: string) => boolean
-  login: (login: string, mdp: string) => Promise<void>
+  login: (login: string, mdp: string) => Promise<'ok' | 'totp'>   // 'totp' : second facteur à fournir (loginTotp)
+  loginTotp: (code: string) => Promise<void>
   logout: () => void
   rafraichir: () => Promise<void>
   choisirAgence: (id: number) => void
@@ -59,7 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const charger = useCallback(async () => {
     const moi = await api.get<Utilisateur>('/api/auth/me')
-    if (moi.doit_changer_mdp) {              // mot de passe temporaire : seul le changement est possible
+    if (moi.doit_changer_mdp || moi.totp_a_enroler) {   // mot de passe temporaire ou second facteur à enrôler : rien d'autre n'est possible
       setUser(moi)
       return
     }
@@ -110,11 +113,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [charger, logout])
 
+  const defi = useRef<string | null>(null)       // défi du second facteur : en mémoire seulement, jamais stocké
   const login = useCallback(
-    async (l: string, mdp: string) => {
-      const r = await api.post<{ access_token: string }>('/api/auth/login', { login: l, mot_de_passe: mdp })
-      session.setToken(r.access_token)
+    async (l: string, mdp: string): Promise<'ok' | 'totp'> => {
+      const r = await api.post<{ access_token?: string; totp_requis?: boolean; defi?: string }>('/api/auth/login', { login: l, mot_de_passe: mdp })
+      if (r.totp_requis && r.defi) { defi.current = r.defi; return 'totp' }
+      session.setToken(r.access_token ?? null)
       await charger()
+      return 'ok'
+    },
+    [charger],
+  )
+  const loginTotp = useCallback(
+    async (code: string) => {
+      if (!defi.current) throw new ApiError(401, 'Défi expiré : recommencez la connexion')
+      try {
+        const r = await api.post<{ access_token: string }>('/api/auth/login/totp', { defi: defi.current, code })
+        defi.current = null
+        session.setToken(r.access_token)
+        await charger()
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 429) defi.current = null      // compte verrouillé : on repart du mot de passe
+        throw e
+      }
     },
     [charger],
   )
@@ -126,8 +147,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<Ctx>(
-    () => ({ user, perms, agences, agenceId, chargement, can: (p) => perms.has(p), login, logout, rafraichir, choisirAgence }),
-    [user, perms, agences, agenceId, chargement, login, logout, rafraichir, choisirAgence],
+    () => ({ user, perms, agences, agenceId, chargement, can: (p) => perms.has(p), login, loginTotp, logout, rafraichir, choisirAgence }),
+    [user, perms, agences, agenceId, chargement, login, loginTotp, logout, rafraichir, choisirAgence],
   )
   return <SessionCtx.Provider value={value}>{children}</SessionCtx.Provider>
 }

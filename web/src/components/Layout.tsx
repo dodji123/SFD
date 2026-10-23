@@ -44,6 +44,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/operations', titre: 'Opérations et transferts', icone: '🔁', perm: 'operation:read' },
     { to: '/charges-produits', titre: 'Charges et produits', icone: '⚖️', perm: 'operation:read' },
     { to: '/immobilisations', titre: 'Immobilisations et maintenance', icone: '🏗️', perm: 'immobilisation:read' },
+    { to: '/stock', titre: 'Stock des fournitures', icone: '📦', perm: 'stock:read' },
     { to: '/roles', titre: 'Rôles et droits', icone: '🔑', perm: 'roles:demander' },
     { to: '/tresorerie', titre: 'Trésorerie', icone: '💵', perm: 'tresorerie:read' },
     { to: '/compta', titre: 'Comptabilité', icone: '📒', perm: 'compta:read' },
@@ -53,6 +54,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/rh', titre: 'RH et paie', icone: '🧑‍🤝‍🧑', perm: 'rh:read' },
   ] },
   { titre: 'Application et administration', items: [
+    { to: '/aide', titre: 'Aide et manuel', icone: '❓', perm: '' },
     { to: '/application-mobile', titre: 'Application mobile', icone: '📱', perm: 'collecte:read' },
     { to: '/admin', titre: 'Administration', icone: '⚙️', perm: ['users:manage', 'params:read', 'audit:read', 'ref:write'] },
   ] },
@@ -73,7 +75,8 @@ export default function Layout() {
     try { localStorage.setItem(CLE_REPLIE, JSON.stringify(n)) } catch { /* stockage indisponible : l'état n'est pas conservé */ }
     return n
   })
-  const autorise = (p: string | string[]) => (Array.isArray(p) ? p.some(can) : can(p))
+  // perm vide : écran accessible à tout utilisateur connecté (ex. l'aide)
+  const autorise = (p: string | string[]) => (p === '' ? true : Array.isArray(p) ? p.some(can) : can(p))
   return (
     <div className="app">
       <aside className={`sidebar ${ouvert ? 'ouverte' : ''}`} aria-label="Navigation principale">

@@ -19,6 +19,8 @@ import OperationsCaisse from './pages/OperationsCaisse'
 import ChargesProduits from './pages/ChargesProduits'
 import Roles from './pages/Roles'
 import Immobilisations from './pages/Immobilisations'
+import Aide from './pages/Aide'
+import Stock from './pages/Stock'
 import ProcurationsCheques from './pages/ProcurationsCheques'
 import Epargne from './pages/Epargne'
 import Adhesion from './pages/Adhesion'
@@ -39,6 +41,7 @@ import Login from './pages/Login'
 import MobileApp from './mobile/MobileApp'
 import SyncValidation from './pages/SyncValidation'
 import { ChangementObligatoire, Reinitialiser } from './pages/MotDePasse'
+import { EnrolementTotp } from './pages/Totp'
 import Provisions from './pages/Provisions'
 import Rapports from './pages/Rapports'
 import Retraits from './pages/Retraits'
@@ -55,6 +58,7 @@ export default function App() {
   if (chargement) return <Spinner />
   if (!user) return <Login />
   if (user.doit_changer_mdp) return <ChangementObligatoire />
+  if (user.totp_a_enroler) return <EnrolementTotp />
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -93,6 +97,8 @@ export default function App() {
         <Route path="charges-produits" element={<Garde perm="operation:read"><ChargesProduits /></Garde>} />
         <Route path="roles" element={<Garde perm="roles:demander"><Roles /></Garde>} />
         <Route path="immobilisations" element={<Garde perm="immobilisation:read"><Immobilisations /></Garde>} />
+        <Route path="aide" element={<Aide />} />
+        <Route path="stock" element={<Garde perm="stock:read"><Stock /></Garde>} />
         <Route path="rh" element={<Garde perm="rh:read"><Rh /></Garde>} />
         <Route path="admin" element={<Garde perm={['users:manage', 'params:read', 'audit:read', 'ref:write']}><Admin /></Garde>} />
         <Route path="*" element={<Navigate to="/" replace />} />

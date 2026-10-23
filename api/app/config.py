@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     max_failed_logins: int = 5
     lockout_minutes: int = 15
     password_min_length: int = 10
+    # second facteur du personnel (TOTP)
+    totp_obligatoire: bool = True         # exigé pour les rôles de totp_roles (False : développement et anciens tests seulement)
+    totp_roles: str = "admin,directeur,chef_agence,comptable"
+    totp_key: str = ""                    # clé de chiffrement des secrets TOTP (par défaut dérivée du secret JWT)
+    totp_issuer: str = "SFD"
+    totp_defi_minutes: int = 5            # durée du défi entre mot de passe et code
+    totp_codes_secours: int = 10
     # espace client
     client_token_minutes: int = 15       # session courte
     otp_minutes: int = 5                 # durée de vie du code SMS

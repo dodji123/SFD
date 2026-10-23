@@ -1,19 +1,20 @@
 """Gestion des utilisateurs (administrateur)."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..auth import User, hash_password, require
 from ..db import all_rows, one_row, tx
-from ..securite import alerter, journaliser, verifier_politique
+from ..securite import alerter, ip_client, journaliser, verifier_politique
 
 router = APIRouter(prefix="/api/utilisateurs", tags=["utilisateurs"])
 
 Role = Literal["admin", "directeur", "chef_agence", "caissier", "comptable", "agent", "collectrice", "rh", "auditeur", "coordinateur"]
 
 COLS = ("id, login, nom, role::text AS role, agence_id, reseau_id, agent_id, collectrice_id, actif, derniere_connexion, "
-        "verrouille_jusqua, email, telephone, doit_changer_mdp, mdp_change_le")
+        "verrouille_jusqua, email, telephone, doit_changer_mdp, mdp_change_le, "
+        "EXISTS (SELECT 1 FROM utilisateur_totp t WHERE t.utilisateur_id = utilisateur.id AND t.actif) AS totp_actif")
 
 
 class UserIn(BaseModel):
@@ -101,3 +102,29 @@ def deverrouiller(user_id: int, user: User = Depends(require("users:manage"))):
         cur.execute("UPDATE utilisateur SET echecs_connexion = 0, verrouille_jusqua = NULL WHERE id = %s", (user_id,))
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+
+class TotpReinitIn(BaseModel):
+    motif: str = Field(min_length=5, max_length=500)
+
+
+@router.post("/{user_id}/totp/reinitialiser", status_code=204)
+def reinitialiser_totp(user_id: int, body: TotpReinitIn, request: Request, user: User = Depends(require("totp:reinitialiser"))):
+    """Téléphone perdu et codes de secours épuisés : un responsable efface le second facteur. L'intéressé en enrôle un nouveau
+    à sa prochaine connexion ; ses sessions ouvertes sont coupées. Jamais pour soi-même ; seul un administrateur
+    réinitialise un administrateur ou un directeur."""
+    if user_id == user.id:
+        raise HTTPException(status_code=422, detail="Vous ne pouvez pas réinitialiser votre propre second facteur")
+    with tx(user.login) as cur:
+        cible = one_row(cur, "SELECT login, role::text AS role, agence_id FROM utilisateur WHERE id = %s FOR UPDATE", (user_id,))
+        if cible is None:
+            raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+        if user.role != "admin" and cible["role"] in ("admin", "directeur"):
+            raise HTTPException(status_code=403, detail="Seul un administrateur réinitialise le second facteur d'un administrateur ou d'un directeur")
+        cur.execute("DELETE FROM code_secours_totp WHERE utilisateur_id = %s", (user_id,))
+        cur.execute("DELETE FROM utilisateur_totp WHERE utilisateur_id = %s", (user_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Aucun second facteur enregistré pour cet utilisateur")
+        cur.execute("UPDATE utilisateur SET sessions_depuis = now() WHERE id = %s", (user_id,))
+        journaliser(cur, cible["login"], user_id, "totp_reinit", ip_client(request), f"par {user.login} : {body.motif}")
+        alerter(cur, "totp_reinit", f"Second facteur de {cible['login']} réinitialisé par {user.login} ({body.motif})", "moyenne", user_id, cible["agence_id"])
