@@ -82,6 +82,17 @@ export default function CycleDetail() {
             </Card>
 
             <div className="grid-2">
+              <Card title={`Détail des collectes (${c.lignes.length})`} flush>
+                <Table rows={c.lignes} vide="Aucune collecte enregistrée" cols={[
+                  { titre: 'Page', num: true, render: (l) => l.page },
+                  { titre: 'Case', num: true, render: (l) => l.no_ligne },
+                  { titre: 'Date', render: (l) => fdate(l.date_collecte) },
+                  { titre: 'Montant', num: true, render: (l) => xof(l.montant_collecte) },
+                  { titre: 'Mise appliquée', num: true, render: (l) => xof(l.mise_appliquee) },
+                  { titre: 'Origine', render: (l) => (l.origine === 'virement' ? 'Virement' : 'Espèces') },
+                  { titre: 'Agent', render: (l) => l.agent ?? '—' },
+                ]} />
+              </Card>
               <Card title="Historique des mises" flush>
                 <Table rows={c.mises} cols={[
                   { titre: 'À partir du', render: (m) => fdate(m.date_effet) },
