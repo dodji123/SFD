@@ -34,7 +34,7 @@ export default function CycleDetail() {
         const pages = Math.max(1, Math.ceil(c.nb_lignes_prevues / 31), ...c.lignes.map((l) => l.page))
         const parCase = new Map(c.lignes.map((l) => [`${l.page}-${l.no_ligne}`, l]))
         return (
-          <Page title={`Cycle ${c.numero}`} subtitle={`Type ${c.type_cycle} · du ${fdate(c.date_debut)} au ${fdate(c.date_fin)}${c.date_cloture ? ` · clôturé le ${fdate(c.date_cloture)}` : ''}`}
+          <Page title={`Cycle ${c.numero}`} subtitle={`Type ${c.type_cycle} · début ${fdate(c.date_debut)} · fin réelle ${c.date_cloture ? fdate(c.date_cloture) : 'cycle en cours'}${c.date_fin !== c.date_cloture ? ` · fin prévue ${fdate(c.date_fin)}` : ''}`}
             actions={<>
               <Link to={`/clients/${c.client_id}`} className="btn">{c.client}</Link>
               <Statut s={c.statut} />
@@ -56,6 +56,8 @@ export default function CycleDetail() {
             </div>
 
             <Prolongations cycleId={c.id} enCours={enCours} dateFin={c.date_fin} onChange={q.reload} />
+
+            <ControlesLivret cycleId={c.id} />
 
             <Card title={`Livret — ${c.nb_lignes} ligne${c.nb_lignes > 1 ? 's' : ''} sur ${c.nb_lignes_prevues}`}>
               <div className="stack">
@@ -204,6 +206,34 @@ const STATUTS_PROLONGATION: Record<string, { texte: string; tone: 'warn' | 'ok' 
 }
 
 /** Demandes de prolongation du cycle : demandée par la saisie, autorisée par un responsable. */
+interface Controle {
+  id: number; date_controle: string; controleur: string; etat_livret: string; nb_lignes_constatees: number | null; nb_lignes_systeme: number
+  total_constate: number | null; total_systeme: number; ecart_montant: number | null; nb_ecarts_lignes: number; statut: string
+  decide_par_nom: string | null; commentaire: string | null
+}
+
+/** Contrôles du livret de ce cycle : constat du contrôleur, écarts et décision. Visible avant la caisse. */
+function ControlesLivret({ cycleId }: { cycleId: number }) {
+  const controles = useFetch(() => api.get<Controle[]>('/api/controles-livrets', { cycle_id: cycleId, limit: 50 }), [cycleId])
+  return (
+    <Card title="Contrôles du livret" flush>
+      <Charge q={controles}>
+        {(rows) => (
+          <Table rows={rows} vide="Aucun contrôle de ce livret" cols={[
+            { titre: 'Date', render: (k) => fdate(k.date_controle) },
+            { titre: 'Contrôleur', render: (k) => k.controleur },
+            { titre: 'État du livret', render: (k) => k.etat_livret },
+            { titre: 'Lignes (constat / système)', render: (k) => `${k.nb_lignes_constatees ?? '—'} / ${k.nb_lignes_systeme}` },
+            { titre: 'Total (constat / système)', num: true, render: (k) => `${xof(k.total_constate)} / ${xof(k.total_systeme)}` },
+            { titre: 'Écarts', num: true, render: (k) => (k.nb_ecarts_lignes > 0 || (k.ecart_montant ?? 0) !== 0 ? <Badge tone="bad">{k.nb_ecarts_lignes} ligne(s) · {xof(k.ecart_montant)}</Badge> : <Badge tone="ok">Aucun</Badge>) },
+            { titre: 'Décision', render: (k) => <>{k.statut}{k.decide_par_nom ? ` · ${k.decide_par_nom}` : ''}</> },
+          ]} />
+        )}
+      </Charge>
+    </Card>
+  )
+}
+
 function Prolongations({ cycleId, enCours, dateFin, onChange }: { cycleId: number; enCours: boolean; dateFin: string; onChange: () => void }) {
   const { can } = useSession()
   const q = useFetch(() => api.get<Prolongation[]>('/api/prolongations', { cycle_id: cycleId }), [cycleId])

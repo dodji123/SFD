@@ -22,6 +22,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/collecte', titre: 'Collecte du jour', icone: '💰', perm: 'collecte:read' },
     { to: '/sync-validation', titre: 'Synchronisations à valider', icone: '📲', perm: 'collecte:valider' },
     { to: '/cycles', titre: 'Cycles de tontine', icone: '🔄', perm: 'collecte:read' },
+    { to: '/demande-retrait', titre: 'Demande de retrait', icone: '💸', perm: 'retrait:request' },
     { to: '/retraits', titre: 'Retraits et écarts', icone: '↩️', perm: 'collecte:read' },
     { to: '/paiements-mobile', titre: 'Mobile money et demandes', icone: '📲', perm: 'paiement-mobile:read' },
     { to: '/carnets', titre: 'Carnets et stock', icone: '📦', perm: 'carnet:read' },
