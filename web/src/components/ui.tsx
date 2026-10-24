@@ -218,13 +218,16 @@ export function Button({ variant, small, className, ...p }: ButtonHTMLAttributes
 /* ---------------------------------------------------------------- modale */
 export function Modal({ titre, onClose, children, footer, large }: { titre: string; onClose: () => void; children: ReactNode; footer?: ReactNode; large?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
+  // onClose change à chaque rendu du parent : on le lit par référence pour ne pas relancer le focus à chaque frappe
+  const fermer = useRef(onClose)
+  fermer.current = onClose
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null
     ref.current?.focus()
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') fermer.current() }
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey); prev?.focus() }
-  }, [onClose])
+  }, [])
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className={`modal ${large ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={titre} ref={ref} tabIndex={-1}>
