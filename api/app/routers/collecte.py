@@ -60,11 +60,11 @@ def lister_cycles(
 
 def _type_du_cycle(cur, client_id: int, produit_id: int, type_produit: int | None, demande: int | None) -> int:
     """Type imposé par le produit, sinon celui qu'on choisit pour ce cycle (libre à chaque cycle)."""
+    if demande is not None:
+        return demande
     if type_produit is not None:
         return type_produit
-    if demande is None:
-        raise HTTPException(status_code=422, detail="Choisissez le type de cycle (1, 2 ou 3)")
-    return demande
+    raise HTTPException(status_code=422, detail="Choisissez le type de cycle (1, 2 ou 3)")
 
 
 @router.get("/cycles/type-propose")
@@ -75,7 +75,7 @@ def type_propose(client_id: int, produit_id: int, user: User = Depends(require("
         p = one_row(cur, "SELECT type_cycle FROM produit_epargne WHERE id = %s", (produit_id,))
         if p is None:
             raise HTTPException(status_code=404, detail="Produit introuvable")
-        return {"type_cycle": p["type_cycle"], "impose_par": "produit" if p["type_cycle"] else None}
+        return {"type_cycle": p["type_cycle"], "impose_par": None}   # suggestion seulement : le type se choisit à chaque cycle
 
 
 @router.post("/cycles", status_code=201)

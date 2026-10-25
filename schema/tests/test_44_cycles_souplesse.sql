@@ -22,7 +22,9 @@ INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin)
   VALUES (1,'CY-4',2,1,3,1000,1000,'2026-11-01','2026-11-30');
 SELECT t.eq('A un autre client choisit librement : type 3', type_cycle::text, '3') FROM cycle WHERE numero = 'CY-4';
-SELECT t.refuse('A produit à type imposé : le type du produit prévaut', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''CY-5'',2,2,2,1000,1000,''2026-11-01'',''2026-11-30'')');
+INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin)
+  VALUES (1,'CY-5',2,2,2,1000,1000,'2027-01-01','2027-01-31');
+SELECT t.eq('A produit à type suggéré : type libre accepté (module 62)', type_cycle::text, '2') FROM cycle WHERE numero = 'CY-5';
 
 -- ===== B. Délai de grâce =====
 UPDATE produit_epargne SET delai_grace_jours = 5 WHERE code = 'TON';
