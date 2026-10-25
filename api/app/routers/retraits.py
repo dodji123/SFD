@@ -56,6 +56,50 @@ def demander_retrait(cycle_id: int, body: RetraitIn, user: User = Depends(requir
         return _retrait(cur, rid)
 
 
+class RetraitDirectIn(BaseModel):
+    nature: Literal["retrait_client", "virement_vers_epargne"] = "retrait_client"
+    compte_id: int | None = None
+    date: dt.date | None = None
+    montant: int | None = Field(default=None, gt=0)   # absent = solde disponible entier
+    cloturer: bool | None = None                      # cycle en cours, retrait partiel : clôturer ou non
+    session_id: int | None = None                     # caisse : session ouverte obligatoire pour un paiement en espèces
+
+
+@router.post("/cycles/{cycle_id}/retrait-direct", status_code=201)
+def retrait_direct(cycle_id: int, body: RetraitDirectIn, user: User = Depends(require("retrait:execute"))):
+    """Retrait au guichet : demande, constat sans écart et paiement en une action.
+    Le contrôle du livret a déjà été fait avant la caisse ; un écart de contrôle non validé bloque le retrait."""
+    with tx(user.login) as cur:
+        ag = verifier_agence(cur, user, "cycle", cycle_id)
+        ecart = one_row(cur, "SELECT id FROM v_controle_livret WHERE cycle_id = %s AND statut <> 'valide' "
+                             "AND (COALESCE(ecart_montant, 0) <> 0 OR nb_ecarts_lignes > 0) LIMIT 1", (cycle_id,))
+        if ecart is not None:
+            raise HTTPException(status_code=422, detail="Le contrôle du livret de ce cycle relève un écart non validé : le carnet reste au contrôle")
+        cy = one_row(cur, "SELECT client_id FROM cycle WHERE id = %s", (cycle_id,))
+        if body.nature == "virement_vers_epargne":
+            if body.compte_id is None:
+                raise HTTPException(status_code=422, detail="compte_id obligatoire pour un virement vers l'épargne")
+            verifier_agence(cur, user, "compte_epargne", body.compte_id)
+            vid = one_row(cur, "SELECT demander_virement_cycle_vers_epargne(%s, %s, %s, COALESCE(%s, current_date)) AS id",
+                          (cycle_id, body.compte_id, user.id, body.date))["id"]
+            rid = one_row(cur, "SELECT retrait_id FROM virement WHERE id = %s", (vid,))["retrait_id"]
+            session = None
+        else:
+            if body.session_id is None:
+                raise HTTPException(status_code=422, detail="Ouvrez une session de caisse pour payer en espèces")
+            if verifier_session(cur, user, body.session_id) != ag:
+                raise HTTPException(status_code=422, detail="La session de caisse appartient à une autre agence")
+            rid = one_row(cur, "SELECT demander_retrait_cycle(%s, 'retrait_client', COALESCE(%s, current_date), %s, %s) AS id",
+                          (cycle_id, body.date, body.montant, body.cloturer))["id"]
+            montant = one_row(cur, "SELECT montant FROM retrait WHERE id = %s", (rid,))["montant"]
+            controler_seuil_retrait(cur, user, cy["client_id"], ag, montant, body.date)
+            session = body.session_id
+        cur.execute("SELECT constater_sans_ecart(%s)", (rid,))
+        cur.execute("SELECT executer_retrait(%s, %s, %s)", (rid, body.date, session))
+        cur.execute("UPDATE retrait SET execute_par = %s WHERE id = %s", (user.id, rid))
+        return _retrait(cur, rid)
+
+
 @router.get("/retraits")
 def lister_retraits(
     statut: str | None = None, nature: str | None = None, cycle_id: int | None = None, agence_id: int | None = None,

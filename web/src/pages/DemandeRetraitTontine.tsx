@@ -49,16 +49,9 @@ export default function DemandeRetraitTontine() {
   const sessions = useFetch(() => api.get<SessionC[]>('/api/sessions'), [agenceId])
   const sessionOuverte = (sessions.data ?? []).find((s) => s.statut === 'ouverte') ?? null
   const tous = retraits.data ?? []
-  const aPayer = tous.filter((r) => r.statut === 'fonds_disponibles')
   const duJour = tous.filter((r) => jour(r.date_operation) === aujourdhui() || jour(r.date_demande) === aujourdhui())
   const payesDuJour = tous.filter((r) => r.statut === 'execute' && jour(r.date_operation) === aujourdhui())
   const totalJour = payesDuJour.reduce((s, r) => s + montantRetrait(r), 0)
-
-  const payer = (r: RetraitL) => void run(
-    () => api.post(`/api/retraits/${r.id}/executer`, { date: aujourdhui(), session_id: r.nature === 'retrait_client' ? sessionOuverte?.id ?? null : null }),
-    `Retrait ${r.cycle} payé`,
-    retraits.reload,
-  )
 
   // ----- demande de retrait : produit, numéro ou nom, cycles à solde, cases à cocher
   const produits = useProduitsEpargne('collecte')
@@ -115,10 +108,11 @@ export default function DemandeRetraitTontine() {
       for (const c of liste) {
         try {
           const partiel = partielDe(c)
-          await api.post(`/api/cycles/${c.id}/retrait`, {
+          await api.post(`/api/cycles/${c.id}/retrait-direct`, {
             nature: destination, compte_id: compte ? Number(compte) : null, date,
             montant: partiel ? montantDe(c) : null,
             cloturer: partiel && c.statut === 'en_cours' ? !!clotures[c.id] : null,
+            session_id: destination === 'retrait_client' ? sessionOuverte?.id ?? null : null,
           })
         } catch (e) {
           echecs.push(`${c.numero} : ${e instanceof Error ? e.message : 'erreur'}`)
@@ -126,7 +120,7 @@ export default function DemandeRetraitTontine() {
       }
       if (echecs.length) throw new Error(echecs.join(' · '))
     }, `${liste.length} demande(s) de retrait créée(s)`, () => {
-      setFait(`${liste.length} cycle(s) pour ${xof(total)} : demande créée. Le constat est fait par un responsable avant le paiement.`)
+      setFait(`${liste.length} retrait(s) effectué(s) pour ${xof(total)}.`)
       reinitialiser()
       cycles.reload()
       retraits.reload()
@@ -138,17 +132,7 @@ export default function DemandeRetraitTontine() {
 
   return (
     <Page title="Retrait de tontine au guichet" subtitle="Payer les retraits dont le constat est fait, demander un retrait, suivre la journée">
-      <Card title={`À payer : constat fait (${aPayer.length})`} flush>
-        {!sessionOuverte && <div style={{ padding: 12 }}><Alert tone="warn">Aucune session de caisse ouverte : ouvrez-la pour payer en espèces.</Alert></div>}
-        <Table rows={aPayer} vide="Aucun retrait à payer" cols={[
-          { titre: 'Cycle', render: (r) => <strong>{r.cycle}</strong> },
-          { titre: 'Client', render: (r) => r.client },
-          { titre: 'Zone', render: (r) => r.zone ?? '—' },
-          { titre: 'Destination', render: (r) => NATURE[r.nature] ?? r.nature },
-          { titre: 'Montant', num: true, render: (r) => <strong>{xof(r.montant)}</strong> },
-          { titre: '', render: (r) => <Button small variant="primary" disabled={busy} onClick={() => payer(r)}>Payer</Button> },
-        ]} />
-      </Card>
+      {!sessionOuverte && <Alert tone="warn">Aucune session de caisse ouverte : ouvrez-la pour payer en espèces.</Alert>}
 
       <Card>
         <div className="form-grid">
@@ -218,7 +202,7 @@ export default function DemandeRetraitTontine() {
           </div>
           <div className="row" style={{ marginTop: 12 }}>
             <Button variant="primary" disabled={busy || !toutValide || (destination === 'virement_vers_epargne' && (!compte || !memeClient))} onClick={demander}>
-              {busy ? 'En cours…' : `Demander le retrait de ${choisis.length} cycle(s)`}
+              {busy ? 'En cours…' : `Retirer : ${choisis.length} cycle(s) · ${xof(total)}`}
             </Button>
             <Button onClick={reinitialiser}>Annuler</Button>
           </div>
