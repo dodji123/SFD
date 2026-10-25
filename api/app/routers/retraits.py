@@ -34,6 +34,8 @@ class RetraitIn(BaseModel):
     nature: Literal["retrait_client", "virement_vers_epargne"] = "retrait_client"
     compte_id: int | None = None     # obligatoire pour un virement vers l'épargne
     date: dt.date | None = None
+    montant: int | None = Field(default=None, gt=0)   # retrait partiel ; absent = solde disponible entier
+    cloturer: bool | None = None     # cycle en cours, retrait partiel : clôturer le cycle ou non
 
 
 @router.post("/cycles/{cycle_id}/retrait", status_code=201)
@@ -49,7 +51,8 @@ def demander_retrait(cycle_id: int, body: RetraitIn, user: User = Depends(requir
                           (cycle_id, body.compte_id, user.id, body.date))["id"]
             rid = one_row(cur, "SELECT retrait_id FROM virement WHERE id = %s", (vid,))["retrait_id"]
         else:
-            rid = one_row(cur, "SELECT demander_retrait_cycle(%s, 'retrait_client', COALESCE(%s, current_date)) AS id", (cycle_id, body.date))["id"]
+            rid = one_row(cur, "SELECT demander_retrait_cycle(%s, 'retrait_client', COALESCE(%s, current_date), %s, %s) AS id",
+                          (cycle_id, body.date, body.montant, body.cloturer))["id"]
         return _retrait(cur, rid)
 
 

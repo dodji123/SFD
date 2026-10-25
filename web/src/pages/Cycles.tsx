@@ -10,7 +10,7 @@ import { Alert, Button, Card, Charge, Field, FormModal, Input, Page, Select, Sta
 export interface CycleLigne {
   id: number; numero: string; client_id: number; client: string; type_cycle: number; statut: string; produit: string
   mise_courante: number; mise_finale: number | null; date_debut: string; date_fin: string
-  nb_lignes: number; nb_lignes_prevues: number; montant_collecte: number; montant_previsionnel: number | null; net: number
+  nb_lignes: number; nb_lignes_prevues: number; montant_collecte: number; montant_previsionnel: number | null; net: number; solde_disponible?: number
 }
 
 export default function Cycles() {

@@ -15,7 +15,8 @@ SITUATION = (
     "SELECT s.cycle_id AS id, s.agence_id, s.numero, s.client_id, cl.nom AS client, s.type_cycle, s.statut, "
     "       c.produit_id, pe.code AS produit, pe.libelle AS produit_libelle, delai_grace_cycle(c.id) AS delai_grace, date_limite_cycle(c.id) AS date_limite, "
     "       c.mise_initiale, c.mise_courante, c.mise_finale, c.objectif, c.nb_lignes_prevues, c.date_debut, c.date_fin, c.date_cloture, "
-    "       s.nb_lignes, s.montant_collecte, s.montant_previsionnel, s.reste_a_collecter, s.mise_cycle, s.net "
+    "       s.nb_lignes, s.montant_collecte, s.montant_previsionnel, s.reste_a_collecter, s.mise_cycle, s.net, "
+    "       mf.solde_disponible_cycle(s.cycle_id) AS solde_disponible "
     "FROM v_cycle_situation s JOIN cycle c ON c.id = s.cycle_id JOIN client cl ON cl.id = s.client_id "
     "JOIN produit_epargne pe ON pe.id = c.produit_id "
 )

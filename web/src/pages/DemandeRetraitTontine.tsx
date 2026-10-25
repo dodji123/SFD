@@ -73,15 +73,29 @@ export default function DemandeRetraitTontine() {
   const [date, setDate] = useState(aujourdhui())
   const [compte, setCompte] = useState('')
   const [fait, setFait] = useState<string | null>(null)
+  const [montants, setMontants] = useState<Record<number, string>>({})
+  const [clotures, setClotures] = useState<Record<number, boolean>>({})
+  const soldeDe = (c: CycleLigne) => c.solde_disponible ?? c.net
+  const montantDe = (c: CycleLigne) => Number(montants[c.id] ?? soldeDe(c))
+  const partielDe = (c: CycleLigne) => montantDe(c) < soldeDe(c)
+  const valideDe = (c: CycleLigne) => montantDe(c) > 0 && montantDe(c) <= soldeDe(c) && (destination === 'retrait_client' || !partielDe(c))
+  const effetDe = (c: CycleLigne) => {
+    const m = montantDe(c)
+    if (!valideDe(c)) return destination === 'virement_vers_epargne' && partielDe(c) ? 'Partiel non disponible pour un virement' : 'Montant invalide'
+    if (!partielDe(c)) return c.statut === 'en_cours' ? 'Retrait total : cycle clôturé puis retiré' : 'Retrait normal : cycle retiré'
+    if (c.statut === 'en_cours') return clotures[c.id] ? 'Retrait partiel : cycle clôturé' : "Retrait partiel d'urgence : cycle non clôturé"
+    return `Retrait partiel : cycle reste clôturé, solde restant ${xof(soldeDe(c) - m)}`
+  }
 
   const actif = produit !== '' && recherche.trim().length >= 2
   const cycles = useFetch(
     () => (actif ? api.get<CycleLigne[]>('/api/cycles', { q: recherche.trim(), produit_id: produit, limit: 100 }) : Promise.resolve([] as CycleLigne[])),
     [produit, recherche, agenceId],
   )
-  const avecSolde = (cycles.data ?? []).filter((c) => c.net > 0 && c.statut !== 'retire')
+  const avecSolde = (cycles.data ?? []).filter((c) => soldeDe(c) > 0 && c.statut !== 'retire')
   const choisis = avecSolde.filter((c) => coches.has(c.id))
-  const total = choisis.reduce((s, c) => s + c.net, 0)
+  const total = choisis.reduce((s, c) => s + montantDe(c), 0)
+  const toutValide = choisis.length > 0 && choisis.every(valideDe)
   const client = choisis[0]?.client_id
   const memeClient = choisis.every((c) => c.client_id === client)
 
@@ -100,7 +114,12 @@ export default function DemandeRetraitTontine() {
       const echecs: string[] = []
       for (const c of liste) {
         try {
-          await api.post(`/api/cycles/${c.id}/retrait`, { nature: destination, compte_id: compte ? Number(compte) : null, date })
+          const partiel = partielDe(c)
+          await api.post(`/api/cycles/${c.id}/retrait`, {
+            nature: destination, compte_id: compte ? Number(compte) : null, date,
+            montant: partiel ? montantDe(c) : null,
+            cloturer: partiel && c.statut === 'en_cours' ? !!clotures[c.id] : null,
+          })
         } catch (e) {
           echecs.push(`${c.numero} : ${e instanceof Error ? e.message : 'erreur'}`)
         }
@@ -154,7 +173,7 @@ export default function DemandeRetraitTontine() {
                 { titre: 'Cycle', render: (c) => <strong>{c.numero}</strong> },
                 { titre: 'Client', render: (c) => c.client },
                 { titre: 'Statut', render: (c) => <Badge tone="neutre">{c.statut}</Badge> },
-                { titre: 'Solde à retirer', num: true, render: (c) => <strong>{xof(c.net)}</strong> },
+                { titre: 'Solde disponible', num: true, render: (c) => <strong>{xof(soldeDe(c))}</strong> },
               ]} />
             )}
           </Charge>
@@ -163,6 +182,21 @@ export default function DemandeRetraitTontine() {
 
       {choisis.length > 0 && (
         <Card title={`Demande : ${choisis.length} cycle(s) · ${xof(total)}`}>
+          <Table rows={choisis} cols={[
+            { titre: 'Cycle', render: (c) => <strong>{c.numero}</strong> },
+            { titre: 'Client', render: (c) => c.client },
+            { titre: 'Statut', render: (c) => <Badge tone="neutre">{c.statut}</Badge> },
+            { titre: 'Solde disponible', num: true, render: (c) => xof(soldeDe(c)) },
+            { titre: 'Montant à retirer', num: true, render: (c) => (
+              <Input type="number" min={1} max={soldeDe(c)} aria-label={`Montant ${c.numero}`} style={{ width: 130 }}
+                value={montants[c.id] ?? String(soldeDe(c))}
+                onChange={(e) => setMontants({ ...montants, [c.id]: e.target.value })} />
+            ) },
+            { titre: 'Clôturer le cycle', render: (c) => (c.statut === 'en_cours' && partielDe(c)
+              ? <input type="checkbox" aria-label={`Clôturer ${c.numero}`} checked={!!clotures[c.id]} onChange={(e) => setClotures({ ...clotures, [c.id]: e.target.checked })} />
+              : <span className="muted">—</span>) },
+            { titre: 'Effet', render: (c) => <Badge tone={valideDe(c) ? 'ok' : 'bad'}>{effetDe(c)}</Badge> },
+          ]} />
           <div className="form-grid">
             <Field label="Destination">
               <Select value={destination} onChange={(e) => { setDestination(e.target.value); setCompte('') }}>
@@ -183,7 +217,7 @@ export default function DemandeRetraitTontine() {
             </Field>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <Button variant="primary" disabled={busy || (destination === 'virement_vers_epargne' && (!compte || !memeClient))} onClick={demander}>
+            <Button variant="primary" disabled={busy || !toutValide || (destination === 'virement_vers_epargne' && (!compte || !memeClient))} onClick={demander}>
               {busy ? 'En cours…' : `Demander le retrait de ${choisis.length} cycle(s)`}
             </Button>
             <Button onClick={reinitialiser}>Annuler</Button>
