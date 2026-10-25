@@ -13,8 +13,9 @@ from .caisse import verifier_session
 router = APIRouter(prefix="/api", tags=["retraits"])
 
 RETRAIT = (
-    "SELECT r.*, c.numero AS cycle, c.client_id, cl.nom AS client FROM retrait r "
+    "SELECT r.*, c.numero AS cycle, c.client_id, cl.nom AS client, z.libelle AS zone, u.nom AS caissiere FROM retrait r "
     "JOIN cycle c ON c.id = r.cycle_id JOIN client cl ON cl.id = c.client_id "
+    "LEFT JOIN zone z ON z.id = cl.zone_id LEFT JOIN utilisateur u ON u.id = r.execute_par "
 )
 
 
@@ -139,6 +140,7 @@ def executer(retrait_id: int, body: ExecutionIn, user: User = Depends(require("r
         elif r["nature"] == "retrait_client" and r["decaissement"] and r["statut"] == "fonds_disponibles":
             raise HTTPException(status_code=422, detail="Session de caisse obligatoire pour un retrait payé en espèces")
         cur.execute("SELECT executer_retrait(%s, %s, %s)", (retrait_id, body.date, body.session_id))
+        cur.execute("UPDATE retrait SET execute_par = %s WHERE id = %s", (user.id, retrait_id))
         return _retrait(cur, retrait_id)
 
 

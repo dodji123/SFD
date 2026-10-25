@@ -7,16 +7,60 @@ import { Alert, Badge, Button, Card, Charge, Field, Input, Page, Select, Table, 
 import type { CycleLigne } from './Cycles'
 
 interface CompteEpargne { id: number; numero: string; produit: string; disponible: number }
+interface RetraitL {
+  id: number; cycle: string; client: string; zone: string | null; caissiere: string | null; nature: string
+  montant: number; montant_paye: number | null; statut: string; date_demande: string; date_operation: string | null
+}
+interface SessionC { id: number; caisse: string; statut: string }
+
+const NATURE: Record<string, string> = {
+  retrait_client: 'Espèces', virement_vers_epargne: 'Virement épargne', remboursement: 'Remboursement', regularisation: 'Régularisation',
+}
+const STATUT: Record<string, { texte: string; tone: 'ok' | 'warn' | 'bad' | 'neutre' }> = {
+  demande: { texte: 'Demandé', tone: 'warn' }, ecart_en_traitement: { texte: 'Écart à traiter', tone: 'bad' },
+  fonds_disponibles: { texte: 'À payer', tone: 'ok' }, execute: { texte: 'Payé', tone: 'neutre' }, annule: { texte: 'Annulé', tone: 'neutre' },
+}
+
+const jour = (d: string | null | undefined) => (d ?? '').slice(0, 10)
+const montantRetrait = (r: RetraitL) => r.montant_paye ?? r.montant
+
+/** Regroupe les retraits par une clé (zone ou type) : nombre et total. */
+function regrouper(rows: RetraitL[], cle: (r: RetraitL) => string) {
+  const m = new Map<string, { nb: number; total: number }>()
+  for (const r of rows) {
+    const k = cle(r)
+    const e = m.get(k) ?? { nb: 0, total: 0 }
+    e.nb += 1
+    e.total += montantRetrait(r)
+    m.set(k, e)
+  }
+  return [...m.entries()].map(([k, v]) => ({ k, ...v })).sort((a, b) => a.k.localeCompare(b.k))
+}
 
 /**
- * Retrait de tontine au guichet. Le carnet a déjà été contrôlé (Contrôle des livrets) avant la caisse.
- * Le caissier choisit le produit, saisit le numéro ou le nom, voit les cycles avec un solde supérieur à 0,
- * coche un ou plusieurs cycles et crée les demandes de retrait.
+ * Guichet des retraits de tontine. Le constat des écarts est fait par les responsables ;
+ * la caissière paie les retraits « à payer », demande un retrait et suit les paiements du jour.
  */
 export default function DemandeRetraitTontine() {
   const { agenceId } = useSession()
-  const produits = useProduitsEpargne('collecte')
   const { run, busy } = useAction()
+  const retraits = useFetch(() => api.get<RetraitL[]>('/api/retraits', { limit: 500 }), [agenceId])
+  const sessions = useFetch(() => api.get<SessionC[]>('/api/sessions'), [agenceId])
+  const sessionOuverte = (sessions.data ?? []).find((s) => s.statut === 'ouverte') ?? null
+  const tous = retraits.data ?? []
+  const aPayer = tous.filter((r) => r.statut === 'fonds_disponibles')
+  const duJour = tous.filter((r) => jour(r.date_operation) === aujourdhui() || jour(r.date_demande) === aujourdhui())
+  const payesDuJour = tous.filter((r) => r.statut === 'execute' && jour(r.date_operation) === aujourdhui())
+  const totalJour = payesDuJour.reduce((s, r) => s + montantRetrait(r), 0)
+
+  const payer = (r: RetraitL) => void run(
+    () => api.post(`/api/retraits/${r.id}/executer`, { date: aujourdhui(), session_id: r.nature === 'retrait_client' ? sessionOuverte?.id ?? null : null }),
+    `Retrait ${r.cycle} payé`,
+    retraits.reload,
+  )
+
+  // ----- demande de retrait : produit, numéro ou nom, cycles à solde, cases à cocher
+  const produits = useProduitsEpargne('collecte')
   const [produit, setProduit] = useState('')
   const [recherche, setRecherche] = useState('')
   const [coches, setCoches] = useState<Set<number>>(new Set())
@@ -43,10 +87,9 @@ export default function DemandeRetraitTontine() {
 
   const basculer = (id: number) => setCoches((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toutCocher = () => setCoches(coches.size === avecSolde.length ? new Set() : new Set(avecSolde.map((c) => c.id)))
-
   const reinitialiser = () => { setCoches(new Set()); setDestination('retrait_client'); setCompte(''); setDate(aujourdhui()) }
 
-  const envoyer = () => {
+  const demander = () => {
     const liste = choisis
     void run(async () => {
       const echecs: string[] = []
@@ -59,14 +102,30 @@ export default function DemandeRetraitTontine() {
       }
       if (echecs.length) throw new Error(echecs.join(' · '))
     }, `${liste.length} demande(s) de retrait créée(s)`, () => {
-      setFait(`${liste.length} cycle(s) pour ${xof(total)} : demande créée. Le traitement se fait dans « Retraits et écarts ».`)
+      setFait(`${liste.length} cycle(s) pour ${xof(total)} : demande créée. Le constat est fait par un responsable avant le paiement.`)
       reinitialiser()
       cycles.reload()
+      retraits.reload()
     })
   }
 
+  const parZone = regrouper(payesDuJour, (r) => r.zone ?? 'Sans zone')
+  const parType = regrouper(payesDuJour, (r) => NATURE[r.nature] ?? r.nature)
+
   return (
-    <Page title="Retrait de tontine au guichet" subtitle="Produit, puis numéro ou nom du client : cochez les cycles à retirer">
+    <Page title="Retrait de tontine au guichet" subtitle="Payer les retraits dont le constat est fait, demander un retrait, suivre la journée">
+      <Card title={`À payer : constat fait (${aPayer.length})`} flush>
+        {!sessionOuverte && <div style={{ padding: 12 }}><Alert tone="warn">Aucune session de caisse ouverte : ouvrez-la pour payer en espèces.</Alert></div>}
+        <Table rows={aPayer} vide="Aucun retrait à payer" cols={[
+          { titre: 'Cycle', render: (r) => <strong>{r.cycle}</strong> },
+          { titre: 'Client', render: (r) => r.client },
+          { titre: 'Zone', render: (r) => r.zone ?? '—' },
+          { titre: 'Destination', render: (r) => NATURE[r.nature] ?? r.nature },
+          { titre: 'Montant', num: true, render: (r) => <strong>{xof(r.montant)}</strong> },
+          { titre: '', render: (r) => <Button small variant="primary" disabled={busy} onClick={() => payer(r)}>Payer</Button> },
+        ]} />
+      </Card>
+
       <Card>
         <div className="form-grid">
           <Field label="Produit">
@@ -98,7 +157,7 @@ export default function DemandeRetraitTontine() {
       )}
 
       {choisis.length > 0 && (
-        <Card title={`À retirer : ${choisis.length} cycle(s) · ${xof(total)}`}>
+        <Card title={`Demande : ${choisis.length} cycle(s) · ${xof(total)}`}>
           <div className="form-grid">
             <Field label="Destination">
               <Select value={destination} onChange={(e) => { setDestination(e.target.value); setCompte('') }}>
@@ -119,15 +178,41 @@ export default function DemandeRetraitTontine() {
             </Field>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <Button variant="primary" disabled={busy || (destination === 'virement_vers_epargne' && (!compte || !memeClient))} onClick={envoyer}>
+            <Button variant="primary" disabled={busy || (destination === 'virement_vers_epargne' && (!compte || !memeClient))} onClick={demander}>
               {busy ? 'En cours…' : `Demander le retrait de ${choisis.length} cycle(s)`}
             </Button>
             <Button onClick={reinitialiser}>Annuler</Button>
           </div>
         </Card>
       )}
-
       {fait && <Alert tone="info">{fait}</Alert>}
+
+      <Card title={`Retraits du jour (${duJour.length})`} flush>
+        <Table rows={duJour} vide="Aucun retrait aujourd'hui" cols={[
+          { titre: 'Cycle', render: (r) => r.cycle },
+          { titre: 'Client', render: (r) => r.client },
+          { titre: 'Zone', render: (r) => r.zone ?? '—' },
+          { titre: 'Destination', render: (r) => NATURE[r.nature] ?? r.nature },
+          { titre: 'Montant', num: true, render: (r) => xof(montantRetrait(r)) },
+          { titre: 'Statut', render: (r) => <Badge tone={STATUT[r.statut]?.tone ?? 'neutre'}>{STATUT[r.statut]?.texte ?? r.statut}</Badge> },
+          { titre: 'Caissière', render: (r) => r.caissiere ?? '—' },
+        ]} />
+      </Card>
+
+      <Card title={`Récapitulatif du jour : ${payesDuJour.length} paiement(s) · ${xof(totalJour)}`}>
+        <div className="form-grid">
+          <Table rows={parZone} vide="Aucun paiement aujourd'hui" cols={[
+            { titre: 'Zone', render: (z) => z.k },
+            { titre: 'Paiements', num: true, render: (z) => z.nb },
+            { titre: 'Total', num: true, render: (z) => <strong>{xof(z.total)}</strong> },
+          ]} />
+          <Table rows={parType} vide="Aucun paiement aujourd'hui" cols={[
+            { titre: 'Type de retrait', render: (t) => t.k },
+            { titre: 'Paiements', num: true, render: (t) => t.nb },
+            { titre: 'Total', num: true, render: (t) => <strong>{xof(t.total)}</strong> },
+          ]} />
+        </div>
+      </Card>
     </Page>
   )
 }
