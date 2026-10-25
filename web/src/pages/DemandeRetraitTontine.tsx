@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { aujourdhui, xof } from '../lib/format'
 import { useProduitsEpargne } from '../lib/hooks'
@@ -61,8 +62,12 @@ export default function DemandeRetraitTontine() {
 
   // ----- demande de retrait : produit, numéro ou nom, cycles à solde, cases à cocher
   const produits = useProduitsEpargne('collecte')
-  const [produit, setProduit] = useState('')
-  const [recherche, setRecherche] = useState('')
+  // produit et recherche dans l'adresse : ils sont retrouvés au retour depuis la fiche d'un cycle
+  const nav = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const produit = params.get('produit') ?? ''
+  const recherche = params.get('q') ?? ''
+  const majFiltre = (p: string, q: string) => setParams({ produit: p, q }, { replace: true })
   const [coches, setCoches] = useState<Set<number>>(new Set())
   const [destination, setDestination] = useState('retrait_client')
   const [date, setDate] = useState(aujourdhui())
@@ -129,13 +134,13 @@ export default function DemandeRetraitTontine() {
       <Card>
         <div className="form-grid">
           <Field label="Produit">
-            <Select value={produit} onChange={(e) => { setProduit(e.target.value); reinitialiser() }}>
+            <Select value={produit} onChange={(e) => { majFiltre(e.target.value, recherche); reinitialiser() }}>
               <option value="">— choisir un produit —</option>
               {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle}</option>)}
             </Select>
           </Field>
           <Field label="Numéro ou nom du client" hint="Au moins 2 caractères">
-            <Input value={recherche} onChange={(e) => { setRecherche(e.target.value); reinitialiser() }} placeholder="Numéro de cycle, numéro ou nom du client" disabled={produit === ''} />
+            <Input value={recherche} onChange={(e) => { majFiltre(produit, e.target.value); reinitialiser() }} placeholder="Numéro de cycle, numéro ou nom du client" disabled={produit === ''} />
           </Field>
         </div>
       </Card>
@@ -144,7 +149,7 @@ export default function DemandeRetraitTontine() {
         <Card title={`Cycles avec un solde (${avecSolde.length})`} flush actions={avecSolde.length > 0 && <Button small onClick={toutCocher}>{coches.size === avecSolde.length ? 'Tout décocher' : 'Tout cocher'}</Button>}>
           <Charge q={cycles}>
             {() => (
-              <Table rows={avecSolde} vide="Aucun cycle avec un solde pour cette recherche" onRowClick={(c) => window.open(`/cycles/${c.id}`, '_blank')} cols={[
+              <Table rows={avecSolde} vide="Aucun cycle avec un solde pour cette recherche" onRowClick={(c) => nav(`/cycles/${c.id}`)} cols={[
                 { titre: '', render: (c) => <input type="checkbox" aria-label={`Choisir ${c.numero}`} checked={coches.has(c.id)} onClick={(e) => e.stopPropagation()} onChange={() => basculer(c.id)} /> },
                 { titre: 'Cycle', render: (c) => <strong>{c.numero}</strong> },
                 { titre: 'Client', render: (c) => c.client },

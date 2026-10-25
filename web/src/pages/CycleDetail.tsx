@@ -36,6 +36,7 @@ export default function CycleDetail() {
         return (
           <Page title={`Cycle ${c.numero}`} subtitle={`Type ${c.type_cycle} · début ${fdate(c.date_debut)} · fin réelle ${c.date_cloture ? fdate(c.date_cloture) : 'cycle en cours'}${c.date_fin !== c.date_cloture ? ` · fin prévue ${fdate(c.date_fin)}` : ''}`}
             actions={<>
+              <Button onClick={() => nav(-1)}>← Retour au retrait</Button>
               <Link to={`/clients/${c.client_id}`} className="btn">{c.client}</Link>
               <Statut s={c.statut} />
               {enCours && can('collecte:write') && <Button variant="primary" onClick={() => setModale('lignes')}>Saisir des lignes</Button>}
