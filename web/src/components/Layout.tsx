@@ -57,6 +57,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
   ] },
   { titre: 'Application et administration', items: [
     { to: '/aide', titre: 'Aide et manuel', icone: '❓', perm: '' },
+    { to: '/fiche-tests', titre: 'Fiche des tests manuels', icone: '📋', perm: '' },
     { to: '/application-mobile', titre: 'Application mobile', icone: '📱', perm: 'collecte:read' },
     { to: '/admin', titre: 'Administration', icone: '⚙️', perm: ['users:manage', 'params:read', 'audit:read', 'ref:write'] },
   ] },

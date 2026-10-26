@@ -28,6 +28,7 @@ from .routers import kyc as r_kyc
 from .routers import provisions as r_provisions
 from .routers import reglementaire as r_reglementaire
 from .routers import journee as r_journee
+from .routers import fiche_tests as r_fiche_tests
 from .routers import rapprochement as r_rapprochement
 from .routers import referentiels as r_referentiels
 from .routers import retraits as r_retraits
@@ -52,7 +53,7 @@ from .routers import immobilisations as r_immobilisations
 from .routers import stock as r_stock
 from .routers import procurations_cheques as r_procchq
 
-ROUTERS = [r_journee.router, r_auth.router,r_totp.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_collecte_sync.router, r_adhesion.router, r_depots.router, r_pieces.router, r_institution.router, r_capacite.router,
+ROUTERS = [r_journee.router, r_fiche_tests.router,r_auth.router,r_totp.router, r_utilisateurs.router, r_referentiels.router, r_epargne.router, r_collecte.router, r_collecte_sync.router, r_adhesion.router, r_depots.router, r_pieces.router, r_institution.router, r_capacite.router,
            r_caisse.router, r_retraits.router, r_credits.router, r_rapports.router, r_compta.router, r_admin.router, r_rh.router, r_tresorerie.router, r_transferts.router, r_etats.router, r_kyc.router, r_espace.router, r_espace.admin_router, r_reglementaire.router, r_provisions.router, r_rapprochement.router, r_securite.router, r_reseaux.router, r_comites.router, r_recouvrement.router, r_procchq.router, r_releves.router, r_grh.router, r_grh_cycle.router, r_controle_livrets.router, r_carnets.router, r_espace_paiements.router, r_espace_paiements.admin_router, r_operations_caisse.router, r_charges_produits.router, r_roles.router, r_immobilisations.router, r_stock.router]
 
 
