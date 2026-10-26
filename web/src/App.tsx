@@ -20,6 +20,7 @@ import ChargesProduits from './pages/ChargesProduits'
 import Roles from './pages/Roles'
 import Immobilisations from './pages/Immobilisations'
 import Aide from './pages/Aide'
+import Journee from './pages/Journee'
 import DemandeRetraitTontine from './pages/DemandeRetraitTontine'
 import Stock from './pages/Stock'
 import ProcurationsCheques from './pages/ProcurationsCheques'
@@ -99,6 +100,7 @@ export default function App() {
         <Route path="roles" element={<Garde perm="roles:demander"><Roles /></Garde>} />
         <Route path="immobilisations" element={<Garde perm="immobilisation:read"><Immobilisations /></Garde>} />
         <Route path="aide" element={<Aide />} />
+        <Route path="journee" element={<Garde perm="caisse:read"><Journee /></Garde>} />
         <Route path="demande-retrait" element={<Garde perm="retrait:request"><DemandeRetraitTontine /></Garde>} />
         <Route path="stock" element={<Garde perm="stock:read"><Stock /></Garde>} />
         <Route path="rh" element={<Garde perm="rh:read"><Rh /></Garde>} />
