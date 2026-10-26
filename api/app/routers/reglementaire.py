@@ -3,6 +3,7 @@
 Les calculs vivent dans la base (modules 19 et 20) ; l'API contrôle les droits et le cloisonnement par agence.
 Les états du réseau entier (consolidé) sont réservés au siège (permission etats:consolide)."""
 import datetime as dt
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -39,6 +40,23 @@ def bilan(au: dt.date, agence_id: int | None = None, consolide: bool = False, us
     ag = _perimetre(user, agence_id, consolide)
     with tx() as cur:
         return {"au": au, "agence_id": ag, "consolide": ag is None, **_lignes_bilan(cur, ag, au)}
+
+
+@router.get("/bilan-detail")
+def bilan_detail(au: dt.date, agence_id: int | None = None, consolide: bool = False, user: User = Depends(require("compta:read"))):
+    """Bilan au format du modèle : brut, amortissements / provisions et net par poste (module 63)."""
+    ag = _perimetre(user, agence_id, consolide)
+    with tx() as cur:
+        lignes = all_rows(cur, "SELECT code, cote, libelle, brut, amort, net FROM valeurs_postes_detail(%s::smallint, %s) "
+                               "WHERE cote IN ('actif','passif') AND net <> 0", (ag, au))
+    actif = [l for l in lignes if l["cote"] == "actif"]
+    passif = [l for l in lignes if l["cote"] == "passif"]
+    # totaux comme l'état par postes : sous-totaux de groupe seulement (A01..E01, E05 ; L01..L75 pour le passif)
+    total_a = [l for l in actif if re.fullmatch(r"[A-D]01|E01|E05", l["code"])]
+    total_p = [l for l in passif if re.fullmatch(r"[FGHKL]01|L75", l["code"])]
+    return {"au": au, "agence_id": ag, "consolide": ag is None, "actif": actif, "passif": passif,
+            "total_actif": {"brut": sum(l["brut"] for l in total_a), "amort": sum(l["amort"] for l in total_a), "net": sum(l["net"] for l in total_a)},
+            "total_passif": sum(l["net"] for l in total_p)}
 
 
 @router.get("/resultat")

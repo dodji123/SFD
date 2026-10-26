@@ -75,12 +75,50 @@ function BilanNormal({ du, au, consolide }: { du: string; au: string; consolide:
   )
 }
 
+interface LigneDetail { code: string; libelle: string; brut: number; amort: number; net: number }
+interface BilanDetail {
+  actif: LigneDetail[]; passif: { code: string; libelle: string; net: number }[]
+  total_actif: { brut: number; amort: number; net: number }; total_passif: number
+}
+
+/** Bilan au format du modèle : brut, amortissements / provisions et net pour l'actif (module 63). */
+function BilanModele({ au, consolide }: { au: string; consolide: boolean }) {
+  const q = useFetch(() => api.get<BilanDetail>('/api/reglementaire/bilan-detail', { au, consolide }), [au, consolide])
+  return (
+    <Card title={`Bilan au format du modèle au ${fdate(au)}`} flush>
+      <Charge q={q}>
+        {(b) => (
+          <>
+            <p className="muted" style={{ padding: '0 12px' }}>
+              Actif : brut {xof(b.total_actif.brut)} · amortissements et provisions {xof(b.total_actif.amort)} · net {xof(b.total_actif.net)} · passif net {xof(b.total_passif)}
+            </p>
+            <div className="grid-2">
+              <Table rows={b.actif} vide="Aucun poste d'actif" cols={[
+                { titre: 'Poste', render: (p) => p.code },
+                { titre: 'Libellé', render: (p) => p.libelle },
+                { titre: 'Brut', num: true, render: (p) => xof(p.brut) },
+                { titre: 'Amort. / prov.', num: true, render: (p) => xof(p.amort) },
+                { titre: 'Net', num: true, render: (p) => xof(p.net) },
+              ]} />
+              <Table rows={b.passif} vide="Aucun poste de passif" cols={[
+                { titre: 'Poste', render: (p) => p.code },
+                { titre: 'Libellé', render: (p) => p.libelle },
+                { titre: 'Net', num: true, render: (p) => xof(p.net) },
+              ]} />
+            </div>
+          </>
+        )}
+      </Charge>
+    </Card>
+  )
+}
+
 export function Reglementaire({ du, au, consolide }: { du: string; au: string; consolide: boolean }) {
   const q = useFetch(() => api.get<Bilan>('/api/reglementaire/bilan', { au, consolide }), [au, consolide])
   const r = useFetch(() => api.get<Resultat>('/api/reglementaire/resultat', { du, au, consolide }), [du, au, consolide])
   return (
     <div className="stack">
-      <Alert tone="info">États présentés selon la nomenclature des postes du référentiel comptable des SFD de l'UMOA (annexe 1.1). Montants nets ; les colonnes brut et amortissements ne sont pas produites. Document de travail, à valider par le comptable avant tout dépôt auprès des autorités.</Alert>
+      <Alert tone="info">États présentés selon la nomenclature des postes du référentiel comptable des SFD de l'UMOA (annexe 1.1). Bilan par postes en montants nets ; le bloc « Bilan au format du modèle » ajoute le brut et les amortissements / provisions de l'actif. Document de travail, à valider par le comptable avant tout dépôt auprès des autorités.</Alert>
       <Charge q={q}>
         {(b) => (
           <>
@@ -98,6 +136,7 @@ export function Reglementaire({ du, au, consolide }: { du: string; au: string; c
           </>
         )}
       </Charge>
+      <BilanModele au={au} consolide={consolide} />
       <BilanNormal du={du} au={au} consolide={consolide} />
       <Charge q={r}>
         {(x) => (

@@ -38,6 +38,16 @@ def test_bilan_par_postes(client, h, agence7):
     assert d["total_actif"] == d["total_passif"] == 153000
 
 
+def test_bilan_detail_brut_amort_net(client, h, agence7):
+    d = client.get("/api/reglementaire/bilan-detail", params={**P, "agence_id": agence7}, headers=h("comptable"))
+    assert d.status_code == 200, d.text
+    d = d.json()
+    bilan = client.get("/api/reglementaire/bilan", params={**P, "agence_id": agence7}, headers=h("comptable")).json()
+    assert d["total_actif"]["net"] == bilan["total_actif"]          # même net que l'état par postes
+    assert d["total_passif"] == bilan["total_passif"]
+    assert all(l["brut"] - l["amort"] == l["net"] for l in d["actif"])
+
+
 def test_resultat_par_postes(client, h, agence7):
     r = client.get("/api/reglementaire/resultat", params={"du": "2034-01-01", "au": "2034-12-31", "agence_id": agence7}, headers=h("comptable")).json()
     produits = {l["code"]: l["montant"] for l in r["produits"]}
