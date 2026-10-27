@@ -315,8 +315,19 @@ def journee(agent_id: int, date: dt.date, user: User = Depends(require("collecte
 @router.get("/collecte/jour")
 def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int | None = None,
                      user: User = Depends(require("collecte:read"))):
-    """Tableau des collectes saisies un jour (toute l'agence, ou un agent), avec l'état de validation de la journée."""
+    """Tableau des collectes saisies un jour, avec l'état de validation de la journée.
+    Un agent ne voit que ses collectes ; une collectrice seulement celles de sa zone en cours ; les autres, l'agence (ou un agent)."""
     ag = agence_scope(user, agence_id)
+    zone = None
+    if user.agent_id is not None:
+        agent_id = user.agent_id
+    elif user.collectrice_id is not None:
+        with tx() as cur:
+            aff = one_row(cur, "SELECT zone_id FROM affectation_zone WHERE collectrice_id = %s AND date_fin IS NULL "
+                               "ORDER BY date_debut DESC LIMIT 1", (user.collectrice_id,))
+        if aff is None:
+            return {"date": date, "agence_id": ag, "validee": False, "validation": None, "lignes": [], "total": 0}
+        zone = aff["zone_id"]
     with tx() as cur:
         lignes = all_rows(
             cur,
@@ -329,8 +340,8 @@ def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int 
             "LEFT JOIN zone z ON z.id = cl.zone_id "
             "LEFT JOIN versement_agent v ON v.agent_id = l.agent_id AND v.date_tournee = l.date_collecte "
             "WHERE c.agence_id = %s AND l.date_collecte = %s AND l.origine = 'collecte' "
-            "AND (%s::int IS NULL OR l.agent_id = %s) ORDER BY l.id DESC",
-            (ag, date, agent_id, agent_id),
+            "AND (%s::int IS NULL OR l.agent_id = %s) AND (%s::int IS NULL OR z.id = %s) ORDER BY l.id DESC",
+            (ag, date, agent_id, agent_id, zone, zone),
         )
         val = one_row(cur, "SELECT v.valide_le, u.login AS valide_par FROM validation_collecte v LEFT JOIN utilisateur u ON u.id = v.valide_par "
                            "WHERE v.agence_id = %s AND v.date_collecte = %s", (ag, date))

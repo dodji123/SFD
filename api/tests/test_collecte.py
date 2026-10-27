@@ -97,6 +97,20 @@ def test_agent_ne_saisit_que_ses_collectes(client, h, base, utilisateurs):
     assert client.post(f"/api/cycles/{c['id']}/lignes", json=corps(None), headers=h("agent1")).status_code == 403
 
 
+def test_collecte_du_jour_limitee_a_l_agent(client, h, base):
+    c = _cycle(client, h, base, mise=100)
+    tok = client.post("/api/auth/login", json={"login": "agent_lie", "mot_de_passe": "MotDePasse-Test-1"}).json()["access_token"]
+    hdr = {"Authorization": "Bearer " + tok}
+    assert client.post(f"/api/cycles/{c['id']}/lignes", json={"lignes": [{"date_collecte": "2026-10-03", "montant_collecte": 100}]},
+                       headers=hdr).status_code == 201
+    assert client.post(f"/api/cycles/{c['id']}/lignes", json={"lignes": [{"date_collecte": "2026-10-03", "montant_collecte": 100,
+                       "agent_id": base["ag2"]["id"]}]}, headers=h("chef1")).status_code == 201
+    vue_agent = client.get("/api/collecte/jour", params={"date": "2026-10-03"}, headers=hdr).json()["lignes"]
+    assert vue_agent and all(l["agent_id"] == base["ag1"]["id"] for l in vue_agent)
+    vue_chef = client.get("/api/collecte/jour", params={"date": "2026-10-03"}, headers=h("chef1")).json()["lignes"]
+    assert {l["agent_id"] for l in vue_chef} >= {base["ag1"]["id"], base["ag2"]["id"]}
+
+
 def test_changement_de_mise(client, h, base):
     c = _cycle(client, h, base, mise=500)
     _lignes(client, h, c["id"], base["ag1"]["id"], 3, montant=500)
