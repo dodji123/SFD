@@ -72,6 +72,53 @@ def enregistrer_controle(cycle_id: int, body: ControleCarnetIn, user: User = Dep
         return one_row(cur, "SELECT * FROM controle_carnet WHERE id = %s", (cid,))
 
 
+def controle_actif(cur, cycle_id: int) -> dict | None:
+    """Le contrôle en vigueur du cycle : le plus récent non annulé."""
+    return one_row(
+        cur,
+        "SELECT k.id FROM controle_carnet k WHERE k.cycle_id = %s "
+        "AND NOT EXISTS (SELECT 1 FROM controle_carnet_annulation a WHERE a.controle_id = k.id) "
+        "ORDER BY k.id DESC LIMIT 1",
+        (cycle_id,),
+    )
+
+
+class AnnulationIn(BaseModel):
+    motif: str = Field(min_length=5)
+
+
+@router.post("/cycles/{cycle_id}/controle/annuler")
+def annuler_controle(cycle_id: int, body: AnnulationIn, user: User = Depends(require("livret:controler"))):
+    """Annule le contrôle en vigueur du cycle (remplacé) : il reste dans la base, avec son motif."""
+    with tx(user.login) as cur:
+        verifier_agence(cur, user, "cycle", cycle_id)
+        ctrl = controle_actif(cur, cycle_id)
+        if ctrl is None:
+            raise HTTPException(status_code=404, detail="Aucun contrôle en vigueur sur ce cycle")
+        cur.execute("SELECT annuler_controle_carnet(%s, %s, %s)", (ctrl["id"], user.id, body.motif))
+        return {"controle_annule": ctrl["id"]}
+
+
+class ModificationCarnetIn(BaseModel):
+    motif: str = Field(min_length=5)
+    lignes: list[LigneCarnetIn] = Field(min_length=1, max_length=400)
+
+
+@router.put("/cycles/{cycle_id}/controle")
+def modifier_controle(cycle_id: int, body: ModificationCarnetIn, user: User = Depends(require("livret:controler"))):
+    """Modification des valeurs du contrôle déjà enregistré du cycle, avec motif. Chaque valeur changée est historisée."""
+    with tx(user.login) as cur:
+        verifier_agence(cur, user, "cycle", cycle_id)
+        ctrl = controle_actif(cur, cycle_id)
+        if ctrl is None:
+            raise HTTPException(status_code=404, detail="Ce cycle n'a pas encore de contrôle au carnet")
+        cur.execute(
+            "SELECT modifier_controle_carnet(%s, %s::jsonb, %s, %s)",
+            (ctrl["id"], json.dumps([l.model_dump() for l in body.lignes]), user.id, body.motif),
+        )
+        return one_row(cur, "SELECT * FROM controle_carnet WHERE id = %s", (ctrl["id"],))
+
+
 @router.get("/cycles/{cycle_id}/controles")
 def controles_du_cycle(cycle_id: int, user: User = Depends(require("livret:read"))):
     """Historique des contrôles au carnet du cycle, avec leurs lignes."""
@@ -79,7 +126,9 @@ def controles_du_cycle(cycle_id: int, user: User = Depends(require("livret:read"
         verifier_agence(cur, user, "cycle", cycle_id)
         controles = all_rows(
             cur,
-            "SELECT k.*, u.nom AS controleur FROM controle_carnet k LEFT JOIN utilisateur u ON u.id = k.controleur_id "
+            "SELECT k.*, u.nom AS controleur, (a.id IS NOT NULL) AS annule, a.motif AS motif_annulation "
+            "FROM controle_carnet k LEFT JOIN utilisateur u ON u.id = k.controleur_id "
+            "LEFT JOIN controle_carnet_annulation a ON a.controle_id = k.id "
             "WHERE k.cycle_id = %s ORDER BY k.date_controle DESC, k.id DESC",
             (cycle_id,),
         )

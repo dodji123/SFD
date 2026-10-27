@@ -81,6 +81,18 @@ def test_montant_carnet_multiple_de_la_mise(client, h, cycle_carnet):
     assert r.status_code == 422, r.text
 
 
+def test_un_seul_controle_par_cycle_puis_modification_de_valeurs(client, h, cycle_carnet):
+    cid = cycle_carnet["cycle"]["id"]
+    lignes = client.get(f"/api/controle-carnet/cycles/{cid}/lignes", headers=h("chef1")).json()
+    saisie = [{"ligne_id": l["id"], "montant_carnet": 2000 if i == 0 else 1000} for i, l in enumerate(lignes)]
+    assert client.post(f"/api/controle-carnet/cycles/{cid}/controles", json={"lignes": saisie}, headers=h("chef1")).status_code == 422
+    assert client.put(f"/api/controle-carnet/cycles/{cid}/controle", json={"motif": "ok", "lignes": saisie}, headers=h("chef1")).status_code == 422
+    # valeurs inchangées : la modification est acceptée, l'écart reste celui du contrôle initial (1 000)
+    r = client.put(f"/api/controle-carnet/cycles/{cid}/controle", json={"motif": "relecture du contrôle", "lignes": saisie}, headers=h("chef1"))
+    assert r.status_code == 200, r.text
+    assert r.json()["ecart_collecte"] == 1000
+
+
 def test_recherche_du_client_par_nom_ou_numero(client, h, cycle_carnet, produits):
     base = {"du": "2026-10-01", "au": "2026-10-31", "produit_id": produits["P1"]}
     par_nom = client.get("/api/controle-carnet/cycles", params={**base, "q": "carnet"}, headers=h("chef1")).json()
@@ -88,6 +100,18 @@ def test_recherche_du_client_par_nom_ou_numero(client, h, cycle_carnet, produits
     par_numero = client.get("/api/controle-carnet/cycles", params={**base, "q": cycle_carnet["client"]["numero"]}, headers=h("chef1")).json()
     assert [x["id"] for x in par_numero] == [cycle_carnet["cycle"]["id"]]
     assert client.get("/api/controle-carnet/cycles", params={**base, "q": "introuvable"}, headers=h("chef1")).json() == []
+
+
+def test_annulation_du_controle_en_vigueur(client, h, cycle_carnet):
+    cid = cycle_carnet["cycle"]["id"]
+    assert client.post(f"/api/controle-carnet/cycles/{cid}/controle/annuler", json={"motif": "trop court"}, headers=h("caissier1")).status_code == 403
+    r = client.post(f"/api/controle-carnet/cycles/{cid}/controle/annuler", json={"motif": "contrôle remplacé"}, headers=h("chef1"))
+    assert r.status_code == 200, r.text
+    historique = client.get(f"/api/controle-carnet/cycles/{cid}/controles", headers=h("chef1")).json()
+    assert historique[0]["annule"] is True and historique[0]["motif_annulation"] == "contrôle remplacé"
+    assert client.put(f"/api/controle-carnet/cycles/{cid}/controle", json={"motif": "après annulation", "lignes": [
+        {"ligne_id": l["id"], "montant_carnet": 1000} for l in client.get(f"/api/controle-carnet/cycles/{cid}/lignes", headers=h("chef1")).json()
+    ]}, headers=h("chef1")).status_code == 404
 
 
 def test_reglement_des_manquants_du_controle(client, h, cycle_carnet):

@@ -49,3 +49,25 @@ SELECT enregistrer_controle_carnet((SELECT id FROM cycle WHERE numero = 'K4'), (
   (SELECT jsonb_agg(jsonb_build_object('ligne_id', id, 'montant_carnet', 2000)) FROM ligne_collecte WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4')));
 SELECT t.eq('K carnet multiple de la mise accepté (écart 1 000)', ecart_collecte::text, '1000') FROM controle_carnet
  WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4');
+
+-- Un cycle n'est contrôlé qu'une fois
+SELECT t.refuse('K second contrôle du même cycle refusé', 'SELECT mf.enregistrer_controle_carnet((SELECT id FROM mf.cycle WHERE numero = ''K4''), (SELECT id FROM mf.utilisateur WHERE login = ''ctrl''), ''2026-10-16'', (SELECT jsonb_agg(jsonb_build_object(''ligne_id'', id, ''montant_carnet'', 2000)) FROM mf.ligne_collecte WHERE cycle_id = (SELECT id FROM mf.cycle WHERE numero = ''K4'')))');
+
+-- Modification des valeurs : motif obligatoire, historisée, écart recalculé
+SELECT t.refuse('K modification sans motif refusée', 'SELECT mf.modifier_controle_carnet((SELECT id FROM mf.controle_carnet WHERE cycle_id = (SELECT id FROM mf.cycle WHERE numero = ''K4'')), (SELECT jsonb_agg(jsonb_build_object(''ligne_id'', id, ''montant_carnet'', 1000)) FROM mf.ligne_collecte WHERE cycle_id = (SELECT id FROM mf.cycle WHERE numero = ''K4'')), (SELECT id FROM mf.utilisateur WHERE login = ''ctrl''), ''ok'')');
+SELECT modifier_controle_carnet((SELECT id FROM controle_carnet WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4')),
+  (SELECT jsonb_agg(jsonb_build_object('ligne_id', id, 'montant_carnet', 1000)) FROM ligne_collecte WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4')),
+  (SELECT id FROM utilisateur WHERE login = 'ctrl'), 'erreur de saisie au carnet');
+SELECT t.eq('K modification : écart du contrôle recalculé', ecart_collecte::text, '0') FROM controle_carnet WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4');
+SELECT t.eq('K modification historisée (ancienne, nouvelle, motif)', ancien_montant::text || '/' || nouveau_montant::text || '/' || motif, '2000/1000/erreur de saisie au carnet')
+  FROM controle_carnet_modification;
+SELECT t.refuse('K modification directe refusée', 'UPDATE mf.controle_carnet_ligne SET montant_carnet = 5000');
+
+-- Annulation du contrôle de K4 (remplacé) : il reste dans la base, il n'est plus actif, un nouveau contrôle est possible
+SELECT annuler_controle_carnet((SELECT id FROM controle_carnet WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4')),
+  (SELECT id FROM utilisateur WHERE login = 'ctrl'), 'contrôle remplacé dans le test');
+SELECT t.refuse('K contrôle annulé : modification refusée', 'SELECT mf.modifier_controle_carnet((SELECT id FROM mf.controle_carnet WHERE cycle_id = (SELECT id FROM mf.cycle WHERE numero = ''K4'')), (SELECT jsonb_agg(jsonb_build_object(''ligne_id'', id, ''montant_carnet'', 1000)) FROM mf.ligne_collecte WHERE cycle_id = (SELECT id FROM mf.cycle WHERE numero = ''K4'')), (SELECT id FROM mf.utilisateur WHERE login = ''ctrl''), ''après annulation'')');
+SELECT enregistrer_controle_carnet((SELECT id FROM cycle WHERE numero = 'K4'), (SELECT id FROM utilisateur WHERE login = 'ctrl'), '2026-10-17',
+  (SELECT jsonb_agg(jsonb_build_object('ligne_id', id, 'montant_carnet', 1000)) FROM ligne_collecte WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4')));
+SELECT t.eq('K nouveau contrôle après annulation : 2 contrôles, 1 annulé', count(*)::text, '2') FROM controle_carnet WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4');
+SELECT t.eq('K annulation tracée', count(*)::text, '1') FROM controle_carnet_annulation;
