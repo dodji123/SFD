@@ -16,10 +16,9 @@ export default function ControleCarnet() {
   const [du, setDu] = useState(premierJour)
   const [au, setAu] = useState(aujourdhui)
   const [produit, setProduit] = useState('')
-  const [client, setClient] = useState('')
+  const [recherche, setRecherche] = useState('')
   const [cycle, setCycle] = useState<CycleCarnet | null>(null)
-  const q = useFetch(() => api.get<CycleCarnet[]>('/api/controle-carnet/cycles', { du, au, produit_id: produit ? Number(produit) : undefined }), [du, au, produit])
-  const clients = Array.from(new Map((q.data ?? []).map((c) => [c.client_id, c.client])).entries())
+  const q = useFetch(() => api.get<CycleCarnet[]>('/api/controle-carnet/cycles', { du, au, produit_id: produit ? Number(produit) : undefined, q: recherche.trim() || undefined }), [du, au, produit, recherche])
   return (
     <Page title="Contrôle au carnet" subtitle="Vérifier chaque collecte d'un cycle avec le carnet du client, puis enregistrer les écarts">
       <Card>
@@ -27,23 +26,20 @@ export default function ControleCarnet() {
           <Field label="Du"><Input type="date" value={du} onChange={(e) => setDu(e.target.value)} /></Field>
           <Field label="Au"><Input type="date" value={au} onChange={(e) => setAu(e.target.value)} /></Field>
           <Field label="Produit">
-            <Select value={produit} onChange={(e) => { setProduit(e.target.value); setClient('') }}>
+            <Select value={produit} onChange={(e) => setProduit(e.target.value)}>
               <option value="">Tous les produits</option>
               {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle}</option>)}
             </Select>
           </Field>
-          <Field label="Client">
-            <Select value={client} onChange={(e) => setClient(e.target.value)}>
-              <option value="">Tous les clients</option>
-              {clients.map(([id, nom]) => <option key={id} value={id}>{nom}</option>)}
-            </Select>
+          <Field label="Client" hint="Numéro ou nom du client">
+            <Input value={recherche} placeholder="ex. CL-LOM-2026-000005 ou Mensah" autoComplete="off" onChange={(e) => setRecherche(e.target.value)} />
           </Field>
         </div>
       </Card>
       <Card title="Cycles de la période" flush>
         <Charge q={q}>
           {(rows) => {
-            const filtre = rows.filter((c) => !client || String(c.client_id) === client)
+            const filtre = rows
             return (
               <>
                 <p className="muted" style={{ padding: '8px 16px', margin: 0 }}>Double-cliquez sur un cycle pour contrôler sa collecte au carnet.</p>

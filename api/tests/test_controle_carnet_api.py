@@ -73,6 +73,15 @@ def test_periode_inversee_renvoie_vide(client, h, cycle_carnet):
     assert r.status_code == 200 and r.json() == []
 
 
+def test_recherche_du_client_par_nom_ou_numero(client, h, cycle_carnet, produits):
+    base = {"du": "2026-10-01", "au": "2026-10-31", "produit_id": produits["P1"]}
+    par_nom = client.get("/api/controle-carnet/cycles", params={**base, "q": "carnet"}, headers=h("chef1")).json()
+    assert [x["id"] for x in par_nom] == [cycle_carnet["cycle"]["id"]]
+    par_numero = client.get("/api/controle-carnet/cycles", params={**base, "q": cycle_carnet["client"]["numero"]}, headers=h("chef1")).json()
+    assert [x["id"] for x in par_numero] == [cycle_carnet["cycle"]["id"]]
+    assert client.get("/api/controle-carnet/cycles", params={**base, "q": "introuvable"}, headers=h("chef1")).json() == []
+
+
 def test_reglement_des_manquants_du_controle(client, h, cycle_carnet):
     cid = cycle_carnet["cycle"]["id"]
     controle_id = client.get(f"/api/controle-carnet/cycles/{cid}/controles", headers=h("chef1")).json()[0]["id"]

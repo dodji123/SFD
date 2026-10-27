@@ -12,12 +12,14 @@ router = APIRouter(prefix="/api/controle-carnet", tags=["controle-carnet"])
 
 
 @router.get("/cycles")
-def cycles_du_controle(du: dt.date, au: dt.date, produit_id: int | None = None, client_id: int | None = None,
+def cycles_du_controle(du: dt.date, au: dt.date, produit_id: int | None = None, q: str | None = None,
                        agence_id: int | None = None, user: User = Depends(require("livret:read"))):
-    """Cycles dont la période chevauche [du, au], avec la date de leur dernier contrôle au carnet."""
+    """Cycles dont la période chevauche [du, au], avec la date de leur dernier contrôle au carnet.
+    q : recherche par numéro de client ou nom (partiel)."""
     ag = agence_filter(user, agence_id)
     if au < du:
         return []
+    q = (q or "").strip() or None
     with tx() as cur:
         return all_rows(
             cur,
@@ -26,9 +28,10 @@ def cycles_du_controle(du: dt.date, au: dt.date, produit_id: int | None = None, 
             "(SELECT max(k.date_controle) FROM controle_carnet k WHERE k.cycle_id = c.id) AS dernier_controle "
             "FROM cycle c JOIN client cl ON cl.id = c.client_id JOIN produit_epargne pe ON pe.id = c.produit_id "
             "WHERE (%s::int IS NULL OR c.agence_id = %s) AND c.date_debut <= %s AND c.date_fin >= %s "
-            "AND (%s::int IS NULL OR c.produit_id = %s) AND (%s::int IS NULL OR c.client_id = %s) "
+            "AND (%s::int IS NULL OR c.produit_id = %s) "
+            "AND (%s::text IS NULL OR cl.nom ILIKE '%%' || %s || '%%' OR cl.numero ILIKE '%%' || %s || '%%') "
             "ORDER BY cl.nom, c.date_debut, c.id",
-            (ag, ag, au, du, produit_id, produit_id, client_id, client_id),
+            (ag, ag, au, du, produit_id, produit_id, q, q, q),
         )
 
 
