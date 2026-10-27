@@ -93,6 +93,8 @@ function Actions({ r, onAction, onFait }: { r: Retrait; onAction: (t: 'ecart' | 
 }
 
 function Detail({ r, onClose }: { r: Retrait; onClose: () => void }) {
+  const { user } = useSession()
+  const [validerEcart, setValiderEcart] = useState<number | null>(null)
   return (
     <Modal titre={`${NATURES[r.nature] ?? r.nature} — ${r.client}`} onClose={onClose} large>
       <div className="stack">
@@ -112,10 +114,60 @@ function Detail({ r, onClose }: { r: Retrait; onClose: () => void }) {
               { titre: 'Surplus utilisé', num: true, render: (d) => xof(d.surplus_utilise) },
               { titre: 'Perte imputée', num: true, render: (d) => xof(d.perte) },
             ]} />
+            {e.statut !== 'traite' && user?.role === 'chef_agence' && (
+              <div style={{ marginTop: 12 }}>
+                <Button small onClick={() => setValiderEcart(e.id)}>Régler par un surplus d'une autre date</Button>
+              </div>
+            )}
           </Card>
         ))}
       </div>
+      {validerEcart !== null && <ValiderSurplus ecartId={validerEcart} onClose={() => setValiderEcart(null)} onFait={() => setValiderEcart(null)} />}
     </Modal>
+  )
+}
+
+interface DetailEcart { id: number; date_ecart: string; agent: string; montant: number; surplus_utilise: number; perte: number; surplus_autres_dates: { id: number; date_surplus: string; libre: number }[] }
+
+// Autorisation du chef d'agence : un détail d'écart réglé par le surplus d'une autre date du même agent.
+function ValiderSurplus({ ecartId, onClose, onFait }: { ecartId: number; onClose: () => void; onFait: () => void }) {
+  const d = useFetch(() => api.get<{ details: DetailEcart[] }>(`/api/ecarts/${ecartId}/details`), [ecartId])
+  const { run, busy } = useAction()
+  const [detail, setDetail] = useState('')
+  const [surplus, setSurplus] = useState('')
+  const [montant, setMontant] = useState('')
+  const [motif, setMotif] = useState('')
+  const details = d.data?.details ?? []
+  const choix = details.find((x) => String(x.id) === detail)
+  const surplusChoisi = choix?.surplus_autres_dates.find((s) => String(s.id) === surplus)
+  const ok = !!choix && !!surplusChoisi && Number(montant) > 0 && Number(montant) <= Math.min(surplusChoisi.libre, choix.montant) && motif.trim().length >= 5
+  return (
+    <FormModal titre="Surplus d'une autre date" onClose={onClose} busy={busy} valider="Autoriser le règlement" large
+      onSubmit={() => ok && void run(() => api.post(`/api/ecart-details/${choix.id}/validation-surplus`, {
+        surplus_id: Number(surplus), montant: Number(montant), motif: motif.trim(),
+      }), 'Règlement autorisé', onFait)}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Alert tone="info">Le chef d'agence autorise qu'un manquant de collecte soit réglé par un surplus versé à une autre date par le même agent. L'autorisation est tracée et ne se supprime pas.</Alert>
+      </div>
+      <Field label="Date de collecte à régler">
+        <Select value={detail} onChange={(e) => { setDetail(e.target.value); setSurplus(''); setMontant('') }}>
+          <option value="">— choisir —</option>
+          {details.map((x) => <option key={x.id} value={x.id}>{fdate(x.date_ecart)} · {x.agent} · {xof(x.montant)}</option>)}
+        </Select>
+      </Field>
+      <Field label="Surplus d'une autre date">
+        <Select value={surplus} onChange={(e) => setSurplus(e.target.value)} disabled={!choix}>
+          <option value="">— choisir —</option>
+          {choix?.surplus_autres_dates.map((s) => <option key={s.id} value={s.id}>Surplus du {fdate(s.date_surplus)} · {xof(s.libre)} disponibles</option>)}
+        </Select>
+      </Field>
+      <Field label="Montant à régler" hint={surplusChoisi ? `maximum ${xof(Math.min(surplusChoisi.libre, choix?.montant ?? 0))}` : undefined}>
+        <Input type="number" min={1} value={montant} onChange={(e) => setMontant(e.target.value)} />
+      </Field>
+      <Field label="Motif de l'autorisation" hint="Au moins 5 caractères">
+        <Input value={motif} onChange={(e) => setMotif(e.target.value)} />
+      </Field>
+    </FormModal>
   )
 }
 

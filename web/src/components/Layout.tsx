@@ -24,6 +24,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/cycles', titre: 'Cycles de tontine', icone: '🔄', perm: 'collecte:read' },
     { to: '/demande-retrait', titre: 'Demande de retrait', icone: '💸', perm: 'retrait:request' },
     { to: '/retraits', titre: 'Retraits et écarts', icone: '↩️', perm: 'collecte:read' },
+    { to: '/rapport-manquants', titre: 'Manquants non payés', icone: '📋', perm: 'collecte:read' },
     { to: '/paiements-mobile', titre: 'Mobile money et demandes', icone: '📲', perm: 'paiement-mobile:read' },
     { to: '/carnets', titre: 'Carnets et stock', icone: '📦', perm: 'carnet:read' },
     { to: '/controle-livrets', titre: 'Contrôle des livrets', icone: '📖', perm: 'livret:read' },

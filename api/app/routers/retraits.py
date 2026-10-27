@@ -292,3 +292,63 @@ def purger(body: PurgeIn, user: User = Depends(require("collecte:admin"))):
     with tx(user.login) as cur:
         n = one_row(cur, "SELECT purger_dates(%s::smallint, COALESCE(%s, current_date)) AS n", (ag, body.jusqu_au))["n"]
     return {"dates_purgees": n}
+
+
+# ---------------------------------------------------------------- surplus d'une autre date (module 70)
+@router.get("/ecarts/{ecart_id}/details")
+def details_ecart(ecart_id: int, user: User = Depends(require("collecte:read"))):
+    """Détail d'un écart par date, avec les surplus de l'agent sur d'autres dates pouvant le régler."""
+    with tx() as cur:
+        e = one_row(cur, "SELECT e.id, e.statut, e.retrait_id FROM ecart_retrait e WHERE e.id = %s", (ecart_id,))
+        if e is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        verifier_agence(cur, user, "retrait", e["retrait_id"])
+        details = all_rows(
+            cur,
+            "SELECT d.id, d.date_ecart, d.agent_id, a.nom AS agent, d.montant, d.surplus_utilise, d.perte "
+            "FROM ecart_retrait_date d JOIN agent a ON a.id = d.agent_id WHERE d.ecart_id = %s ORDER BY d.date_ecart, d.id",
+            (ecart_id,),
+        )
+        for d in details:
+            d["surplus_autres_dates"] = all_rows(
+                cur,
+                "SELECT s.id, s.date_surplus, s.montant - s.montant_utilise AS libre FROM surplus s "
+                "WHERE s.agent_id = %s AND s.date_surplus <> %s AND s.statut = 'a_traiter' AND s.montant > s.montant_utilise "
+                "ORDER BY s.date_surplus, s.id",
+                (d["agent_id"], d["date_ecart"]),
+            )
+        return {"id": e["id"], "statut": e["statut"], "details": details}
+
+
+class ValidationSurplusIn(BaseModel):
+    surplus_id: int
+    montant: int = Field(gt=0)
+    motif: str = Field(min_length=5)
+
+
+@router.post("/ecart-details/{detail_id}/validation-surplus", status_code=201)
+def valider_surplus_autre_date(detail_id: int, body: ValidationSurplusIn, user: User = Depends(require("retrait:ecart"))):
+    """Autorisation du chef d'agence : régler ce détail d'écart par un surplus d'une autre date du même agent."""
+    if user.role != "chef_agence":
+        raise HTTPException(status_code=403, detail="Seul le chef d'agence valide un surplus d'une autre date")
+    with tx(user.login) as cur:
+        d = one_row(cur, "SELECT e.retrait_id FROM ecart_retrait_date d JOIN ecart_retrait e ON e.id = d.ecart_id WHERE d.id = %s", (detail_id,))
+        if d is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        verifier_agence(cur, user, "retrait", d["retrait_id"])
+        vid = one_row(
+            cur, "SELECT valider_surplus_autre_date(%s, %s, %s, %s, %s) AS id",
+            (detail_id, body.surplus_id, body.montant, user.id, body.motif),
+        )["id"]
+        return one_row(cur, "SELECT * FROM validation_surplus_autre_date WHERE id = %s", (vid,))
+
+
+# ---------------------------------------------------------------- rapport des manquants non payés (module 71)
+@router.get("/rapport-manquants")
+def rapport_manquants(du: dt.date, au: dt.date, agence_id: int | None = None,
+                      user: User = Depends(require("collecte:read"))):
+    if au < du:
+        raise HTTPException(status_code=422, detail="La date de fin précède la date de début")
+    ag = agence_scope(user, agence_id)
+    with tx() as cur:
+        return all_rows(cur, "SELECT * FROM rapport_manquants(%s::smallint, %s, %s)", (ag, du, au))
