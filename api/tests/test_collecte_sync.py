@@ -105,7 +105,9 @@ def test_sync_met_en_attente_sans_rien_ecrire(client, h, base):
 def test_refus_a_la_reception(client, h, base):
     hdr = _hdr(client, "agent_sync")
     mien = _cycle(client, h, base)
-    autre_zone = _cycle(client, h, base, zone="autre")
+    cli_autre = client.post("/api/clients", json={"nom": "Cli hors zone", "zone_id": base["autre"]["zone_id"]}, headers=h("chef1")).json()
+    autre_zone = client.post("/api/cycles", json={"client_id": cli_autre["id"], "produit_id": base["p1"], "mise": 1000,
+                                                  "date_debut": iso(-10), "date_fin": iso(20)}, headers=h("chef1")).json()
     # cycle d'une autre agence
     c2 = client.post("/api/clients", json={"nom": "Cli autre agence"}, headers=h("chef2")).json()
     cy2 = client.post("/api/cycles", json={"client_id": c2["id"], "produit_id": base["p1"], "mise": 1000, "date_debut": iso(-5), "date_fin": iso(20)}, headers=h("chef2")).json()
@@ -196,14 +198,16 @@ def test_type_de_cycle_libre_a_chaque_cycle(client, h, base):
     """Même client, même produit : un cycle de type 1 puis un de type 2 (aucun verrou à la première mise)."""
     hdr = _hdr(client, "agent_sync")
     cl = base["dans"][7]
-    mk = lambda cle, t: {"cle": cle, "type": "cycle", "payload": {"client": cl["id"], "produit_id": base["libre"], "mise": 500, "type_cycle": t,
-                                                                  "date_debut": iso(-1), "date_fin": iso(30)}}
-    _sync(client, hdr, mk("cle-sync-f0001", 1), mk("cle-sync-f0002", 2), {"cle": "cle-sync-f0003", "type": "cycle", "payload": {
-        "client": cl["id"], "produit_id": base["libre"], "mise": 500, "date_debut": iso(-1), "date_fin": iso(30)}})        # sans type : refusé à la validation
+    autre = base["dans"][6]     # un cycle en cours par client et par produit : le second cycle va à un autre client
+    mk = lambda cle, t, c: {"cle": cle, "type": "cycle", "payload": {"client": c["id"], "produit_id": base["libre"], "mise": 500, "type_cycle": t,
+                                                                     "date_debut": iso(-1), "date_fin": iso(30)}}
+    _sync(client, hdr, mk("cle-sync-f0001", 1, cl), mk("cle-sync-f0002", 2, autre), {"cle": "cle-sync-f0003", "type": "cycle", "payload": {
+        "client": base["dans"][5]["id"], "produit_id": base["libre"], "mise": 500, "date_debut": iso(-1), "date_fin": iso(30)}})        # sans type : refusé à la validation
     r = _valider(client, h("chef1"), "cle-sync-f0001", "cle-sync-f0002", "cle-sync-f0003")
     assert [r[k]["statut"] for k in ("cle-sync-f0001", "cle-sync-f0002", "cle-sync-f0003")] == ["validee", "validee", "rejetee"]
-    types = sorted(c["type_cycle"] for c in client.get("/api/cycles", params={"client_id": cl["id"]}, headers=h("chef1")).json())
-    assert types == [1, 2]
+    types = sorted(c["type_cycle"] for cid in (cl["id"], autre["id"])
+                   for c in client.get("/api/cycles", params={"client_id": cid}, headers=h("chef1")).json())
+    assert types == [1, 2]     # un type par cycle, même produit ; un seul cycle en cours par client
 
 
 def test_rejet_a_la_validation_selon_le_schema(client, h, base):

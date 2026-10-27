@@ -321,10 +321,12 @@ def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int 
         lignes = all_rows(
             cur,
             "SELECT l.id, l.cycle_id, c.numero AS souscription, cl.numero AS client_numero, cl.nom AS client, p.code AS produit, "
+            "       z.id AS zone_id, z.code AS zone_code, z.libelle AS zone, "
             "       c.type_cycle, c.mise_courante AS mise, l.montant_collecte, l.agent_id, a.matricule AS agent, "
             "       v.id IS NOT NULL AS versee "
             "FROM ligne_collecte l JOIN cycle c ON c.id = l.cycle_id JOIN client cl ON cl.id = c.client_id "
             "JOIN produit_epargne p ON p.id = c.produit_id LEFT JOIN agent a ON a.id = l.agent_id "
+            "LEFT JOIN zone z ON z.id = cl.zone_id "
             "LEFT JOIN versement_agent v ON v.agent_id = l.agent_id AND v.date_tournee = l.date_collecte "
             "WHERE c.agence_id = %s AND l.date_collecte = %s AND l.origine = 'collecte' "
             "AND (%s::int IS NULL OR l.agent_id = %s) ORDER BY l.id DESC",

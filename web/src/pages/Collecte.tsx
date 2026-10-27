@@ -14,6 +14,7 @@ interface Feuille {
 }
 interface LigneJour {
   id: number; cycle_id: number; souscription: string; client_numero: string; client: string; produit: string; type_cycle: number
+  zone_id: number | null; zone_code: string | null; zone: string | null
   mise: number; montant_collecte: number; agent_id: number; agent: string; versee: boolean; modifiable: boolean
 }
 interface Jour { date: string; validee: boolean; validation: { valide_le: string; valide_par: string | null } | null; lignes: LigneJour[]; total: number }
@@ -162,6 +163,16 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
   )
 }
 
+/** Regroupe les collectes par zone (ordre alphabétique ; sans zone en dernier). */
+function parZone(lignes: LigneJour[]): [string, LigneJour[]][] {
+  const m = new Map<string, LigneJour[]>()
+  for (const l of lignes) {
+    const k = l.zone ?? 'Sans zone'
+    m.set(k, [...(m.get(k) ?? []), l])
+  }
+  return [...m.entries()].sort(([a], [b]) => (a === 'Sans zone' ? 1 : b === 'Sans zone' ? -1 : a.localeCompare(b)))
+}
+
 function TableauJour({ jour, onChange }: { jour: string; onChange: () => void }) {
   const { can } = useSession()
   const q = useFetch(() => api.get<Jour>('/api/collecte/jour', { date: jour }), [jour])
@@ -199,7 +210,13 @@ Elle disparaîtra des écrans mais restera tracée pour l'audit. Motif obligatoi
             <Kpi label="Collectes saisies" value={d.lignes.length} />
           </div>
           <FiltreTableau valeur={filtre} onChange={setFiltre} />
-          <Table rows={filtrer(d.lignes, filtre, (l) => [l.client, l.client_numero, l.souscription, l.agent])} vide={filtre ? 'Aucune collecte ne correspond au filtre' : 'Aucune collecte saisie ce jour'} cols={[
+          {parZone(filtrer(d.lignes, filtre, (l) => [l.client, l.client_numero, l.souscription, l.agent])).map(([zone, rows]) => (
+          <div key={zone} className="stack">
+            <div className="row" style={{ padding: '8px 16px' }}>
+              <strong>{zone}</strong>
+              <span className="muted">{rows.length} collecte(s) · {xof(rows.reduce((s, l) => s + l.montant_collecte, 0))}</span>
+            </div>
+          <Table rows={rows} vide={filtre ? 'Aucune collecte ne correspond au filtre' : 'Aucune collecte saisie ce jour'} cols={[
             { titre: 'N° client', render: (l) => l.client_numero },
             { titre: 'Client', render: (l) => <strong>{l.client}</strong> },
             { titre: 'Souscription', render: (l) => <>{l.souscription}<div className="muted">{l.produit}</div></> },
@@ -220,6 +237,8 @@ Elle disparaîtra des écrans mais restera tracée pour l'audit. Motif obligatoi
                   <Button small variant="danger" disabled={busy} onClick={() => supprimer(l)}>Supprimer</Button>
                 </> },
           ]} />
+          </div>
+          ))}
         </Card>
       )}
     </Charge>

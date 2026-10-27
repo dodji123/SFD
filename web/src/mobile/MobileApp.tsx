@@ -9,6 +9,7 @@ import {
   appliquerStatuts, demarrerSynchro, ecrireCache, enregistrer, lireCache, marquerReseau, reessayer, retirer, sessionRetablie, synchroniser, useFile, viderCache,
   type ClientVue, type CycleVue, type EtatOp, type Operation, type Produit, type Ref, type Tournee,
 } from './file'
+import { BoutonScanner, lireQr } from '../components/Qr'
 import ControleApp from './Controle'
 import { demarrerSynchroConstats, sessionRetablieC } from './fileConstats'
 import './mobile.css'
@@ -225,17 +226,26 @@ type Vue = ReturnType<typeof fusionner>
 
 // ------------------------------------------------------------------ cycles et saisie de collecte
 function Cycles({ vue, onRecharger, onSaisi }: { vue: Vue; onRecharger: () => void; onSaisi: (m: string) => void }) {
+  const [produit, setProduit] = useState('')
   const [q, setQ] = useState('')
   const [choisi, setChoisi] = useState<CycleVue | null>(null)
+  const produits = useMemo(() => [...new Set(vue.cycles.map((c) => c.produit))].sort(), [vue.cycles])
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return vue.cycles.filter((c) => !s || c.client.toLowerCase().includes(s) || c.numero.toLowerCase().includes(s))
-  }, [vue.cycles, q])
+    return vue.cycles.filter((c) => (!produit || c.produit === produit) && (!s || c.client.toLowerCase().includes(s) || c.numero.toLowerCase().includes(s)))
+  }, [vue.cycles, produit, q])
   return (
     <>
       <div className="m-recherche">
-        <input className="input" type="search" placeholder="Client ou n° de cycle" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input" aria-label="Produit" value={produit} onChange={(e) => setProduit(e.target.value)}>
+          <option value="">Tous les produits</option>
+          {produits.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input className="input" type="search" placeholder="Nom du client ou n° de cycle" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn" onClick={onRecharger} aria-label="Actualiser">↻</button>
+      </div>
+      <div className="m-recherche">
+        <BoutonScanner libelle="Scanner le QR du cycle" onLu={(t) => setQ(lireQr(t).numero)} />
       </div>
       <p className="muted m-compte">{filtres.length} cycle(s) en cours dans votre zone</p>
       <ul className="m-liste">

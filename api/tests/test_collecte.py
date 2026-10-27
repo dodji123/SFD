@@ -16,8 +16,16 @@ def base(client, h, sql, agences, produits):
     return {"zone": z, "ag1": ag1, "ag2": ag2, "c1": c1, "c2": c2, "produits": produits}
 
 
+_clients_servis = set()   # (client, produit) déjà couverts par un cycle de ce module : règle « un cycle en cours par produit »
+
+
 def _cycle(client, h, base, client_key="c1", produit="P1", mise=1000, debut="2026-10-01", fin="2026-10-31", **kw):
-    r = client.post("/api/cycles", json={"client_id": base[client_key]["id"], "produit_id": base["produits"][produit],
+    cid = base[client_key]["id"]
+    if (cid, produit) in _clients_servis:      # un second cycle pour ce produit : on prend un autre client de la même zone
+        cid = client.post("/api/clients", json={"nom": f"Cli Collecte {len(_clients_servis) + 3}", "zone_id": base["zone"]["id"]},
+                          headers=h("chef1")).json()["id"]
+    _clients_servis.add((cid, produit))
+    r = client.post("/api/cycles", json={"client_id": cid, "produit_id": base["produits"][produit],
                                          "mise": mise, "date_debut": debut, "date_fin": fin, **kw}, headers=h("chef1"))
     assert r.status_code == 201, r.text
     return r.json()
@@ -146,13 +154,14 @@ def test_feuille_de_collecte_du_jour(client, h, base):
 
 def test_formulaire_de_saisie(client, h, base):
     """Recherche du client par son numéro, montant multiple de la mise (sauf type 3), saisie par le siège pour un agent."""
-    c = _cycle(client, h, base, client_key="c1", mise=500, debut="2026-10-05", fin="2026-11-04")
-    num = str(int(base["c1"]["numero"].split("-")[-1]))        # l'opérateur ne tape que le numéro d'ordre
+    cli = client.post("/api/clients", json={"nom": "Cli Collecte 1 bis", "zone_id": base["zone"]["id"]}, headers=h("chef1")).json()
+    c = _cycle(client, h, {**base, "c1": cli}, client_key="c1", mise=500, debut="2026-10-05", fin="2026-11-04")
+    num = str(int(cli["numero"].split("-")[-1]))        # l'opérateur ne tape que le numéro d'ordre
     p = {"suffixe": num, "produit_id": base["produits"]["P1"], "date": "2026-10-06"}
     r = client.get("/api/collecte/client-cycle", params=p, headers=h("chef1"))
     assert r.status_code == 200, r.text
     d = r.json()
-    assert d["client"]["nom"] == "Cli Collecte 1" and d["cycle"]["mise_courante"] == 500
+    assert d["client"]["nom"] == "Cli Collecte 1 bis" and d["cycle"]["mise_courante"] == 500
     assert client.get("/api/collecte/client-cycle", params={**p, "suffixe": "987654"}, headers=h("chef1")).status_code == 404
     assert client.get("/api/collecte/client-cycle", params={**p, "zone_id": base["zone"]["id"] + 9999}, headers=h("chef1")).status_code == 422
     assert client.get("/api/collecte/client-cycle", params={**p, "produit_id": base["produits"]["P2"]}, headers=h("chef1")).status_code == 404
