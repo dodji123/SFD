@@ -1,7 +1,8 @@
 -- =====================================================================
 -- 73_reglement_manquant_collecte.sql
 -- Règlement des manquants de collecte relevés au contrôle au carnet (module 72).
---   * on parcourt les surplus de versement de l'agent (d'abord ceux de la date de la collecte, puis les plus anciens) ;
+--   * le manquant se règle par le surplus de versement de la même date ; les surplus d'autres dates ne servent que si
+--     toutes les collectes de l'agent à cette date sont retirées (ce qui n'est pas le cas d'un cycle en cours) ;
 --   * le manquant est déduit du surplus, sans jamais dépasser le solde disponible ; le surplus est mis à jour ;
 --   * le reste, s'il y en a, est imputé à l'agent : débit « manquant_versement » de son compte agent,
 --     qui sera déduit automatiquement au virement de salaire (solde négatif du compte agent) ;
@@ -32,6 +33,7 @@ CREATE TRIGGER reglement_manquant_collecte_fige BEFORE UPDATE OR DELETE ON regle
 CREATE FUNCTION regler_manquant_collecte(p_controle_ligne integer, p_date date DEFAULT current_date) RETURNS numeric
 LANGUAGE plpgsql AS $$
 DECLARE l mf.controle_carnet_ligne; k mf.controle_carnet; s record; v_reste numeric; v_use numeric; v_utilise numeric := 0; v_impute numeric;
+        v_toutes_retirees boolean;
 BEGIN
   SELECT * INTO l FROM mf.controle_carnet_ligne WHERE id = p_controle_ligne;
   IF NOT FOUND THEN RAISE EXCEPTION 'ligne de contrôle % inconnue', p_controle_ligne; END IF;
@@ -42,10 +44,17 @@ BEGIN
   END IF;
   SELECT * INTO k FROM mf.controle_carnet WHERE id = l.controle_id;
 
+  -- les collectes de l'agent à cette date sont-elles toutes retirées ?
+  SELECT NOT EXISTS (SELECT 1 FROM mf.ligne_collecte x JOIN mf.cycle c ON c.id = x.cycle_id
+                      WHERE x.agent_id = l.agent_id AND x.date_collecte = l.date_collecte AND c.statut <> 'retire')
+    INTO v_toutes_retirees;
+
   v_reste := l.ecart;
-  -- le surplus de la date de la collecte d'abord, puis les plus anciens ; jamais au-delà du solde disponible
+  -- surplus de la même date uniquement ; les surplus d'autres dates ne servent que si toutes les collectes
+  -- de cette date sont retirées. Jamais au-delà du solde disponible.
   FOR s IN SELECT * FROM mf.surplus
             WHERE agent_id = l.agent_id AND statut = 'a_traiter' AND montant > montant_utilise
+              AND (date_surplus = l.date_collecte OR v_toutes_retirees)
             ORDER BY (date_surplus = l.date_collecte) DESC, date_surplus, id
             FOR UPDATE LOOP
     EXIT WHEN v_reste <= 0;
