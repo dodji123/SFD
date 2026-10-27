@@ -1526,7 +1526,7 @@ CREATE TABLE ligne_bulletin (
 -- (dans la limite du net restant). Pas de retenue pour absence : non spécifiée dans le brief.
 CREATE FUNCTION generer_bulletin(p_employe integer, p_periode date) RETURNS integer
 LANGUAGE plpgsql AS $$
-DECLARE e mf.employe; v_mois date := date_trunc('month', p_periode)::date; v_fin date;
+DECLARE e mf.employe; v_mois date := date_trunc('month', p_periode)::date; v_fin date; v_dette numeric := 0;
         v_base numeric; v_comm numeric := 0; v_comm_id integer; v_brut numeric; v_gains numeric := 0;
         v_ret numeric := 0; v_pat numeric := 0; v_net numeric; v_avance numeric := 0; v_id integer;
         r record; v_m numeric; v_b numeric;
@@ -1585,6 +1585,18 @@ BEGIN
   IF v_avance > 0 THEN
     INSERT INTO mf.ligne_bulletin(bulletin_id, code, libelle, type, montant) VALUES (v_id, 'AVANCE', 'Retenue d''avance', 'retenue_salariale', v_avance);
   END IF;
+  -- dette de l'agent (compte agent débiteur) : retenue sur le salaire, dans la limite du net disponible
+  IF e.agent_id IS NOT NULL THEN
+    SELECT GREATEST(-COALESCE(solde, 0), 0) INTO v_dette FROM mf.v_solde_compte_agent WHERE agent_id = e.agent_id;
+    v_dette := LEAST(v_dette, GREATEST(v_brut - v_ret - v_avance, 0));
+    IF v_dette > 0 THEN
+      INSERT INTO mf.ligne_bulletin(bulletin_id, code, libelle, type, montant) VALUES (v_id, 'DETTE_AGENT', 'Retenue sur dette d''agent', 'retenue_salariale', v_dette);
+      INSERT INTO mf.compte_agent(agence_id, agent_id, type, montant, date_operation, libelle, reference)
+      VALUES (e.agence_id, e.agent_id, 'retenue_commission', v_dette, v_mois, 'Retenue sur salaire', 'bulletin:' || v_id);
+    END IF;
+  END IF;
+  v_ret := v_ret + v_dette;
+
   v_net := v_brut - v_ret - v_avance;
   UPDATE mf.bulletin_paie
      SET brut = v_brut, retenues = v_ret, retenue_avance = v_avance, charges_patronales = v_pat, net_a_payer = v_net

@@ -42,11 +42,12 @@ INSERT INTO avance_salaire(employe_id,date_avance,montant,restant) VALUES (t.em(
 SELECT t.refuse('P employé sans contrat', format('SELECT mf.generer_bulletin(%s,''2026-10-01'')', t.em('E2')));
 SELECT generer_bulletin(t.em('E1'),'2026-10-15');            -- n'importe quel jour du mois
 SELECT t.eq('P brut = base 100000 + prime 5000 + commission 30', brut::text, '105030') FROM bulletin_paie;
-SELECT t.eq('P cotisation salariale 4 % du brut', retenues::text, '4201') FROM bulletin_paie;
+SELECT t.eq('P cotisation salariale 4 % du brut', montant::text, '4201') FROM ligne_bulletin WHERE code = 'COTSOC';
+SELECT t.eq('P retenues : cotisation 4 201 + dette de l''agent 970 (solde retenu au salaire)', retenues::text, '5171') FROM bulletin_paie;
 SELECT t.eq('P charges patronales 15 % du brut', charges_patronales::text, '15755') FROM bulletin_paie;
 SELECT t.eq('P avance retenue en totalité', retenue_avance::text, '20000') FROM bulletin_paie;
-SELECT t.eq('P net à payer', net_a_payer::text, '80829') FROM bulletin_paie;
-SELECT t.eq('P lignes du bulletin', string_agg(code, ',' ORDER BY id), 'BASE,COMMISSION,PRIME,COTSOC,PATSOC,AVANCE') FROM ligne_bulletin;
+SELECT t.eq('P net à payer', net_a_payer::text, '79859') FROM bulletin_paie;
+SELECT t.eq('P lignes du bulletin', string_agg(code, ',' ORDER BY id), 'BASE,COMMISSION,PRIME,COTSOC,PATSOC,AVANCE,DETTE_AGENT') FROM ligne_bulletin;
 SELECT t.eq('P période normalisée au 1er du mois', periode::text, '2026-10-01') FROM bulletin_paie;
 SELECT t.refuse('P bulletin déjà généré', format('SELECT mf.generer_bulletin(%s,''2026-10-01'')', t.em('E1')));
 SELECT valider_bulletin((SELECT id FROM bulletin_paie));
