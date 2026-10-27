@@ -50,6 +50,7 @@ import Rapports from './pages/Rapports'
 import Retraits from './pages/Retraits'
 import RapportManquants from './pages/RapportManquants'
 import ControleCarnet from './pages/ControleCarnet'
+import RapportCollecte from './pages/RapportCollecte'
 import Rh from './pages/Rh'
 import Tresorerie from './pages/Tresorerie'
 
@@ -83,6 +84,7 @@ export default function App() {
         <Route path="retraits" element={<Garde perm="collecte:read"><Retraits /></Garde>} />
         <Route path="rapport-manquants" element={<Garde perm="collecte:read"><RapportManquants /></Garde>} />
         <Route path="controle-carnet" element={<Garde perm="livret:read"><ControleCarnet /></Garde>} />
+        <Route path="rapport-collecte" element={<Garde perm="rapports:read"><RapportCollecte /></Garde>} />
         <Route path="credits" element={<Garde perm="credit:read"><Credits /></Garde>} />
         <Route path="credits/:id" element={<Garde perm="credit:read"><CreditDetail /></Garde>} />
         <Route path="comites" element={<Garde perm="comite:read"><Comites /></Garde>} />

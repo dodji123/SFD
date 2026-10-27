@@ -2,8 +2,9 @@
 
 Les rapports sont calculés par la base à partir des dates métier : un jour passé se reproduit à l'identique."""
 import datetime as dt
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth import User, agence_scope, require
 from ..db import all_rows, one_row, tx
@@ -32,6 +33,18 @@ def rapport_zones(date: dt.date, agence_id: int | None = None, user: User = Depe
     ag = agence_scope(user, agence_id)
     with tx() as cur:
         return all_rows(cur, "SELECT * FROM rapport_journalier_zone(%s::smallint, %s)", (ag, date))
+
+
+@router.get("/rapports/collecte-periode")
+def rapport_collecte_periode(du: dt.date, au: dt.date, groupe: Literal["produit", "agent", "zone"] = "produit",
+                             produit_id: int | None = None, agence_id: int | None = None,
+                             user: User = Depends(require("rapports:read"))):
+    """Collectes d'une période, regroupées par produit, par agent ou par zone (zone = zone du client, collectrices affectées)."""
+    if au < du:
+        raise HTTPException(status_code=422, detail="La date de fin précède la date de début")
+    ag = agence_scope(user, agence_id)
+    with tx() as cur:
+        return all_rows(cur, "SELECT * FROM rapport_collecte_periode(%s::smallint, %s, %s, %s, %s)", (ag, du, au, produit_id, groupe))
 
 
 @router.get("/rapports/credits/echus")
