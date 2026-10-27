@@ -14823,7 +14823,7 @@ CREATE TRIGGER audit_controle_carnet_ligne AFTER INSERT ON controle_carnet_ligne
 CREATE FUNCTION enregistrer_controle_carnet(p_cycle integer, p_controleur integer, p_date date,
                                             p_lignes jsonb, p_commentaire text DEFAULT NULL) RETURNS integer
 LANGUAGE plpgsql AS $$
-DECLARE c mf.cycle; v_nb_cycle integer; v_nb integer; v_tc numeric; v_tk numeric; v_id integer;
+DECLARE c mf.cycle; v_nb_cycle integer; v_nb integer; v_tc numeric; v_tk numeric; v_id integer; v_hors integer;
 BEGIN
   SELECT * INTO c FROM mf.cycle WHERE id = p_cycle;
   IF NOT FOUND THEN RAISE EXCEPTION 'cycle % inconnu', p_cycle; END IF;
@@ -14833,6 +14833,15 @@ BEGIN
   IF EXISTS (SELECT 1 FROM jsonb_to_recordset(p_lignes) AS x(ligne_id integer, montant_carnet numeric)
               WHERE x.montant_carnet IS NULL OR x.montant_carnet < 0) THEN
     RAISE EXCEPTION 'montant carnet invalide';
+  END IF;
+
+  -- cycle à mise fixe : le montant porté sur le carnet est un multiple de la mise ; le type 3 (libre) n'a pas cette règle
+  IF COALESCE(c.type_cycle, 0) <> 3 THEN
+    SELECT count(*) INTO v_hors FROM jsonb_to_recordset(p_lignes) AS x(ligne_id integer, montant_carnet numeric)
+     WHERE x.montant_carnet % c.mise_courante <> 0;
+    IF v_hors > 0 THEN
+      RAISE EXCEPTION 'montant carnet doit être un multiple de la mise (% F) : % ligne(s) hors multiple', c.mise_courante, v_hors;
+    END IF;
   END IF;
 
   SELECT count(*) INTO v_nb_cycle FROM mf.ligne_collecte WHERE cycle_id = p_cycle;

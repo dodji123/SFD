@@ -24,7 +24,7 @@ def cycles_du_controle(du: dt.date, au: dt.date, produit_id: int | None = None, 
         return all_rows(
             cur,
             "SELECT c.id, c.numero, c.client_id, cl.nom AS client, cl.numero AS client_numero, c.produit_id, pe.libelle AS produit, "
-            "c.date_debut, c.date_fin, c.statut, "
+            "c.type_cycle, c.mise_courante, c.date_debut, c.date_fin, c.statut, "
             "(SELECT max(k.date_controle) FROM controle_carnet k WHERE k.cycle_id = c.id) AS dernier_controle "
             "FROM cycle c JOIN client cl ON cl.id = c.client_id JOIN produit_epargne pe ON pe.id = c.produit_id "
             "WHERE (%s::int IS NULL OR c.agence_id = %s) AND c.date_debut <= %s AND c.date_fin >= %s "

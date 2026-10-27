@@ -4,7 +4,7 @@ import { aujourdhui, date as fdate, xof } from '../lib/format'
 import { useProduitsEpargne } from '../lib/hooks'
 import { Alert, Button, Card, Charge, Field, Input, Modal, Page, Select, Table, useAction, useFetch } from '../components/ui'
 
-interface CycleCarnet { id: number; numero: string; client_id: number; client: string; client_numero: string; produit_id: number; produit: string; date_debut: string; date_fin: string; statut: string; dernier_controle: string | null }
+interface CycleCarnet { id: number; numero: string; client_id: number; client: string; client_numero: string; produit_id: number; produit: string; type_cycle: number; mise_courante: number; date_debut: string; date_fin: string; statut: string; dernier_controle: string | null }
 interface LigneCollecte { id: number; date_collecte: string; page: number; no_ligne: number; montant_collecte: number; agent_id: number | null; agent: string | null; origine: string }
 interface ControleHisto { id: number; date_controle: string; controleur: string; total_collecte: number; total_carnet: number; ecart_collecte: number; commentaire: string | null; lignes: { ecart: number; impute_agent: number | null }[] }
 
@@ -68,7 +68,10 @@ function ControlerCycle({ cycle, onClose, onFait }: { cycle: CycleCarnet; onClos
   const [saisie, setSaisie] = useState<Record<number, string>>({})
   const [commentaire, setCommentaire] = useState('')
   const rows = lignes.data ?? []
-  const complet = rows.length > 0 && rows.every((l) => saisie[l.id] !== undefined && saisie[l.id] !== '')
+  const libre = cycle.type_cycle === 3
+  const horsMultiple = (v: string | undefined) => !libre && !!v && Number(v) % cycle.mise_courante !== 0
+  const nbHors = rows.filter((l) => horsMultiple(saisie[l.id])).length
+  const complet = rows.length > 0 && rows.every((l) => saisie[l.id] !== undefined && saisie[l.id] !== '') && nbHors === 0
   const totalColl = rows.reduce((s, l) => s + l.montant_collecte, 0)
   const totalCarnet = rows.reduce((s, l) => s + Number(saisie[l.id] || 0), 0)
   const ecartDe = (l: LigneCollecte) => (saisie[l.id] === undefined || saisie[l.id] === '' ? null : Number(saisie[l.id]) - l.montant_collecte)
@@ -76,6 +79,7 @@ function ControlerCycle({ cycle, onClose, onFait }: { cycle: CycleCarnet; onClos
     <Modal titre={`Contrôle au carnet — ${cycle.client} · ${cycle.numero}`} onClose={onClose} large>
       <div className="stack">
         <Alert tone="info">Saisissez, pour chaque collecte, le montant porté sur le carnet du client. Un écart positif est un manquant de collecte ; un écart négatif est un excédent mis en réserve.</Alert>
+        {nbHors > 0 && <Alert tone="warn">Sur ce cycle à mise fixe, le montant porté sur le carnet doit être un multiple de la mise ({xof(cycle.mise_courante)}) : {nbHors} ligne(s) à corriger.</Alert>}
         <Table rows={rows} vide="Aucune collecte sur ce cycle" cols={[
           { titre: 'Date', render: (l) => fdate(l.date_collecte) },
           { titre: 'Case', render: (l) => `${l.page}-${l.no_ligne}` },

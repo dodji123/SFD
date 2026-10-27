@@ -6,12 +6,12 @@ INSERT INTO agence(code,libelle) VALUES ('LOM','Lomé Centre');
 INSERT INTO zone(agence_id,code,libelle) VALUES (1,'Z1','Zone Marché');
 INSERT INTO agent(agence_id,matricule,nom) VALUES (1,'A04','Kossi'),(1,'A05','Yao');
 INSERT INTO client(agence_id,zone_id,numero,nom) VALUES (1,1,'C001','Un'),(1,1,'C002','Deux'),(1,1,'C003','Trois');
-INSERT INTO produit_epargne(code,libelle,categorie,type_cycle,nb_pages_livret) VALUES ('P1','Tontine','collecte',1,1);
+INSERT INTO produit_epargne(code,libelle,categorie) VALUES ('LIB','Tontine libre','collecte');
 INSERT INTO utilisateur(login,nom,role,agence_id) VALUES ('ctrl','Contrôleur','chef_agence',1);
 
 -- ===== A. Cycle M1 en cours : le surplus d'une autre date ne règle pas le manquant =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
-VALUES (1,'M1',(SELECT id FROM client WHERE numero = 'C001'),1,1,1000,1000,31000,'2026-10-01','2026-10-31');
+VALUES (1,'M1',(SELECT id FROM client WHERE numero = 'C001'),(SELECT id FROM produit_epargne WHERE code = 'LIB'),3,1000,1000,31000,'2026-10-01','2026-10-31');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
 SELECT (SELECT id FROM cycle WHERE numero = 'M1'),1,g,'2026-10-01'::date+g-1,(SELECT id FROM agent WHERE matricule = 'A04'),1000
   FROM generate_series(1,5) g;
@@ -39,7 +39,7 @@ SELECT t.refuse('R manquant déjà réglé refusé', 'SELECT mf.regler_manquant_
 
 -- ===== B. Agent sans surplus : le manquant est imputé en totalité =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
-VALUES (1,'M2',(SELECT id FROM client WHERE numero = 'C002'),1,1,1000,1000,31000,'2026-10-01','2026-10-31');
+VALUES (1,'M2',(SELECT id FROM client WHERE numero = 'C002'),(SELECT id FROM produit_epargne WHERE code = 'LIB'),3,1000,1000,31000,'2026-10-01','2026-10-31');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
 SELECT (SELECT id FROM cycle WHERE numero = 'M2'),1,g,'2026-10-01'::date+g-1,(SELECT id FROM agent WHERE matricule = 'A05'),1000
   FROM generate_series(1,2) g;
@@ -51,7 +51,7 @@ SELECT t.eq('R solde agent A05 (-100)', solde::text, '-100') FROM v_solde_compte
 
 -- ===== C. Toutes les collectes du 3 octobre retirées : le surplus le plus ancien d'une autre date sert =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
-VALUES (1,'M3',(SELECT id FROM client WHERE numero = 'C003'),1,1,1000,1000,31000,'2026-10-03','2026-10-31');
+VALUES (1,'M3',(SELECT id FROM client WHERE numero = 'C003'),(SELECT id FROM produit_epargne WHERE code = 'LIB'),3,1000,1000,31000,'2026-10-03','2026-10-31');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
 VALUES ((SELECT id FROM cycle WHERE numero = 'M3'),1,1,'2026-10-03',(SELECT id FROM agent WHERE matricule = 'A04'),1000);
 SELECT enregistrer_controle_carnet((SELECT id FROM cycle WHERE numero = 'M3'), (SELECT id FROM utilisateur WHERE login = 'ctrl'), '2026-10-15',

@@ -73,6 +73,14 @@ def test_periode_inversee_renvoie_vide(client, h, cycle_carnet):
     assert r.status_code == 200 and r.json() == []
 
 
+def test_montant_carnet_multiple_de_la_mise(client, h, cycle_carnet):
+    cid = cycle_carnet["cycle"]["id"]
+    lignes = client.get(f"/api/controle-carnet/cycles/{cid}/lignes", headers=h("chef1")).json()
+    r = client.post(f"/api/controle-carnet/cycles/{cid}/controles",
+                    json={"lignes": [{"ligne_id": l["id"], "montant_carnet": 1500} for l in lignes]}, headers=h("chef1"))
+    assert r.status_code == 422, r.text
+
+
 def test_recherche_du_client_par_nom_ou_numero(client, h, cycle_carnet, produits):
     base = {"du": "2026-10-01", "au": "2026-10-31", "produit_id": produits["P1"]}
     par_nom = client.get("/api/controle-carnet/cycles", params={**base, "q": "carnet"}, headers=h("chef1")).json()

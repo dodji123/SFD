@@ -6,9 +6,10 @@ INSERT INTO zone(agence_id,code,libelle) VALUES (1,'Z1','Zone Marché');
 INSERT INTO agent(agence_id,matricule,nom) VALUES (1,'A04','Kossi');
 INSERT INTO client(agence_id,zone_id,numero,nom) VALUES (1,1,'C001','Un');
 INSERT INTO produit_epargne(code,libelle,categorie,type_cycle,nb_pages_livret) VALUES ('P1','Tontine','collecte',1,1);
+INSERT INTO produit_epargne(code,libelle,categorie) VALUES ('LIB','Tontine libre','collecte');
 INSERT INTO utilisateur(login,nom,role,agence_id) VALUES ('ctrl','Contrôleur','chef_agence',1);
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
-VALUES (1,'K1',1,1,1,1000,1000,31000,'2026-10-01','2026-10-31');
+VALUES (1,'K1',1,(SELECT id FROM produit_epargne WHERE code = 'LIB'),3,1000,1000,31000,'2026-10-01','2026-10-31');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
 SELECT (SELECT id FROM cycle WHERE numero = 'K1'),1,g,'2026-10-01'::date+g-1,(SELECT id FROM agent WHERE matricule = 'A04'),1000
   FROM generate_series(1,5) g;
@@ -37,3 +38,14 @@ SELECT t.eq('K agent porté sur chaque ligne', count(*)::text, '5') FROM control
 -- Figé : ni modification, ni suppression
 SELECT t.refuse('K contrôle non modifiable', 'UPDATE mf.controle_carnet SET commentaire = ''changé''');
 SELECT t.refuse('K contrôle non supprimable', 'DELETE FROM mf.controle_carnet_ligne');
+
+-- Cycle à mise fixe (type 1, mise 1 000) : le carnet doit être un multiple de la mise
+INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
+VALUES (1,'K4',(SELECT id FROM client WHERE numero = 'C001'),(SELECT id FROM produit_epargne WHERE code = 'P1'),1,1000,1000,31000,'2026-10-01','2026-10-31');
+INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
+VALUES ((SELECT id FROM cycle WHERE numero = 'K4'),1,1,'2026-10-01',(SELECT id FROM agent WHERE matricule = 'A04'),1000);
+SELECT t.refuse('K carnet non multiple de la mise refusé', 'SELECT mf.enregistrer_controle_carnet((SELECT id FROM mf.cycle WHERE numero = ''K4''), (SELECT id FROM mf.utilisateur WHERE login = ''ctrl''), ''2026-10-15'', ''[{"ligne_id": 1, "montant_carnet": 1500}]''::jsonb)');
+SELECT enregistrer_controle_carnet((SELECT id FROM cycle WHERE numero = 'K4'), (SELECT id FROM utilisateur WHERE login = 'ctrl'), '2026-10-15',
+  (SELECT jsonb_agg(jsonb_build_object('ligne_id', id, 'montant_carnet', 2000)) FROM ligne_collecte WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4')));
+SELECT t.eq('K carnet multiple de la mise accepté (écart 1 000)', ecart_collecte::text, '1000') FROM controle_carnet
+ WHERE cycle_id = (SELECT id FROM cycle WHERE numero = 'K4');
