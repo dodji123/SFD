@@ -71,3 +71,14 @@ def test_cycle_controle_affiche_sa_date(client, h, cycle_carnet, produits):
 def test_periode_inversee_renvoie_vide(client, h, cycle_carnet):
     r = client.get("/api/controle-carnet/cycles", params={"du": "2026-10-31", "au": "2026-10-01"}, headers=h("chef1"))
     assert r.status_code == 200 and r.json() == []
+
+
+def test_reglement_des_manquants_du_controle(client, h, cycle_carnet):
+    cid = cycle_carnet["cycle"]["id"]
+    controle_id = client.get(f"/api/controle-carnet/cycles/{cid}/controles", headers=h("chef1")).json()[0]["id"]
+    r = client.post(f"/api/controle-carnet/controles/{controle_id}/regler-manquants", headers=h("chef1"))
+    assert r.status_code == 200, r.text
+    assert r.json()["impute_a_l_agent"] == 1000   # pas de surplus pour cet agent : le manquant de 1 000 est imputé
+    lignes = client.get(f"/api/controle-carnet/cycles/{cid}/controles", headers=h("chef1")).json()[0]["lignes"]
+    assert [l["impute_agent"] for l in lignes if l["ecart"] > 0] == [1000]
+    assert client.post(f"/api/controle-carnet/controles/{controle_id}/regler-manquants", headers=h("chef1")).json()["impute_a_l_agent"] == 0

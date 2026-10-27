@@ -6,7 +6,7 @@ import { Alert, Button, Card, Charge, Field, Input, Modal, Page, Select, Table, 
 
 interface CycleCarnet { id: number; numero: string; client_id: number; client: string; client_numero: string; produit_id: number; produit: string; date_debut: string; date_fin: string; statut: string; dernier_controle: string | null }
 interface LigneCollecte { id: number; date_collecte: string; page: number; no_ligne: number; montant_collecte: number; agent_id: number | null; agent: string | null; origine: string }
-interface ControleHisto { id: number; date_controle: string; controleur: string; total_collecte: number; total_carnet: number; ecart_collecte: number; commentaire: string | null }
+interface ControleHisto { id: number; date_controle: string; controleur: string; total_collecte: number; total_carnet: number; ecart_collecte: number; commentaire: string | null; lignes: { ecart: number; impute_agent: number | null }[] }
 
 const premierJour = () => aujourdhui().slice(0, 8) + '01'
 
@@ -107,6 +107,9 @@ function ControlerCycle({ cycle, onClose, onFait }: { cycle: CycleCarnet; onClos
             { titre: 'Carnet', num: true, render: (k) => xof(k.total_carnet) },
             { titre: 'Écart', num: true, render: (k) => xof(k.ecart_collecte) },
             { titre: 'Commentaire', render: (k) => k.commentaire ?? '—' },
+            { titre: 'Manquants', render: (k) => (k.lignes.some((l) => l.ecart > 0 && l.impute_agent === null)
+              ? <Button small disabled={busy} onClick={() => void run(() => api.post(`/api/controle-carnet/controles/${k.id}/regler-manquants`), 'Manquants réglés : surplus utilisés, reste imputé à l\'agent', () => histo.reload())}>Régler les manquants</Button>
+              : 'Réglés') },
           ]} />
         </Card>
       </div>

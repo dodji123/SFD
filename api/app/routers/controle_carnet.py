@@ -2,7 +2,7 @@
 import datetime as dt
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..auth import User, agence_filter, require, verifier_agence
@@ -81,5 +81,23 @@ def controles_du_cycle(cycle_id: int, user: User = Depends(require("livret:read"
             (cycle_id,),
         )
         for k in controles:
-            k["lignes"] = all_rows(cur, "SELECT * FROM controle_carnet_ligne WHERE controle_id = %s ORDER BY id", (k["id"],))
+            k["lignes"] = all_rows(
+                cur,
+                "SELECT l.*, r.surplus_utilise, r.impute_agent FROM controle_carnet_ligne l "
+                "LEFT JOIN reglement_manquant_collecte r ON r.controle_ligne_id = l.id "
+                "WHERE l.controle_id = %s ORDER BY l.id",
+                (k["id"],),
+            )
         return controles
+
+
+@router.post("/controles/{controle_id}/regler-manquants")
+def regler_manquants(controle_id: int, user: User = Depends(require("livret:controler"))):
+    """Règle les manquants de collecte du contrôle : surplus de l'agent d'abord, le reste est imputé à son compte."""
+    with tx(user.login) as cur:
+        k = one_row(cur, "SELECT cycle_id FROM controle_carnet WHERE id = %s", (controle_id,))
+        if k is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        verifier_agence(cur, user, "cycle", k["cycle_id"])
+        impute = one_row(cur, "SELECT regler_manquants_controle(%s, current_date) AS total", (controle_id,))["total"]
+        return {"impute_a_l_agent": impute}
