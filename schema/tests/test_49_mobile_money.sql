@@ -5,10 +5,11 @@ INSERT INTO agence(code,libelle) VALUES ('LOM','Lomé Centre');
 INSERT INTO client(agence_id,nom) VALUES (1,'Cliente un'),(1,'Cliente deux');
 INSERT INTO utilisateur(login,nom,role,agence_id) VALUES ('chef','Chef','chef_agence',1);
 INSERT INTO produit_epargne(code,libelle,categorie) VALUES ('TON','Tontine normale','collecte');
+INSERT INTO produit_epargne(code,libelle,categorie) VALUES ('TON2','Tontine 2','collecte');
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin) VALUES
   (1,'CY-1',1,1,2,1000,1000,31000,current_date - 5,current_date + 25),
   (1,'CY-2',2,1,2,1000,1000,31000,current_date - 5,current_date + 25),
-  (1,'CY-3',1,1,3,500,500,NULL,current_date - 5,current_date + 25);
+  (1,'CY-3',1,(SELECT id FROM produit_epargne WHERE code = 'TON2'),3,500,500,NULL,current_date - 5,current_date + 25);
 
 -- ===== A. Initiation d'un paiement =====
 INSERT INTO paiement_mobile(client_id,cycle_id,operateur,telephone,montant,cle)

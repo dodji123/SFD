@@ -115,7 +115,7 @@ SELECT t.eq('J au fil des collectes, 1er-2 oct', production_collectrice(1,'2026-
 
 -- (en fin de fichier : un INSERT refusé consomme un id de séquence et décalerait les cycles ci-dessus)
 -- ===== E. Cohérence cycle / produit / client =====
-SELECT t.refuse('E type 1 sur produit de type 3', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''X1'',1,3,1,500,500,''2026-10-01'',''2026-10-31'')');
+-- type de cycle libre (module 62) : un type 1 sur un produit de type 3 est accepté, il n'est plus refusé
 SELECT t.refuse('E produit classique', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''X2'',1,4,1,500,500,''2026-10-01'',''2026-10-31'')');
 SELECT t.refuse('E client d''une autre agence', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''X3'',3,1,1,500,500,''2026-10-01'',''2026-10-31'')');
 

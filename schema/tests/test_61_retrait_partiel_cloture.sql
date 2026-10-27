@@ -7,11 +7,11 @@ CREATE OR REPLACE FUNCTION t.cy(p_numero text) RETURNS integer LANGUAGE sql AS $
 INSERT INTO agence(code,libelle) VALUES ('LOM','Lomé Centre');
 INSERT INTO zone(agence_id,code,libelle) VALUES (1,'Z1','Zone Marché');
 INSERT INTO agent(agence_id,matricule,nom) VALUES (1,'A03','Ama');
-INSERT INTO client(agence_id,zone_id,numero,nom) VALUES (1,1,'C001','Un');
+INSERT INTO client(agence_id,zone_id,numero,nom) VALUES (1,1,'C001','Un'),(1,1,'C002','Deux');
 INSERT INTO produit_epargne(code,libelle,categorie,type_cycle,nb_pages_livret) VALUES ('P1','Tontine','collecte',1,1);
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
 VALUES (1,'Q1',1,1,1,1000,1000,31000,'2026-10-01','2026-10-31'),
-       (1,'Q2',1,1,1,1000,1000,31000,'2026-10-01','2026-10-31');
+       (1,'Q2',2,1,1,1000,1000,31000,'2026-10-01','2026-10-31');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
 SELECT t.cy('Q1'),1,g,'2026-10-01'::date+g-1,(SELECT id FROM agent WHERE matricule='A03'),1000 FROM generate_series(1,5) g;
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)

@@ -25,6 +25,9 @@ SELECT t.refuse('T1 retrait au-delà du disponible', 'INSERT INTO mf.mouvement_e
 SELECT t.refuse('T1 virement sans fonds suffisants', 'SELECT mf.virement_epargne_vers_tontine(1,1,500000,''2026-10-10'')');
 SELECT t.eq('T1 aucune ligne ajoutée par les refus', count(*)::text, '6') FROM ligne_collecte WHERE cycle_id=1;
 
+-- CY1 est clos avant T2 : un seul cycle en cours par client et par produit (module 66)
+UPDATE cycle SET statut = 'clos', date_cloture = '2026-10-31', mise_finale = 500 WHERE numero = 'CY1';
+
 -- ===== T2 : tontine -> épargne, sans écart =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
 VALUES (1,'CY2',1,1,1,1000,1000,31000,'2026-10-01','2026-10-31');

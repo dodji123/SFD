@@ -17,6 +17,7 @@ SELECT t.eq('A première mise : type 2 choisi', type_cycle::text, '2') FROM cycl
 UPDATE cycle SET statut = 'clos', date_cloture = '2026-10-31', mise_finale = 1000 WHERE numero = 'CY-1';
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,'CY-2',1,1,3,1000,1000,'2027-06-01','2027-06-30');
 SELECT t.eq('A le type n''est pas fixé par la première mise : type 3 accepté', type_cycle::text, '3') FROM cycle WHERE numero = 'CY-2';
+UPDATE cycle SET statut = 'clos', date_cloture = '2026-11-01', mise_finale = 1000 WHERE numero = 'CY-2';
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
   VALUES (1,'CY-3',1,1,2,2000,2000,62000,'2026-11-01','2026-11-30');
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin)
@@ -41,6 +42,7 @@ INSERT INTO parametre(cle, valeur, agence_id, description) VALUES ('cycle_delai_
 SELECT t.eq('B grâce par défaut : paramètre de l''agence', delai_grace_cycle((SELECT id FROM cycle WHERE numero = 'CY-3'))::text, '2');
 
 -- ===== C. Prolongation avec autorisation =====
+UPDATE cycle SET statut = 'clos', date_cloture = '2026-12-01', mise_finale = 1000 WHERE numero = 'CY-4';
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
   VALUES (1,'CY-6',2,1,3,1000,1000,NULL,'2026-12-01','2026-12-31');
 SELECT t.refuse('C prolongation sans motif', 'INSERT INTO mf.prolongation_cycle(cycle_id,ancienne_fin,nouvelle_fin,motif) SELECT id,date_fin,date_fin+10,''court'' FROM mf.cycle WHERE numero = ''CY-6''');
