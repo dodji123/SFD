@@ -131,7 +131,7 @@ export default function DemandeRetraitTontine() {
   const parType = regrouper(payesDuJour, (r) => NATURE[r.nature] ?? r.nature)
 
   return (
-    <Page title="Retrait de tontine au guichet" subtitle="Payer les retraits dont le constat est fait, demander un retrait, suivre la journée">
+    <Page title="Retrait tontine" subtitle="Payer les retraits dont le constat est fait, demander un retrait, suivre la journée">
       {!sessionOuverte && <Alert tone="warn">Aucune session de caisse ouverte : ouvrez-la pour payer en espèces.</Alert>}
 
       <Card>

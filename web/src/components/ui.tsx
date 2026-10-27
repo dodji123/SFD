@@ -154,7 +154,7 @@ export interface Col<T> {
   num?: boolean
 }
 
-export function Table<T>({ cols, rows, onRowClick, vide = 'Aucun élément' }: { cols: Col<T>[]; rows: T[]; onRowClick?: (r: T) => void; vide?: string }) {
+export function Table<T>({ cols, rows, onRowClick, onRowDoubleClick, vide = 'Aucun élément' }: { cols: Col<T>[]; rows: T[]; onRowClick?: (r: T) => void; onRowDoubleClick?: (r: T) => void; vide?: string }) {
   if (rows.length === 0) return <div className="empty">{vide}</div>
   return (
     <div className="table-wrap">
@@ -164,7 +164,8 @@ export function Table<T>({ cols, rows, onRowClick, vide = 'Aucun élément' }: {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className={onRowClick ? 'click' : ''} onClick={onRowClick ? () => onRowClick(r) : undefined}
+            <tr key={i} className={onRowClick || onRowDoubleClick ? 'click' : ''} onClick={onRowClick ? () => onRowClick(r) : undefined}
+                onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(r) : undefined}
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(r) } : undefined} tabIndex={onRowClick ? 0 : undefined}>
               {cols.map((c) => <td key={c.titre} className={c.num ? 'num' : ''}>{c.render(r, i)}</td>)}
             </tr>
