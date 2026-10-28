@@ -35,6 +35,20 @@ def rapport_zones(date: dt.date, agence_id: int | None = None, user: User = Depe
         return all_rows(cur, "SELECT * FROM rapport_journalier_zone(%s::smallint, %s)", (ag, date))
 
 
+@router.get("/rapports/collecte-periode/detail")
+def rapport_collecte_detail(du: dt.date, au: dt.date, produit_id: int | None = None, agent_id: int | None = None,
+                            zone_id: int | None = None, q: str | None = None, agence_id: int | None = None,
+                            user: User = Depends(require("rapports:read"))):
+    """Détail ligne à ligne des collectes d'une période ; q : recherche d'un client par nom ou numéro (partiel)."""
+    if au < du:
+        raise HTTPException(status_code=422, detail="La date de fin précède la date de début")
+    ag = agence_scope(user, agence_id)
+    q = (q or "").strip() or None
+    with tx() as cur:
+        return all_rows(cur, "SELECT * FROM rapport_collecte_detail(%s::smallint, %s, %s, %s, %s, %s, %s)",
+                        (ag, du, au, produit_id, agent_id, zone_id, q))
+
+
 @router.get("/rapports/collecte-periode")
 def rapport_collecte_periode(du: dt.date, au: dt.date, groupe: Literal["produit", "agent", "zone"] = "produit",
                              produit_id: int | None = None, agence_id: int | None = None,

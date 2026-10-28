@@ -53,3 +53,26 @@ LANGUAGE sql STABLE AS $$
     FROM g
    ORDER BY g.cle;
 $$;
+
+-- Détail ligne à ligne des collectes d'une période, avec recherche d'un client (nom ou numéro, partiel).
+CREATE FUNCTION rapport_collecte_detail(p_agence smallint, p_du date, p_au date, p_produit integer, p_agent integer,
+                                        p_zone integer, p_recherche text)
+RETURNS TABLE (date_collecte date, client_numero text, client text, zone text, produit text, agent text,
+               montant_collecte numeric, mise_appliquee numeric, cycle text, page smallint, no_ligne smallint)
+LANGUAGE sql STABLE AS $$
+  SELECT l.date_collecte, cl.numero::text, cl.nom::text, z.libelle::text, pe.code::text, a.nom::text,
+         l.montant_collecte, l.mise_appliquee, c.numero::text, l.page, l.no_ligne
+    FROM mf.ligne_collecte l
+    JOIN mf.cycle c ON c.id = l.cycle_id
+    JOIN mf.client cl ON cl.id = c.client_id
+    JOIN mf.produit_epargne pe ON pe.id = c.produit_id
+    LEFT JOIN mf.agent a ON a.id = l.agent_id
+    LEFT JOIN mf.zone z ON z.id = cl.zone_id
+   WHERE c.agence_id = p_agence AND l.origine = 'collecte'
+     AND l.date_collecte BETWEEN p_du AND p_au
+     AND (p_produit IS NULL OR pe.id = p_produit)
+     AND (p_agent IS NULL OR l.agent_id = p_agent)
+     AND (p_zone IS NULL OR cl.zone_id = p_zone)
+     AND (p_recherche IS NULL OR cl.nom ILIKE '%' || p_recherche || '%' OR cl.numero ILIKE '%' || p_recherche || '%')
+   ORDER BY l.date_collecte, cl.nom, l.id;
+$$;

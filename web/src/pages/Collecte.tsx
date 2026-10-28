@@ -1,6 +1,7 @@
 import { BoutonScanner, lireQr } from '../components/Qr'
 import { ChampTypeCycle, useTypeCycle } from '../components/TypeCycle'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { aujourdhui, xof } from '../lib/format'
 import { useAgents, useProduitsEpargne, useZones } from '../lib/hooks'
@@ -29,6 +30,8 @@ export default function Collecte() {
   const zones = useZones()
   const [agent, setAgent] = useState<string>('')
   const [zone, setZone] = useState<string>('')
+  const [produit, setProduit] = useState('')
+  const produits = useProduitsEpargne('collecte')
   const [jour, setJour] = useState(aujourdhui())
   const [rafraichir, setRafraichir] = useState(0)
   const peutSaisir = can('collecte:write')
@@ -60,22 +63,22 @@ export default function Collecte() {
         </div>
       </Card>
       {peutSaisir && (
-        <FormulaireSaisie key={`f-${agenceId}`} jour={jour} agent={agent} zone={zone} agents={agents} zones={zones}
+        <FormulaireSaisie key={`f-${agenceId}`} jour={jour} agent={agent} zone={zone} produit={produit} onProduit={setProduit} agents={agents} zones={zones}
           onAgent={choisirAgent} onZone={choisirZone} onFait={() => setRafraichir((n) => n + 1)} />
       )}
-      <TableauJour key={`t-${jour}-${agenceId}-${rafraichir}`} jour={jour} onChange={() => setRafraichir((n) => n + 1)} />
+      <TableauJour key={`t-${jour}-${agenceId}-${rafraichir}`} jour={jour} onChange={() => setRafraichir((n) => n + 1)}
+        agent={agent} produitCode={produits.find((p) => String(p.id) === produit)?.code ?? ''} />
       {agent && <Tournee key={`v-${agent}-${jour}-${agenceId}-${rafraichir}`} agentId={Number(agent)} jour={jour} />}
     </Page>
   )
 }
 
-function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, onFait }: {
-  jour: string; agent: string; zone: string
+function FormulaireSaisie({ jour, agent, zone, produit, onProduit, agents, zones, onAgent, onZone, onFait }: {
+  jour: string; agent: string; zone: string; produit: string; onProduit: (id: string) => void
   agents: { id: number; matricule: string; nom: string }[]; zones: { id: number; code: string; libelle: string }[]
   onAgent: (id: string) => void; onZone: (id: string) => void; onFait: () => void
 }) {
   const produits = useProduitsEpargne('collecte')
-  const [produit, setProduit] = useState('')
   const [suffixe, setSuffixe] = useState('')
   const [trouve, setTrouve] = useState<Trouve | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -118,10 +121,10 @@ function FormulaireSaisie({ jour, agent, zone, agents, zones, onAgent, onZone, o
   return (
     <Card title="Saisie d'une collecte" actions={<Button small onClick={() => setNouvelle(true)}>Nouvelle mise</Button>}>
       {nouvelle && <NouvelleMise produitInitial={produit} numeroInitial={suffixe} jour={jour} onClose={() => setNouvelle(false)}
-        onFait={(p, n) => { setNouvelle(false); setProduit(p); setSuffixe(n) }} />}
+        onFait={(p, n) => { setNouvelle(false); onProduit(p); setSuffixe(n) }} />}
       <div className="row">
         <Field label="Produit tontine">
-          <Select value={produit} onChange={(e) => setProduit(e.target.value)}>
+          <Select value={produit} onChange={(e) => onProduit(e.target.value)}>
             <option value="">— choisir un produit —</option>
             {produits.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.libelle}</option>)}
           </Select>
@@ -173,9 +176,11 @@ function parZone(lignes: LigneJour[]): [string, LigneJour[]][] {
   return [...m.entries()].sort(([a], [b]) => (a === 'Sans zone' ? 1 : b === 'Sans zone' ? -1 : a.localeCompare(b)))
 }
 
-function TableauJour({ jour, onChange }: { jour: string; onChange: () => void }) {
+function TableauJour({ jour, onChange, agent, produitCode }: { jour: string; onChange: () => void; agent: string; produitCode: string }) {
   const { can } = useSession()
   const q = useFetch(() => api.get<Jour>('/api/collecte/jour', { date: jour }), [jour])
+  // le tableau ne montre que le produit et l'agent choisis ; le reste de la journée est dans le rapport de collecte
+  const lignesDe = (d: Jour) => (agent && produitCode ? d.lignes.filter((l) => String(l.agent_id) === agent && l.produit === produitCode) : [])
   const { run, busy } = useAction()
   const [edit, setEdit] = useState<{ id: number; montant: string } | null>(null)
   const [filtre, setFiltre] = useState('')
@@ -209,8 +214,9 @@ Elle disparaîtra des écrans mais restera tracée pour l'audit. Motif obligatoi
             <Kpi label="Total collecté" value={xof(d.total)} />
             <Kpi label="Collectes saisies" value={d.lignes.length} />
           </div>
+          {(!agent || !produitCode) && <Alert tone="info">Choisissez un produit et un agent pour voir leurs collectes. Toute la collecte de la journée se consulte dans le <Link to="/rapport-collecte">rapport de collecte</Link>.</Alert>}
           <FiltreTableau valeur={filtre} onChange={setFiltre} />
-          {parZone(filtrer(d.lignes, filtre, (l) => [l.client, l.client_numero, l.souscription, l.agent])).map(([zone, rows]) => (
+          {parZone(filtrer(lignesDe(d), filtre, (l) => [l.client, l.client_numero, l.souscription, l.agent])).map(([zone, rows]) => (
           <div key={zone} className="stack">
             <div className="row" style={{ padding: '8px 16px' }}>
               <strong>{zone}</strong>

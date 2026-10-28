@@ -45,3 +45,9 @@ SELECT t.eq('Z agent A02 : 1 000', montant_collecte::text, '1000') FROM rapport_
 SELECT t.eq('Z filtre produit P2 : une seule zone', count(*)::text, '1') FROM rapport_collecte_periode(1::smallint,'2026-10-01','2026-10-31',(SELECT id FROM produit_epargne WHERE code = 'P2'),'zone');
 SELECT t.eq('Z novembre : collecte du 2 novembre seule', montant_collecte::text, '1000') FROM rapport_collecte_periode(1::smallint,'2026-11-01','2026-11-30',NULL,'zone') WHERE cle = 'Z1';
 SELECT t.eq('Z hors période : aucune ligne', count(*)::text, '0') FROM rapport_collecte_periode(1::smallint,'2026-12-01','2026-12-31',NULL,'zone');
+
+-- Détail ligne à ligne, avec recherche de client
+SELECT t.eq('D détail de la période : 3 collectes', count(*)::text, '3') FROM rapport_collecte_detail(1::smallint,'2026-10-01','2026-10-31',NULL,NULL,NULL,NULL);
+SELECT t.eq('D recherche client « Un » : ses 2 collectes', count(*)::text, '2') FROM rapport_collecte_detail(1::smallint,'2026-10-01','2026-10-31',NULL,NULL,NULL,'Un');
+SELECT t.eq('D recherche par numéro client « C2 » : 1 collecte', count(*)::text, '1') FROM rapport_collecte_detail(1::smallint,'2026-10-01','2026-10-31',NULL,NULL,NULL,'C2');
+SELECT t.eq('D agent A02 : 1 collecte', count(*)::text, '1') FROM rapport_collecte_detail(1::smallint,'2026-10-01','2026-10-31',NULL,(SELECT id FROM agent WHERE matricule = 'A02'),NULL,NULL);
