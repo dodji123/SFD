@@ -272,8 +272,8 @@ def regler(agent_id: int, body: ReglementIn, user: User = Depends(require("verse
         verifier_agence(cur, user, "agent", agent_id)
         if body.session_id is not None:
             verifier_session(cur, user, body.session_id)   # 404 si la session est d'une autre agence
-        cur.execute("SELECT reglement_agent_especes(%s, %s, COALESCE(%s, current_date), %s)",
-                    (agent_id, body.montant, body.date, body.session_id))
+        cur.execute("SELECT reglement_agent_especes(%s, %s, COALESCE(%s, current_date), %s, %s)",
+                    (agent_id, body.montant, body.date, body.session_id, user.id))
         return one_row(cur, "SELECT * FROM v_solde_compte_agent WHERE agent_id = %s", (agent_id,))
 
 
