@@ -115,7 +115,7 @@ function DecisionModal({ d, accepte, onClose, onFait }: { d: Demande; accepte: b
     <FormModal titre={accepte ? 'Accepter la demande de retrait' : 'Refuser la demande de retrait'} onClose={onClose} busy={busy} valider={accepte ? 'Accepter' : 'Refuser'}
       onSubmit={() => void run(() => api.post(`/api/demandes-retrait-client/${d.id}/decider`, { accepte, commentaire: commentaire.trim() || null }), accepte ? 'Demande acceptée : le retrait est créé' : 'Demande refusée', onFait)}>
       <p style={{ margin: 0 }}>{d.client} — cycle {d.cycle}.</p>
-      {accepte && <Alert tone="warn">L’acceptation clôture le cycle s’il est encore en cours et crée le retrait (traité ensuite dans « Retraits et écarts »).</Alert>}
+      {accepte && <Alert tone="warn">L’acceptation clôture le cycle s’il est encore en cours et crée le retrait (le retrait est ensuite exécuté au guichet).</Alert>}
       <Field label={accepte ? 'Commentaire (facultatif)' : 'Raison du refus (obligatoire)'}><Input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} required={!accepte} minLength={accepte ? 0 : 5} /></Field>
     </FormModal>
   )

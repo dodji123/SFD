@@ -41,7 +41,7 @@ export default function CreditDetail() {
               {c.garantie && <Kpi label={`Garantie bloquée (${xof(c.garantie.montant_bloque)} au départ)`} value={xof(c.garantie_bloquee)} />}
               {prochaine && <Kpi label={`Dû aujourd'hui (éch. ${prochaine.no_echeance})`} value={xof(prochaine.du_aujourdhui)} tone={prochaine.jours_retard > 0 || prochaine.statut === 'echue' ? 'bad' : undefined} />}
             </div>
-            {c.mode_remboursement === 'tontine' && <Alert tone="info">Remboursement sur la collecte du cycle de tontine : chaque échéance se déclenche dès que le collecté atteint son montant (voir « Retraits et écarts »).</Alert>}
+            {c.mode_remboursement === 'tontine' && <Alert tone="info">Remboursement sur la collecte du cycle de tontine : chaque échéance se déclenche dès que le collecté atteint son montant.</Alert>}
             {c.garantie && c.garantie.montant_saisi > 0 && <Alert tone="warn">Garantie saisie : {xof(c.garantie.montant_saisi)}.</Alert>}
             <Card title="Échéancier" flush>
               <Table rows={c.echeances} cols={[

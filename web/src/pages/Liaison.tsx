@@ -93,7 +93,7 @@ function CycleLiaison({ cycle: c, comptes, peut, peutRetirer, onFait }: { cycle:
               'Tontine alimentée', () => { setMontant(''); onFait() })}>Virer vers la tontine</Button>
           {peutRetirer && (
             <Button disabled={busy || c.montant_collecte === 0}
-              onClick={() => { if (window.confirm(`Virer la tontine ${c.numero} (${xof(c.montant_collecte)} collectés) vers le compte ${cible.numero} ? Le cycle est clôturé et la demande suit le circuit des retraits (contrôle des écarts).`)) void run(() => api.post(`/api/cycles/${c.id}/retrait`, { nature: 'virement_vers_epargne', compte_id: cible.id }), 'Demande de virement créée : à suivre dans Retraits et écarts', onFait) }}>
+              onClick={() => { if (window.confirm(`Virer la tontine ${c.numero} (${xof(c.montant_collecte)} collectés) vers le compte ${cible.numero} ? Le cycle est clôturé et la demande suit le circuit des retraits (contrôle des écarts).`)) void run(() => api.post(`/api/cycles/${c.id}/retrait`, { nature: 'virement_vers_epargne', compte_id: cible.id }), 'Demande de virement créée', onFait) }}>
               Alimenter le compte par la tontine</Button>
           )}
         </div>

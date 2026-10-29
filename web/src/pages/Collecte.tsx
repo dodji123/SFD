@@ -261,6 +261,8 @@ function Versement({ agentId, jour, feuille, onFait }: { agentId: number; jour: 
   const { can } = useSession()
   const { run, busy } = useAction()
   const [verse, setVerse] = useState('')
+  const [session, setSession] = useState('')
+  const sessions = useFetch(() => (can('caisse:read') ? api.get<{ id: number; caisse: string; date_session: string }[]>('/api/sessions', { statut: 'ouverte' }) : Promise.resolve([])), [])
   const v = feuille?.versement
   const collecte = feuille?.total_collecte ?? 0
   const ecart = verse === '' ? null : collecte - Number(verse)
@@ -280,8 +282,14 @@ function Versement({ agentId, jour, feuille, onFait }: { agentId: number; jour: 
           <Field label="Écart">
             <Input readOnly value={ecart === null ? '—' : ecart > 0 ? `Manquant ${xof(ecart)}` : ecart < 0 ? `Surplus ${xof(-ecart)}` : 'Aucun'} />
           </Field>
+          <Field label="Caisse qui reçoit l'argent">
+            <Select value={session} onChange={(e) => setSession(e.target.value)}>
+              <option value="">Session unique (si une seule est ouverte)</option>
+              {sessions.data?.map((s) => <option key={s.id} value={s.id}>{s.caisse} — {s.date_session}</option>)}
+            </Select>
+          </Field>
           <Button variant="primary" disabled={busy || verse === ''}
-            onClick={() => void run(() => api.post(`/api/agents/${agentId}/versement`, { date_tournee: jour, montant_verse: Number(verse) }), 'Versement enregistré', onFait)}>Enregistrer le versement</Button>
+            onClick={() => void run(() => api.post(`/api/agents/${agentId}/versement`, { date_tournee: jour, montant_verse: Number(verse), session_id: session ? Number(session) : null }), 'Versement enregistré en caisse', onFait)}>Enregistrer le versement</Button>
         </div>
       ) : <p className="muted">Aucun versement enregistré.</p>}
     </Card>

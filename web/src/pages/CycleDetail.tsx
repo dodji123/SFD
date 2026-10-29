@@ -102,7 +102,7 @@ export default function CycleDetail() {
                 ]} />
               </Card>
               <Card title="Retraits liés" flush>
-                <Table rows={c.retraits} onRowClick={() => nav('/retraits')} vide="Aucun retrait" cols={[
+                <Table rows={c.retraits} vide="Aucun retrait" cols={[
                   { titre: 'Nature', render: (r) => NATURES[r.nature] ?? r.nature },
                   { titre: 'Montant', num: true, render: (r) => xof(r.montant_paye ?? r.montant) },
                   { titre: 'Écart', num: true, render: (r) => (r.ecart ? xof(r.ecart) : '—') },
@@ -114,7 +114,7 @@ export default function CycleDetail() {
             {modale === 'lignes' && <SaisieLignes c={c} onClose={() => setModale(null)} onFait={fin} />}
             {modale === 'mise' && <ChangerMise c={c} onClose={() => setModale(null)} onFait={fin} />}
             {modale === 'cloture' && <Cloture c={c} onClose={() => setModale(null)} onFait={fin} />}
-            {modale === 'retrait' && <DemandeRetrait c={c} onClose={() => setModale(null)} onFait={() => nav('/retraits')} />}
+            {modale === 'retrait' && <DemandeRetrait c={c} onClose={() => setModale(null)} onFait={fin} />}
           </Page>
         )
       }}

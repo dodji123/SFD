@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { aujourdhui, date as fdate, xof, nombre } from '../lib/format'
 import { ESTCOMPTE, LIBELLES_RUBRIQUES, SECTIONS_RUBRIQUES } from '../lib/rubriques'
@@ -18,7 +18,6 @@ const NATURES: Record<string, string> = { retrait_client: 'Retrait client', vire
 
 export default function Dashboard() {
   const { can, agenceId } = useSession()
-  const nav = useNavigate()
   const [jour, setJour] = useState(aujourdhui())
   const tdb = useFetch(() => api.get<Tdb>('/api/tableau-de-bord', { date: jour }), [jour, agenceId])
   const rapport = useFetch(() => (can('rapports:read') ? api.get<{ rubriques: Rubrique[] }>('/api/rapports/journalier', { date: jour }) : Promise.resolve({ rubriques: [] })), [jour, agenceId])
@@ -46,10 +45,10 @@ export default function Dashboard() {
       </Charge>
 
       <div className="grid-2">
-        <Card title="Retraits en attente" actions={<Link to="/retraits">Tout voir</Link>} flush>
+        <Card title="Retraits en attente" flush>
           <Charge q={retraits}>
             {() => (
-              <Table rows={aTraiter.slice(0, 8)} vide="Aucun retrait en attente" onRowClick={() => nav('/retraits')} cols={[
+              <Table rows={aTraiter.slice(0, 8)} vide="Aucun retrait en attente" cols={[
                 { titre: 'Client', render: (r) => <><strong>{r.client}</strong><div className="muted">{r.cycle}</div></> },
                 { titre: 'Nature', render: (r) => NATURES[r.nature] ?? r.nature },
                 { titre: 'Montant', num: true, render: (r) => xof(r.montant) },

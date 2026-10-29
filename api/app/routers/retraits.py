@@ -230,14 +230,17 @@ def lister_virements(cycle_id: int | None = None, compte_id: int | None = None, 
 class VersementIn(BaseModel):
     date_tournee: dt.date
     montant_verse: int = Field(ge=0)
+    session_id: int | None = None   # session de caisse qui reçoit l'argent versé
 
 
 @router.post("/agents/{agent_id}/versement", status_code=201)
 def versement(agent_id: int, body: VersementIn, user: User = Depends(require("versement:write"))):
-    """Fin de tournée : collecté (lignes saisies) - versé. Manquant : débit du compte agent ; surplus : à traiter."""
+    """Fin de tournée : collecté (lignes saisies) - versé. Manquant : débit du compte agent ; surplus : à traiter.
+    L'argent versé entre en caisse (encaissement), dans la même transaction."""
     with tx(user.login) as cur:
         verifier_agence(cur, user, "agent", agent_id)
-        vid = one_row(cur, "SELECT enregistrer_versement(%s, %s, %s, %s) AS id", (agent_id, body.date_tournee, body.montant_verse, user.id))["id"]
+        vid = one_row(cur, "SELECT versement_tournee_caisse(%s, %s, %s, %s, %s) AS id",
+                      (agent_id, body.date_tournee, body.montant_verse, user.id, body.session_id))["id"]
         return one_row(cur, "SELECT * FROM versement_agent WHERE id = %s", (vid,))
 
 
@@ -257,13 +260,16 @@ def compte_agent(agent_id: int, user: User = Depends(require("collecte:read"))):
 class ReglementIn(BaseModel):
     montant: int = Field(gt=0)
     date: dt.date | None = None
+    session_id: int | None = None   # session de caisse qui reçoit les espèces
 
 
 @router.post("/agents/{agent_id}/compte/reglement", status_code=201)
 def regler(agent_id: int, body: ReglementIn, user: User = Depends(require("versement:write"))):
+    """Encaissement en numéraire d'un manquant de versement : solde le compte agent et entre les espèces en caisse."""
     with tx(user.login) as cur:
         verifier_agence(cur, user, "agent", agent_id)
-        cur.execute("SELECT regler_compte_agent(%s, %s, COALESCE(%s, current_date))", (agent_id, body.montant, body.date))
+        cur.execute("SELECT reglement_agent_especes(%s, %s, COALESCE(%s, current_date), %s)",
+                    (agent_id, body.montant, body.date, body.session_id))
         return one_row(cur, "SELECT * FROM v_solde_compte_agent WHERE agent_id = %s", (agent_id,))
 
 

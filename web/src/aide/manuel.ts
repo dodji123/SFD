@@ -546,7 +546,7 @@ export const CHAPITRES: Chapitre[] = [
       {
         titre: 'Un écart de caisse ou de collecte',
         paragraphes: [
-          "Un écart n'est jamais effacé. Il reste visible dans Retraits et écarts, ou dans la clôture de caisse, jusqu'à sa régularisation par un responsable.",
+          "Un écart n'est jamais effacé. Il reste visible dans la clôture de caisse jusqu'à sa régularisation par un responsable.",
         ],
       },
     ],

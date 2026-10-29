@@ -142,3 +142,13 @@ def test_reglement_du_compte_agent(client, h, base):
     r = client.post(f"/api/agents/{ag}/compte/reglement", json={"montant": -avant}, headers=h("caissier1"))
     assert r.status_code == 201 and r.json()["solde"] == 0
     assert client.post(f"/api/agents/{ag}/compte/reglement", json={"montant": 0}, headers=h("caissier1")).status_code == 422
+
+
+def test_versement_de_tournee_entre_en_caisse(client, h, base):
+    """Le versement de fin de tournée est un encaissement de la session choisie (même opération)."""
+    sid = base["session"]["id"]
+    ag = base["ag"][1]["id"]
+    v = client.post(f"/api/agents/{ag}/versement", json={"date_tournee": "2026-10-20", "montant_verse": 500, "session_id": sid}, headers=h("caissier1"))
+    assert v.status_code == 201, v.text
+    ops = [o for o in client.get(f"/api/sessions/{sid}", headers=h("caissier1")).json()["operations"] if o["motif"] == "versement_agent"]
+    assert ("encaissement", 500) in [(o["type"], o["montant"]) for o in ops]

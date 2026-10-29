@@ -47,13 +47,14 @@ import { ChangementObligatoire, Reinitialiser } from './pages/MotDePasse'
 import { EnrolementTotp } from './pages/Totp'
 import Provisions from './pages/Provisions'
 import Rapports from './pages/Rapports'
-import Retraits from './pages/Retraits'
 import RapportManquants from './pages/RapportManquants'
 import ControleCarnet from './pages/ControleCarnet'
 import RapportCollecte from './pages/RapportCollecte'
 import RapportSoldeARetirer from './pages/RapportSoldeARetirer'
 import Rh from './pages/Rh'
 import Tresorerie from './pages/Tresorerie'
+import EcartsVersement from './pages/EcartsVersement'
+import ReglementManquantsVersement from './pages/ReglementManquantsVersement'
 
 export default function App() {
   const { user, chargement } = useSession()
@@ -82,11 +83,12 @@ export default function App() {
         <Route path="depots" element={<Garde perm="epargne:read"><DepotsBloques /></Garde>} />
         <Route path="deblocages" element={<Garde perm="epargne:read"><Deblocages /></Garde>} />
         <Route path="pieces" element={<Garde perm="epargne:read"><Pieces /></Garde>} />
-        <Route path="retraits" element={<Garde perm="collecte:read"><Retraits /></Garde>} />
         <Route path="rapport-manquants" element={<Garde perm="collecte:read"><RapportManquants /></Garde>} />
         <Route path="controle-carnet" element={<Garde perm="livret:read"><ControleCarnet /></Garde>} />
         <Route path="rapport-collecte" element={<Garde perm="rapports:read"><RapportCollecte /></Garde>} />
-        <Route path="solde-a-retirer" element={<Garde perm="rapports:read"><RapportSoldeARetirer /></Garde>} />
+        <Route path="reglement-manquants" element={<Garde perm="collecte:read"><ReglementManquantsVersement /></Garde>} />
+        <Route path="ecarts-versement"element={<Garde perm="collecte:read"><EcartsVersement /></Garde>} />
+        <Route path="solde-a-retirer"element={<Garde perm="rapports:read"><RapportSoldeARetirer /></Garde>} />
         <Route path="credits" element={<Garde perm="credit:read"><Credits /></Garde>} />
         <Route path="credits/:id" element={<Garde perm="credit:read"><CreditDetail /></Garde>} />
         <Route path="comites" element={<Garde perm="comite:read"><Comites /></Garde>} />
