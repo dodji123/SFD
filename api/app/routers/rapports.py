@@ -49,6 +49,15 @@ def rapport_collecte_detail(du: dt.date, au: dt.date, produit_id: int | None = N
                         (ag, du, au, produit_id, agent_id, zone_id, q))
 
 
+@router.get("/rapports/solde-a-retirer")
+def rapport_solde_a_retirer(produit_id: int | None = None, agence_id: int | None = None,
+                            user: User = Depends(require("rapports:read"))):
+    """Soldes que les clients peuvent encore retirer, cycle par cycle, regroupables par produit (cycles non retirés, solde positif)."""
+    ag = agence_scope(user, agence_id)
+    with tx() as cur:
+        return all_rows(cur, "SELECT * FROM rapport_solde_a_retirer(%s::smallint, %s)", (ag, produit_id))
+
+
 @router.get("/rapports/collecte-periode")
 def rapport_collecte_periode(du: dt.date, au: dt.date, groupe: Literal["produit", "agent", "zone"] = "produit",
                              produit_id: int | None = None, agence_id: int | None = None,
