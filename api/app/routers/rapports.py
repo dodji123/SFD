@@ -70,6 +70,49 @@ def rapport_collecte_periode(du: dt.date, au: dt.date, groupe: Literal["produit"
         return all_rows(cur, "SELECT * FROM rapport_collecte_periode(%s::smallint, %s, %s, %s, %s)", (ag, du, au, produit_id, groupe))
 
 
+@router.get("/rapports/collecte-evolution")
+def rapport_collecte_evolution(du: dt.date | None = None, au: dt.date | None = None, agence_id: int | None = None,
+                               user: User = Depends(require("rapports:read"))):
+    """Évolution de la collecte d'une période, globale et par agent, jour par jour, comparée à la période précédente
+    de même durée. Sans dates : le mois calendaire en cours."""
+    today = dt.date.today()
+    du = du or today.replace(day=1)
+    au = au or today
+    if au < du:
+        raise HTTPException(status_code=422, detail="La date de fin précède la date de début")
+    duree = (au - du).days + 1
+    prec_au = du - dt.timedelta(days=1)
+    prec_du = prec_au - dt.timedelta(days=duree - 1)
+    ag = agence_scope(user, agence_id)
+    sql = ("SELECT l.date_collecte AS jour, l.agent_id, a.matricule, a.nom AS agent, sum(l.montant_collecte) AS total "
+           "FROM ligne_collecte l JOIN cycle c ON c.id = l.cycle_id LEFT JOIN agent a ON a.id = l.agent_id "
+           "WHERE c.agence_id = %s AND l.origine = 'collecte' AND l.date_collecte BETWEEN %s AND %s "
+           "GROUP BY 1, 2, 3, 4 ORDER BY 1, 3")
+    with tx() as cur:
+        lignes = all_rows(cur, sql, (ag, du, au))
+        precedent = all_rows(cur, "SELECT l.agent_id, sum(l.montant_collecte) AS total FROM ligne_collecte l JOIN cycle c ON c.id = l.cycle_id "
+                                  "WHERE c.agence_id = %s AND l.origine = 'collecte' AND l.date_collecte BETWEEN %s AND %s GROUP BY 1",
+                             (ag, prec_du, prec_au))
+    par_jour: dict = {}
+    agents: dict = {}
+    for r in lignes:
+        par_jour[r["jour"]] = par_jour.get(r["jour"], 0) + r["total"]
+        a = agents.setdefault(r["agent_id"], {"agent_id": r["agent_id"], "matricule": r["matricule"], "agent": r["agent"], "total": 0, "jours": {}})
+        a["total"] += r["total"]
+        a["jours"][r["jour"]] = r["total"]
+    prec_agent = {p["agent_id"]: p["total"] for p in precedent}
+    total = sum(par_jour.values())
+    total_prec = sum(prec_agent.values())
+    return {
+        "du": du, "au": au, "precedent_du": prec_du, "precedent_au": prec_au,
+        "total": total, "total_precedent": total_prec,
+        "jours": [{"jour": j, "total": t} for j, t in sorted(par_jour.items())],
+        "agents": [{**{k: v for k, v in a.items() if k != "jours"}, "precedent": prec_agent.get(aid, 0),
+                    "jours": [{"jour": j, "total": t} for j, t in sorted(a["jours"].items())]}
+                   for aid, a in sorted(agents.items(), key=lambda x: x[1]["matricule"] or "")],
+    }
+
+
 @router.get("/rapports/credits/echus")
 def echus(date: dt.date, agence_id: int | None = None, user: User = Depends(require("rapports:read"))):
     ag = agence_scope(user, agence_id)

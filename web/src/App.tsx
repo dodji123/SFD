@@ -55,6 +55,7 @@ import Rh from './pages/Rh'
 import Tresorerie from './pages/Tresorerie'
 import EcartsVersement from './pages/EcartsVersement'
 import ReglementManquantsVersement from './pages/ReglementManquantsVersement'
+import TontineEvolution from './pages/TontineEvolution'
 
 export default function App() {
   const { user, chargement } = useSession()
@@ -86,7 +87,8 @@ export default function App() {
         <Route path="rapport-manquants" element={<Garde perm="collecte:read"><RapportManquants /></Garde>} />
         <Route path="controle-carnet" element={<Garde perm="livret:read"><ControleCarnet /></Garde>} />
         <Route path="rapport-collecte" element={<Garde perm="rapports:read"><RapportCollecte /></Garde>} />
-        <Route path="reglement-manquants" element={<Garde perm="collecte:read"><ReglementManquantsVersement /></Garde>} />
+        <Route path="evolution-collectes" element={<Garde perm="rapports:read"><TontineEvolution /></Garde>} />
+        <Route path="reglement-manquants"element={<Garde perm="collecte:read"><ReglementManquantsVersement /></Garde>} />
         <Route path="ecarts-versement"element={<Garde perm="collecte:read"><EcartsVersement /></Garde>} />
         <Route path="solde-a-retirer"element={<Garde perm="rapports:read"><RapportSoldeARetirer /></Garde>} />
         <Route path="credits" element={<Garde perm="credit:read"><Credits /></Garde>} />
