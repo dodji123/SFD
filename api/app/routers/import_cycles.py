@@ -6,9 +6,9 @@ et facultatives : objectif, type_cycle. Le gérant ou le contrôle relit le rés
 import datetime as dt
 import io
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 import psycopg2
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from ..auth import User, agence_scope, require
 from ..db import all_rows, one_row, tx
@@ -31,7 +31,7 @@ def _date(v) -> dt.date | None:
         return None
 
 
-def _lire(contenu: bytes) -> list[dict]:
+def _lire(contenu: bytes, colonnes: list[str] = COLONNES_OBLIGATOIRES) -> list[dict]:
     try:
         feuille = load_workbook(io.BytesIO(contenu), read_only=True, data_only=True).active
     except Exception:
@@ -40,7 +40,7 @@ def _lire(contenu: bytes) -> list[dict]:
     if not lignes:
         raise HTTPException(status_code=422, detail="Le fichier est vide")
     entetes = [str(c).strip().lower() if c is not None else "" for c in lignes[0]]
-    manquantes = [c for c in COLONNES_OBLIGATOIRES if c not in entetes]
+    manquantes = [c for c in colonnes if c not in entetes]
     if manquantes:
         raise HTTPException(status_code=422, detail=f"Colonnes manquantes : {', '.join(manquantes)}")
     donnees = []
@@ -137,3 +137,42 @@ def valider_cycles(fichier: UploadFile = File(...), agence_id: int | None = None
         except psycopg2.Error as e:
             refus.append({"ligne": v["ligne"], "champ": "base", "motif": message_pg(e)})
     return {"crees": len(crees), "refus": refus, "numeros": crees}
+
+
+NOTICE_MODELE = [
+    "Import des cycles de la machine : mode d'emploi",
+    "",
+    "1. Les clients doivent déjà exister dans l'agence, sous le même numéro client (client_numero), avant cet import.",
+    "2. Une ligne = un cycle. Colonnes obligatoires : numero, client_numero, produit_code, date_debut, date_fin, mise.",
+    "3. numero : numéro du cycle tel qu'il figure sur le carnet terrain (il doit suivre la numérotation déjà utilisée).",
+    "4. produit_code : un code de l'onglet Produits. Les dates s'écrivent AAAA-MM-JJ ou au format date Excel.",
+    "5. mise : nombre entier positif, en francs CFA. objectif et type_cycle sont facultatifs.",
+    "6. Vérifiez le fichier avec « Contrôler le fichier » avant de créer les cycles : aucune écriture à cette étape.",
+    "7. Un numéro de cycle déjà présent dans l'agence est refusé ; il n'est pas écrasé.",
+]
+
+
+@router.get("/cycles/modele")
+def modele_cycles(user: User = Depends(require("livret:controler"))):
+    """Fichier type de l'import des cycles : en-têtes, codes produits de la base, notice. Aucune donnée client."""
+    with tx() as cur:
+        produits = all_rows(cur, "SELECT code, libelle, type_cycle, nb_pages_livret FROM produit_epargne ORDER BY code", ())
+    classeur = Workbook()
+    cycles = classeur.active
+    cycles.title = "Cycles"
+    cycles.append(COLONNES_OBLIGATOIRES + ["objectif", "type_cycle"])
+    notice = classeur.create_sheet("Notice")
+    for ligne in NOTICE_MODELE:
+        notice.append([ligne])
+    notice.column_dimensions["A"].width = 110
+    liste = classeur.create_sheet("Produits")
+    liste.append(["code", "libelle", "type_cycle", "nb_pages_livret"])
+    for p in produits:
+        liste.append([p["code"], p["libelle"], p["type_cycle"], p["nb_pages_livret"]])
+    tampon = io.BytesIO()
+    classeur.save(tampon)
+    return Response(
+        content=tampon.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="modele_import_cycles.xlsx"'},
+    )

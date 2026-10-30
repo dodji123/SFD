@@ -52,3 +52,20 @@ def test_validation_cree_les_cycles_puis_refuse_le_doublon(client, h, produits):
     r2 = client.post("/api/import/cycles/valider", files={"fichier": ("c.xlsx", fichier, mime)}, headers=h("chef1"))
     assert r2.json()["crees"] == 0
     assert any("existe déjà" in e["motif"] for e in r2.json()["refus"])
+
+
+def test_modele_telechargeable_avec_notice_et_produits(client, h):
+    import io
+    from openpyxl import load_workbook
+
+    r = client.get("/api/import/cycles/modele", headers=h("chef1"))
+    assert r.status_code == 200, r.text
+    assert "spreadsheetml" in r.headers["content-type"]
+    classeur = load_workbook(io.BytesIO(r.content))
+    assert classeur.sheetnames == ["Cycles", "Notice", "Produits"]
+    assert [c.value for c in classeur["Cycles"][1]][:6] == ["numero", "client_numero", "produit_code", "date_debut", "date_fin", "mise"]
+    assert "P1" in [row[0].value for row in classeur["Produits"].iter_rows(min_row=2)]
+
+
+def test_modele_refuse_sans_permission(client, h):
+    assert client.get("/api/import/cycles/modele", headers=h("caissier1")).status_code == 403

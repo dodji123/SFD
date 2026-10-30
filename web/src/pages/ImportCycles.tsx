@@ -39,6 +39,19 @@ export default function ImportCycles() {
     }
   }
 
+  async function telecharger() {
+    setErreur(null)
+    const t = session.getToken()
+    const r = await fetch('/api/import/cycles/modele', { headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    if (!r.ok) { setErreur(`Fichier type indisponible (${r.status})`); return }
+    const url = URL.createObjectURL(await r.blob())
+    const lien = document.createElement('a')
+    lien.href = url
+    lien.download = 'modele_import_cycles.xlsx'
+    lien.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function creer() {
     if (!fichier || !confirm('Créer les cycles des lignes acceptées ? Cette opération enregistre les cycles.')) return
     setOccupe(true)
@@ -57,6 +70,7 @@ export default function ImportCycles() {
     <Page title="Import des cycles de la machine" subtitle="Contrôle du fichier Excel avant mise en production, puis création des cycles acceptés.">
       <Card>
         <p className="muted" style={{ marginTop: 0 }}>Colonnes : numero, client_numero, produit_code, date_debut, date_fin, mise (facultatives : objectif, type_cycle).</p>
+        <p><button type="button" className="btn" onClick={() => void telecharger()}>Télécharger le fichier type</button></p>
         <input type="file" accept=".xlsx" disabled={occupe} onChange={(e) => { const f = e.target.files?.[0]; if (f) void controler(f) }} />
       </Card>
       {occupe && <p className="muted">Contrôle en cours…</p>}
