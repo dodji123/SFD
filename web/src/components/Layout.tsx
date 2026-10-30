@@ -68,6 +68,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/aide', titre: 'Aide et manuel', icone: '❓', perm: '' },
     { to: '/fiche-tests', titre: 'Fiche des tests manuels', icone: '📋', perm: '' },
     { to: '/application-mobile', titre: 'Application mobile', icone: '📱', perm: 'collecte:read' },
+    { to: '/import-cycles', titre: 'Import des cycles (Excel)', icone: '📥', perm: 'livret:controler' },
     { to: '/admin', titre: 'Administration', icone: '⚙️', perm: ['users:manage', 'params:read', 'audit:read', 'ref:write'] },
   ] },
 ]
