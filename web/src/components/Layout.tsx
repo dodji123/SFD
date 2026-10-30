@@ -25,6 +25,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/demande-retrait', titre: 'Retrait tontine', icone: '💸', perm: 'retrait:request' },
     { to: '/rapport-manquants', titre: 'Manquants non payés', icone: '📋', perm: 'collecte:read' },
     { to: '/controle-carnet', titre: 'Contrôle au carnet', icone: '📖', perm: 'livret:read' },
+    { to: '/releves-carnet', titre: 'Relevés carnet et rapprochement', icone: '📒', perm: 'livret:read' },
     { to: '/rapport-collecte', titre: 'Rapport de collecte', icone: '📊', perm: 'rapports:read' },
     { to: '/solde-a-retirer', titre: 'Solde à retirer', icone: '💰', perm: 'rapports:read' },
     { to: '/solde-a-retirer-date', titre: 'Solde à retirer à une date', icone: '📅', perm: 'rapports:read' },
