@@ -23,7 +23,7 @@ def ecarts_versement(du: dt.date, au: dt.date, agent_id: int | None = None, agen
     _periode(du, au)
     ag = agence_scope(user, agence_id)
     with tx() as cur:
-        return all_rows(
+        rows = all_rows(
             cur,
             "SELECT v.id, v.date_tournee, a.id AS agent_id, a.matricule, a.nom AS agent, v.montant_collecte, v.montant_verse, v.ecart, "
             "       CASE WHEN v.ecart > 0 THEN 'manquant' ELSE 'surplus' END AS sens, ABS(v.ecart) AS montant "
@@ -32,6 +32,38 @@ def ecarts_versement(du: dt.date, au: dt.date, agent_id: int | None = None, agen
             "AND (%s::int IS NULL OR v.agent_id = %s) ORDER BY v.date_tournee DESC, v.id DESC",
             (ag, du, au, agent_id, agent_id),
         )
+        ops = all_rows(cur, "SELECT agent_id, type, montant, reference FROM compte_agent WHERE agence_id = %s ORDER BY date_operation, id", (ag,))
+        surplus = all_rows(cur, "SELECT reference, montant - montant_utilise AS restant FROM surplus "
+                                "WHERE agence_id = %s AND reference LIKE 'versement_agent:%%'", (ag,))
+    reste_manquant = _reste_manquants(ops)
+    restant_surplus = {s["reference"]: s["restant"] for s in surplus}
+    for r in rows:
+        cle = f"versement_agent:{r['id']}"
+        r["reste"] = reste_manquant.get(cle, r["montant"]) if r["sens"] == "manquant" else restant_surplus.get(cle, 0)
+        r["paye"] = r["reste"] == 0
+    return rows
+
+
+DEBITS_AGENT = {"manquant_versement", "perte_retrait", "correction_debit"}
+CREDITS_AGENT = {"versement", "retenue_commission", "correction_credit"}
+
+
+def _reste_manquants(ops: list[dict]) -> dict:
+    """Reste dû de chaque manquant de versement : les règlements (espèces, retenue) soldent les dettes les plus anciennes d'abord."""
+    dettes: dict[int, list] = {}
+    for o in ops:
+        file = dettes.setdefault(o["agent_id"], [])
+        if o["type"] in DEBITS_AGENT:
+            file.append([o["reference"], o["montant"]])
+        elif o["type"] in CREDITS_AGENT:
+            a_payer = o["montant"]
+            for dette in file:
+                if a_payer <= 0:
+                    break
+                prise = min(dette[1], a_payer)
+                dette[1] -= prise
+                a_payer -= prise
+    return {ref: reste for file in dettes.values() for ref, reste in file if ref and ref.startswith("versement_agent:")}
 
 
 @router.get("/collectes/liste")

@@ -8,7 +8,7 @@ type Vue = 'ecarts' | 'collectes' | 'situation' | 'ecarts_collecte'
 
 interface EcartCollecte { id: number; date_collecte: string; matricule: string | null; agent: string | null; client_numero: string; client: string; cycle: string; manquant: number; surplus_utilise: number; impute_agent: number; surplus_meme_date: number; surplus_autres_dates: number; toutes_retirees: boolean; reglement_id: number | null; solde_reglable: number; statut: string }
 
-interface Ecart { id: number; date_tournee: string; matricule: string; agent: string; montant_collecte: number; montant_verse: number; ecart: number; sens: string; montant: number }
+interface Ecart { id: number; date_tournee: string; matricule: string; agent: string; montant_collecte: number; montant_verse: number; ecart: number; sens: string; montant: number; reste: number; paye: boolean }
 interface Collecte { id: number; date_collecte: string; matricule: string | null; agent: string | null; client_numero: string; client: string; souscription: string; produit: string; montant_collecte: number; origine: string }
 interface Situation { agent_id: number; matricule: string; agent: string; nb_versements: number; total_collecte: number; total_verse: number; manquants: number; surplus: number; ecart_net: number; nb_ecarts: number; solde_compte_agent: number }
 
@@ -29,6 +29,8 @@ export default function EcartsVersement() {
   const [du, setDu] = useState(aujourdhui().slice(0, 8) + '01')
   const [au, setAu] = useState(aujourdhui())
   const [agent, setAgent] = useState('')
+  const [tri, setTri] = useState<'' | 'manquant' | 'surplus'>('')
+  const [paiement, setPaiement] = useState<'' | 'paye' | 'non_paye'>('')
   const [produit, setProduit] = useState('')
   const agentId = agent ? Number(agent) : undefined
 
@@ -72,18 +74,43 @@ export default function EcartsVersement() {
 
       {vue === 'ecarts' && (
         <Charge q={ecarts}>
-          {(rows) => (
+          {(rows) => {
+            const filtrees = rows.filter((r) => (tri === '' || r.sens === tri) && (paiement === '' || (paiement === 'paye') === r.paye))
+            return (
+            <>
+              <div className="row no-print" style={{ gap: 8, alignItems: 'flex-end', marginBottom: 8 }}>
+                <Field label="Afficher">
+                  <Select value={tri} onChange={(e) => setTri(e.target.value as '' | 'manquant' | 'surplus')}>
+                    <option value="">Tous les écarts</option>
+                    <option value="manquant">Manquants seulement</option>
+                    <option value="surplus">Surplus seulement</option>
+                  </Select>
+                </Field>
+                <Field label="Paiement">
+                  <Select value={paiement} onChange={(e) => setPaiement(e.target.value as '' | 'paye' | 'non_paye')}>
+                    <option value="">Tous</option>
+                    <option value="paye">Payé / soldé</option>
+                    <option value="non_paye">Non payé / restant</option>
+                  </Select>
+                </Field>
+                <Button onClick={() => window.print()}>Imprimer</Button>
+              </div>
             <Card title={`Écarts de versement (${rows.length})`} flush actions={<span className="muted">Manquants {xof(rows.filter((r) => r.sens === 'manquant').reduce((s, r) => s + Number(r.montant), 0))} · Surplus {xof(rows.filter((r) => r.sens === 'surplus').reduce((s, r) => s + Number(r.montant), 0))}</span>}>
-              <Table rows={rows} vide="Aucun écart de versement sur la période" cols={[
+              <Table rows={filtrees} vide="Aucun écart de versement sur la période" cols={[
                 { titre: 'Date tournée', render: (r) => fdate(r.date_tournee) },
                 { titre: 'Agent', render: (r) => <><strong>{r.agent}</strong><div className="muted">{r.matricule}</div></> },
                 { titre: 'Collecté', num: true, render: (r) => xof(r.montant_collecte) },
                 { titre: 'Versé', num: true, render: (r) => xof(r.montant_verse) },
                 { titre: 'Sens', render: (r) => (r.sens === 'manquant' ? 'Manquant' : 'Surplus') },
                 { titre: 'Montant', num: true, render: (r) => <strong>{xof(r.montant)}</strong> },
+                { titre: 'Observation', render: (r) => (r.sens === 'manquant'
+                  ? (r.paye ? 'Manquant payé' : `Reste dû ${xof(r.reste)}`)
+                  : `Surplus restant ${xof(r.reste)}`) },
               ]} />
             </Card>
-          )}
+            </>
+            )
+          }}
         </Charge>
       )}
 
