@@ -88,3 +88,16 @@ def test_caissier_ne_saisit_pas_de_releve(client, h, cycles_carnet):
 
 def test_statut_inconnu_refuse(client, h):
     assert client.get("/api/releves-carnet/rapprochement", params={"statut": "bizarre"}, headers=h("chef1")).status_code == 422
+
+
+def test_releve_annule_puis_nouvelle_saisie(client, h, cycles_carnet):
+    cid = cycles_carnet["RC1"]["id"]
+    assert client.post(f"/api/releves-carnet/cycles/{cid}/annuler", json={"motif": "ab"}, headers=h("chef1")).status_code == 422
+    r = client.post(f"/api/releves-carnet/cycles/{cid}/annuler", json={"motif": "Saisi sur la mauvaise ligne"}, headers=h("chef1"))
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/releves-carnet/cycles/{cid}", headers=h("chef1")).json() is None
+    body = {"date_debut": "2026-10-01", "date_fin": "2026-10-31", "mise": 1000, "cle": "R-TEST-4",
+            "pages": [{"page": 1, "montant": 3000}, {"page": 2, "montant": 2000}]}
+    assert client.post(f"/api/releves-carnet/cycles/{cid}", json=body, headers=h("chef1")).status_code == 201
+    ligne = next(x for x in client.get("/api/releves-carnet/rapprochement", headers=h("chef1")).json() if x["cycle_id"] == cid)
+    assert ligne["statut"] == "conforme"

@@ -66,3 +66,19 @@ SELECT t.refuse('R relevé non supprimable', 'DELETE FROM mf.releve_carnet WHERE
 SELECT t.refuse('R clé déjà utilisée pour un autre cycle refusée', format(
   'SELECT mf.enregistrer_releve_carnet(%s,%s,''2026-10-01'',''2026-11-30'',1000,''[{"page":1,"montant":1}]''::jsonb,''CAR-1'')',
   (SELECT id FROM cycle WHERE numero='S4'), (SELECT id FROM utilisateur WHERE login='ctrl.carnet')));
+
+-- Annulation : le relevé reste dans la base, le cycle redevient sans relevé, une nouvelle saisie est possible
+SELECT t.refuse('R annulation sans motif suffisant refusée', format(
+  'SELECT mf.annuler_releve_carnet(%s,%s,''ok'')',
+  (SELECT id FROM releve_carnet WHERE cle = 'CAR-1'), (SELECT id FROM utilisateur WHERE login = 'ctrl.carnet')));
+SELECT annuler_releve_carnet((SELECT id FROM releve_carnet WHERE cle = 'CAR-1'), (SELECT id FROM utilisateur WHERE login = 'ctrl.carnet'), 'Saisi sur la mauvaise ligne');
+SELECT t.eq('R annulé : S1 redevient sans relevé', statut, 'sans_releve') FROM v_rapprochement_carnet WHERE cycle_numero = 'S1';
+SELECT t.eq('R annulation conservée dans la base', count(*)::text, '1') FROM releve_carnet_annulation;
+SELECT t.refuse('R annulation déjà annulée refusée', format(
+  'SELECT mf.annuler_releve_carnet(%s,%s,''Encore une annulation'')',
+  (SELECT id FROM releve_carnet WHERE cle = 'CAR-1'), (SELECT id FROM utilisateur WHERE login = 'ctrl.carnet')));
+SELECT t.refuse('R rejeu d''un relevé annulé refusé', 'SELECT mf.enregistrer_releve_carnet((SELECT id FROM mf.cycle WHERE numero=''S1''), (SELECT id FROM mf.utilisateur WHERE login=''ctrl.carnet''), ''2026-10-01'', ''2026-11-30'', 1000, ''[{"page":1,"montant":3000},{"page":2,"montant":2000}]''::jsonb, ''CAR-1'')');
+SELECT t.eq('R nouvelle saisie après annulation enregistrée', (enregistrer_releve_carnet(
+  (SELECT id FROM cycle WHERE numero='S1'), (SELECT id FROM utilisateur WHERE login='ctrl.carnet'),
+  '2026-10-01', '2026-11-30', 1000, '[{"page":1,"montant":3000},{"page":2,"montant":2000}]'::jsonb, 'CAR-4') > 0)::text, 'true');
+SELECT t.eq('R nouveau relevé : S1 de nouveau conforme', statut, 'conforme') FROM v_rapprochement_carnet WHERE cycle_numero = 'S1';

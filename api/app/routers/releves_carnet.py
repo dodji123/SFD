@@ -31,7 +31,8 @@ def releve_du_cycle(cycle_id: int, user: User = Depends(require("livret:read")))
     """Relevé du carnet du cycle avec ses pages, ou null s'il n'a pas encore été relevé."""
     with tx() as cur:
         verifier_agence(cur, user, "cycle", cycle_id)
-        releve = one_row(cur, "SELECT * FROM releve_carnet WHERE cycle_id = %s", (cycle_id,))
+        releve = one_row(cur, "SELECT * FROM releve_carnet r WHERE r.cycle_id = %s "
+                              "AND NOT EXISTS (SELECT 1 FROM releve_carnet_annulation a WHERE a.releve_id = r.id)", (cycle_id,))
         if releve is None:
             return None
         releve["pages"] = all_rows(cur, "SELECT page, montant_non_retire AS montant FROM releve_carnet_page WHERE releve_id = %s ORDER BY page",
@@ -62,3 +63,20 @@ def enregistrer_releve(cycle_id: int, body: ReleveCarnetIn, user: User = Depends
             (cycle_id, user.id, body.date_debut, body.date_fin, body.mise, json.dumps([p.model_dump() for p in body.pages]), body.cle),
         )["id"]
         return one_row(cur, "SELECT * FROM releve_carnet WHERE id = %s", (rid,))
+
+
+class AnnulationReleveIn(BaseModel):
+    motif: str = Field(min_length=5)
+
+
+@router.post("/cycles/{cycle_id}/annuler")
+def annuler_releve(cycle_id: int, body: AnnulationReleveIn, user: User = Depends(require("livret:controler"))):
+    """Annule le relevé actif du cycle, avec un motif. Le relevé reste dans la base ; le cycle peut être relevé de nouveau."""
+    with tx(user.login) as cur:
+        verifier_agence(cur, user, "cycle", cycle_id)
+        r = one_row(cur, "SELECT r.id FROM releve_carnet r WHERE r.cycle_id = %s "
+                         "AND NOT EXISTS (SELECT 1 FROM releve_carnet_annulation a WHERE a.releve_id = r.id)", (cycle_id,))
+        if r is None:
+            raise HTTPException(status_code=404, detail="Aucun relevé actif sur ce cycle")
+        cur.execute("SELECT annuler_releve_carnet(%s, %s, %s)", (r["id"], user.id, body.motif))
+        return {"releve_annule": r["id"]}
