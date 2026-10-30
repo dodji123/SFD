@@ -11,19 +11,27 @@ export default function ImportCycles() {
   const [resultat, setResultat] = useState<Resultat | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [occupe, setOccupe] = useState(false)
+  const [fichier, setFichier] = useState<File | null>(null)
+  const [creation, setCreation] = useState<{ crees: number; refus: Erreur[] } | null>(null)
 
-  async function controler(fichier: File) {
+  async function envoyer(route: 'verifier' | 'valider', f: File) {
+    const corps = new FormData()
+    corps.append('fichier', f)
+    const t = session.getToken()
+    const r = await fetch(`/api/import/cycles/${route}`, { method: 'POST', body: corps, headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(d.detail ?? `Erreur ${r.status}`)
+    return d
+  }
+
+  async function controler(f: File) {
     setOccupe(true)
     setErreur(null)
     setResultat(null)
+    setCreation(null)
+    setFichier(f)
     try {
-      const corps = new FormData()
-      corps.append('fichier', fichier)
-      const t = session.getToken()
-      const r = await fetch('/api/import/cycles/verifier', { method: 'POST', body: corps, headers: t ? { Authorization: `Bearer ${t}` } : {} })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.detail ?? `Erreur ${r.status}`)
-      setResultat(d as Resultat)
+      setResultat((await envoyer('verifier', f)) as Resultat)
     } catch (e) {
       setErreur(e instanceof Error ? e.message : 'Contrôle impossible')
     } finally {
@@ -31,14 +39,33 @@ export default function ImportCycles() {
     }
   }
 
+  async function creer() {
+    if (!fichier || !confirm('Créer les cycles des lignes acceptées ? Cette opération enregistre les cycles.')) return
+    setOccupe(true)
+    setErreur(null)
+    try {
+      setCreation((await envoyer('valider', fichier)) as { crees: number; refus: Erreur[] })
+      setResultat(null)
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : 'Création impossible')
+    } finally {
+      setOccupe(false)
+    }
+  }
+
   return (
-    <Page title="Import des cycles de la machine" subtitle="Contrôle du fichier Excel avant mise en production. Rien n'est enregistré à cette étape.">
+    <Page title="Import des cycles de la machine" subtitle="Contrôle du fichier Excel avant mise en production, puis création des cycles acceptés.">
       <Card>
         <p className="muted" style={{ marginTop: 0 }}>Colonnes : numero, client_numero, produit_code, date_debut, date_fin, mise (facultatives : objectif, type_cycle).</p>
         <input type="file" accept=".xlsx" disabled={occupe} onChange={(e) => { const f = e.target.files?.[0]; if (f) void controler(f) }} />
       </Card>
       {occupe && <p className="muted">Contrôle en cours…</p>}
       {erreur && <Alert tone="bad">{erreur}</Alert>}
+      {creation && (
+        <Alert tone={creation.refus.length ? 'warn' : 'info'}>
+          {creation.crees} cycle(s) créé(s).{creation.refus.length ? ` ${creation.refus.length} ligne(s) refusée(s) : ${creation.refus.map((e) => `ligne ${e.ligne} (${e.motif})`).join(' ; ')}` : ''}
+        </Alert>
+      )}
       {resultat && (
         <>
           <Card>
@@ -59,7 +86,7 @@ export default function ImportCycles() {
           )}
           {resultat.apercu.length > 0 && (
             <div style={{ marginTop: 16 }}>
-              <Card title="Aperçu des lignes acceptées" flush>
+              <Card title="Aperçu des lignes acceptées" flush actions={<button type="button" className="btn btn-primary" disabled={occupe} onClick={() => void creer()}>Créer les cycles</button>}>
                 <Table rows={resultat.apercu} cols={[
                   { titre: 'Cycle', render: (a) => a.numero },
                   { titre: 'Client', render: (a) => a.client_numero },

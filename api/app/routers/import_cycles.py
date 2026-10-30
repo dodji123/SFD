@@ -7,10 +7,12 @@ import datetime as dt
 import io
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+import psycopg2
 from openpyxl import load_workbook
 
 from ..auth import User, agence_scope, require
-from ..db import all_rows, tx
+from ..db import all_rows, one_row, tx
+from ..errors import message_pg
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 
@@ -51,11 +53,9 @@ def _lire(contenu: bytes) -> list[dict]:
     return donnees
 
 
-@router.post("/cycles/verifier")
-def verifier_cycles(fichier: UploadFile = File(...), agence_id: int | None = None, user: User = Depends(require("livret:controler"))):
-    """Contrôle le fichier sans l'enregistrer : lignes acceptées, erreurs par ligne, aperçu."""
-    ag = agence_scope(user, agence_id)
-    donnees = _lire(fichier.file.read())
+def _controler(contenu: bytes, ag: int) -> dict:
+    """Contrôle chaque ligne du fichier pour l'agence ag, sans rien écrire."""
+    donnees = _lire(contenu)
     with tx() as cur:
         clients = {c["numero"] for c in all_rows(cur, "SELECT numero FROM client WHERE agence_id = %s", (ag,))}
         produits = {p["code"] for p in all_rows(cur, "SELECT code FROM produit_epargne", ())}
@@ -101,4 +101,39 @@ def verifier_cycles(fichier: UploadFile = File(...), agence_id: int | None = Non
         vus.add(numero)
         valides.append({"ligne": ligne, "numero": numero, "client_numero": client, "produit_code": produit,
                         "date_debut": debut.isoformat(), "date_fin": fin.isoformat(), "mise": mise})
-    return {"lignes_lues": len(donnees), "lignes_valides": len(valides), "erreurs": erreurs, "apercu": valides[:50]}
+    return {"lignes_lues": len(donnees), "lignes_valides": len(valides), "erreurs": erreurs, "valides": valides}
+
+
+@router.post("/cycles/verifier")
+def verifier_cycles(fichier: UploadFile = File(...), agence_id: int | None = None, user: User = Depends(require("livret:controler"))):
+    """Contrôle le fichier sans l'enregistrer : lignes acceptées, erreurs par ligne, aperçu."""
+    ag = agence_scope(user, agence_id)
+    r = _controler(fichier.file.read(), ag)
+    return {"lignes_lues": r["lignes_lues"], "lignes_valides": r["lignes_valides"], "erreurs": r["erreurs"], "apercu": r["valides"][:50]}
+
+
+@router.post("/cycles/valider")
+def valider_cycles(fichier: UploadFile = File(...), agence_id: int | None = None, user: User = Depends(require("livret:controler"))):
+    """Étape 2 : crée les cycles des lignes acceptées. Chaque cycle a sa transaction ; une ligne refusée à la base
+    n'empêche pas les autres. Même règles de création que la saisie d'un cycle (mise, objectif, nombre de lignes)."""
+    ag = agence_scope(user, agence_id)
+    r = _controler(fichier.file.read(), ag)
+    with tx() as cur:
+        clients = {c["numero"]: c["id"] for c in all_rows(cur, "SELECT id, numero FROM client WHERE agence_id = %s", (ag,))}
+        produits = {p["code"]: p for p in all_rows(cur, "SELECT id, code, type_cycle, nb_pages_livret FROM produit_epargne", ())}
+    crees, refus = [], list(r["erreurs"])
+    for v in r["valides"]:
+        p = produits[v["produit_code"]]
+        type_cycle = p["type_cycle"] or 1
+        nb = 31 * (p["nb_pages_livret"] or 1)
+        objectif = v["mise"] * nb if type_cycle in (1, 2) else None
+        try:
+            with tx(user.login) as cur:
+                one_row(cur, "INSERT INTO cycle(agence_id, numero, client_id, produit_id, type_cycle, mise_initiale, mise_courante, objectif, "
+                             "nb_lignes_prevues, date_debut, date_fin) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                        (ag, v["numero"], clients[v["client_numero"]], p["id"], type_cycle, v["mise"], v["mise"], objectif, nb,
+                         v["date_debut"], v["date_fin"]))
+            crees.append(v["numero"])
+        except psycopg2.Error as e:
+            refus.append({"ligne": v["ligne"], "champ": "base", "motif": message_pg(e)})
+    return {"crees": len(crees), "refus": refus, "numeros": crees}
