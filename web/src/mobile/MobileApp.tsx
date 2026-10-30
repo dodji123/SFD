@@ -11,10 +11,11 @@ import {
 } from './file'
 import { BoutonScanner, lireQr } from '../components/Qr'
 import ControleApp from './Controle'
+import Terrain from './Terrain'
 import { demarrerSynchroConstats, sessionRetablieC } from './fileConstats'
 import './mobile.css'
 
-type Onglet = 'cycles' | 'clients' | 'suivi'
+type Onglet = 'cycles' | 'clients' | 'credit' | 'suivi'
 
 const CODES: Record<string, { titre: string; conseil: string }> = {
   rejet_operateur: { titre: 'Rejetée par l\'opérateur', conseil: 'Voyez le motif ci-dessus, puis ressaisissez si besoin.' },
@@ -209,11 +210,13 @@ function Principal() {
         {donnees && t && t.zones.length === 0 && <p className="m-bandeau warn">Aucune zone ne vous est affectée : voyez le chef d'agence.</p>}
         {donnees && t && t.zones.length > 0 && onglet === 'cycles' && <Cycles vue={vue} onRecharger={() => void charger()} onSaisi={setMessage} />}
         {donnees && t && t.zones.length > 0 && onglet === 'clients' && <Clients vue={vue} t={t} onSaisi={setMessage} />}
+        {donnees && t && t.zones.length > 0 && onglet === 'credit' && <Terrain clients={vue.clients} onSaisi={setMessage} />}
         {onglet === 'suivi' && <Suivi ops={f.ops} />}
       </main>
       <nav className="m-nav">
         <button className={onglet === 'cycles' ? 'actif' : ''} onClick={() => setOnglet('cycles')}>Cycles</button>
         <button className={onglet === 'clients' ? 'actif' : ''} onClick={() => setOnglet('clients')}>Clients</button>
+        <button className={onglet === 'credit' ? 'actif' : ''} onClick={() => setOnglet('credit')}>Crédit</button>
         <button className={onglet === 'suivi' ? 'actif' : ''} onClick={() => setOnglet('suivi')}>
           Suivi{aRevoir > 0 ? <span className="m-pastille bad">{aRevoir}</span> : aEnvoyer > 0 ? <span className="m-pastille warn">{aEnvoyer}</span> : null}
         </button>
@@ -337,13 +340,20 @@ function Clients({ vue, t, onSaisi }: { vue: Vue; t: Tournee; onSaisi: (m: strin
   const [q, setQ] = useState('')
   const [nouveau, setNouveau] = useState(false)
   const [choisi, setChoisi] = useState<ClientVue | null>(null)
+  const [produit, setProduit] = useState('')
+  const produits = useMemo(() => [...new Set(vue.cycles.map((c) => c.produit))].sort(), [vue.cycles])
   const filtres = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return vue.clients.filter((c) => !s || c.nom.toLowerCase().includes(s) || (c.numero ?? '').toLowerCase().includes(s) || (c.telephone ?? '').includes(s))
-  }, [vue.clients, q])
+    return vue.clients.filter((c) => (!produit || vue.cycles.some((x) => x.client_id === c.id && x.produit === produit))
+      && (!s || c.nom.toLowerCase().includes(s) || (c.numero ?? '').toLowerCase().includes(s) || (c.telephone ?? '').includes(s)))
+  }, [vue.clients, vue.cycles, q, produit])
   return (
     <>
       <div className="m-recherche">
+        <select className="input" aria-label="Produit" value={produit} onChange={(e) => setProduit(e.target.value)}>
+          <option value="">Tous les produits</option>
+          {produits.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
         <input className="input" type="search" placeholder="Nom, numéro ou téléphone" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn btn-primary" onClick={() => setNouveau(true)}>+ Client</button>
       </div>

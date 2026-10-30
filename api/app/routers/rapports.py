@@ -58,6 +58,15 @@ def rapport_solde_a_retirer(produit_id: int | None = None, agence_id: int | None
         return all_rows(cur, "SELECT * FROM rapport_solde_a_retirer(%s::smallint, %s)", (ag, produit_id))
 
 
+@router.get("/rapports/solde-a-retirer-date")
+def rapport_solde_a_retirer_date(date: dt.date | None = None, produit_id: int | None = None, agence_id: int | None = None,
+                                 user: User = Depends(require("rapports:read"))):
+    """Soldes que les clients pouvaient retirer à une date donnée (sans date : aujourd'hui)."""
+    ag = agence_scope(user, agence_id)
+    with tx() as cur:
+        return all_rows(cur, "SELECT * FROM rapport_solde_a_retirer_date(%s::smallint, %s, %s)", (ag, date or dt.date.today(), produit_id))
+
+
 @router.get("/rapports/collecte-periode")
 def rapport_collecte_periode(du: dt.date, au: dt.date, groupe: Literal["produit", "agent", "zone"] = "produit",
                              produit_id: int | None = None, agence_id: int | None = None,

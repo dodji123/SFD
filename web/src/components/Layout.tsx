@@ -27,6 +27,7 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
     { to: '/controle-carnet', titre: 'Contrôle au carnet', icone: '📖', perm: 'livret:read' },
     { to: '/rapport-collecte', titre: 'Rapport de collecte', icone: '📊', perm: 'rapports:read' },
     { to: '/solde-a-retirer', titre: 'Solde à retirer', icone: '💰', perm: 'rapports:read' },
+    { to: '/solde-a-retirer-date', titre: 'Solde à retirer à une date', icone: '📅', perm: 'rapports:read' },
     { to: '/ecarts-versement', titre: 'Collectes et écarts', icone: '📊', perm: 'collecte:read' },
     { to: '/reglement-manquants', titre: 'Règlement des manquants', icone: '💵', perm: 'collecte:read' },
     { to: '/evolution-collectes', titre: 'Évolution des collectes', icone: '📈', perm: 'rapports:read' },
@@ -42,6 +43,8 @@ const SECTIONS: { titre: string; items: Entree[] }[] = [
   ] },
   { titre: 'Crédit et recouvrement', items: [
     { to: '/credits', titre: 'Crédits', icone: '💳', perm: 'credit:read' },
+    { to: '/credits?onglet=demandes', titre: 'Demande de crédit', icone: '📝', perm: 'credit:request' },
+    { to: '/terrain', titre: 'Visites et recouvrements terrain', icone: '🗺️', perm: 'recouvrement:read' },
     { to: '/comites', titre: 'Comité de crédit', icone: '⚖️', perm: 'comite:read' },
     { to: '/recouvrement', titre: 'Recouvrement', icone: '📞', perm: 'recouvrement:read' },
     { to: '/provisions', titre: 'Provisions', icone: '📉', perm: 'provisions:read' },

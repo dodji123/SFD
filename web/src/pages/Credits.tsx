@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { aujourdhui, date as fdate, xof } from '../lib/format'
 import { useSession } from '../lib/session'
@@ -20,7 +20,8 @@ const MODES: Record<string, string> = { prelevement_compte: 'Prélèvement', esp
 export default function Credits() {
   const { agenceId, can } = useSession()
   const nav = useNavigate()
-  const [onglet, setOnglet] = useState('demandes')
+  const [params] = useSearchParams()
+  const [onglet, setOnglet] = useState(params.get('onglet') ?? 'demandes')
   return (
     <Page title="Crédits" subtitle="Demandes, décisions, déblocages et suivi des remboursements">
       <Tabs actif={onglet} onChange={setOnglet} tabs={[{ id: 'demandes', titre: 'Demandes' }, { id: 'credits', titre: 'Crédits' }, { id: 'echeances', titre: 'Échéances' }, ...(can('taches:run') ? [{ id: 'taches', titre: 'Traitements du jour' }] : [])]} />

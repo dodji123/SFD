@@ -56,6 +56,8 @@ import Tresorerie from './pages/Tresorerie'
 import EcartsVersement from './pages/EcartsVersement'
 import ReglementManquantsVersement from './pages/ReglementManquantsVersement'
 import TontineEvolution from './pages/TontineEvolution'
+import RapportSoldeARetirerDate from './pages/RapportSoldeARetirerDate'
+import TerrainVisites from './pages/TerrainVisites'
 
 export default function App() {
   const { user, chargement } = useSession()
@@ -87,7 +89,9 @@ export default function App() {
         <Route path="rapport-manquants" element={<Garde perm="collecte:read"><RapportManquants /></Garde>} />
         <Route path="controle-carnet" element={<Garde perm="livret:read"><ControleCarnet /></Garde>} />
         <Route path="rapport-collecte" element={<Garde perm="rapports:read"><RapportCollecte /></Garde>} />
-        <Route path="evolution-collectes" element={<Garde perm="rapports:read"><TontineEvolution /></Garde>} />
+        <Route path="solde-a-retirer-date" element={<Garde perm="rapports:read"><RapportSoldeARetirerDate /></Garde>} />
+        <Route path="terrain" element={<Garde perm="recouvrement:read"><TerrainVisites /></Garde>} />
+        <Route path="evolution-collectes"element={<Garde perm="rapports:read"><TontineEvolution /></Garde>} />
         <Route path="reglement-manquants"element={<Garde perm="collecte:read"><ReglementManquantsVersement /></Garde>} />
         <Route path="ecarts-versement"element={<Garde perm="collecte:read"><EcartsVersement /></Garde>} />
         <Route path="solde-a-retirer"element={<Garde perm="rapports:read"><RapportSoldeARetirer /></Garde>} />

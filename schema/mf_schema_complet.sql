@@ -15256,3 +15256,176 @@ BEGIN
   PERFORM caisse_operation(v_session, 'encaissement', 'reglement_manquant', p_montant, p_date,
                            'agent', p_agent, 'Manquant de versement réglé par ' || a.nom);
 END $$;
+
+-- =====================================================================
+-- MODULE 77_caisse_epargne.sql
+-- =====================================================================
+-- =====================================================================
+-- 77_caisse_epargne.sql
+-- Dépôts et retraits d'épargne au guichet : espèces, donc en caisse.
+--   * dépôt : mouvement_epargne (depot) + encaissement en caisse ;
+--   * retrait : mouvement_epargne (retrait) + décaissement en caisse (refusé si la caisse ne suffit pas) ;
+--   * session : celle de la caissière (module 76), dans la même opération ; sinon refus, rien n'est écrit.
+-- Dépend de : 01 (compte_epargne, mouvement_epargne), 03 (caisse_operation), 76 (session_especes_agence).
+-- =====================================================================
+SET search_path = mf, public;
+
+CREATE FUNCTION mouvement_epargne_especes(p_compte integer, p_type text, p_montant numeric, p_date date DEFAULT current_date,
+                                          p_libelle text DEFAULT NULL, p_procuration integer DEFAULT NULL,
+                                          p_utilisateur integer DEFAULT NULL, p_session integer DEFAULT NULL) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE ce mf.compte_epargne; v_session integer; v_id bigint; v_sens text;
+BEGIN
+  IF p_type NOT IN ('depot', 'retrait') THEN
+    RAISE EXCEPTION 'type de mouvement en espèces inconnu : %', p_type;
+  END IF;
+  SELECT * INTO ce FROM mf.compte_epargne WHERE id = p_compte;
+  IF NOT FOUND THEN RAISE EXCEPTION 'compte d''épargne % inconnu', p_compte; END IF;
+  -- session choisie explicitement par la caissière (pas de sélection automatique pour l'épargne)
+  IF p_session IS NULL THEN RAISE EXCEPTION 'choisissez la session de caisse pour ce dépôt ou retrait en espèces'; END IF;
+  v_session := session_especes_agence(ce.agence_id, p_utilisateur, p_session);
+
+  INSERT INTO mf.mouvement_epargne(compte_id, type, montant, date_operation, libelle, procuration_id)
+  VALUES (p_compte, p_type, p_montant, p_date, p_libelle, p_procuration)
+  RETURNING id INTO v_id;
+
+  v_sens := CASE WHEN p_type = 'depot' THEN 'encaissement' ELSE 'decaissement' END;
+  PERFORM caisse_operation(v_session, v_sens, 'epargne_' || p_type, p_montant, p_date,
+                           'mouvement_epargne', v_id, COALESCE(p_libelle, 'Épargne : ' || p_type));
+  RETURN v_id;
+END $$;
+
+-- =====================================================================
+-- MODULE 78_terrain_geoloc.sql
+-- =====================================================================
+-- =====================================================================
+-- 78_terrain_geoloc.sql
+-- Visites terrain et recouvrement : positions GPS des lieux de travail (emprunteur, caution) et des lieux visités.
+--   * localisation : une position GPS rattachée à une personne (lieu de travail) ou à une visite ;
+--   * visite_terrain : une sortie de l'agent (visite de suivi ou recouvrement) sur un crédit, avec son lieu ;
+--   * les coordonnées sont validées (latitude -90..90, longitude -180..180) ; la précision est en mètres.
+-- Dépend de : 03 (credit), 17 (garant_credit), 37 (dossier_recouvrement), 10 (trg_audit), 11 (utilisateur).
+-- =====================================================================
+SET search_path = mf, public;
+
+CREATE TABLE localisation (
+  id            bigserial PRIMARY KEY,
+  cle           varchar(64),                      -- identifiant donné par le téléphone (saisie hors ligne), pour ne pas rejouer deux fois
+  agence_id     smallint NOT NULL REFERENCES agence(id),
+  client_id     integer NOT NULL REFERENCES client(id),
+  role          varchar(20) NOT NULL CHECK (role IN ('lieu_travail','caution','visite')),
+  libelle       text,
+  latitude      numeric(9,6) NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+  longitude     numeric(9,6) NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+  precision_m   numeric(8,1) CHECK (precision_m IS NULL OR precision_m >= 0),
+  releve_par    integer REFERENCES utilisateur(id),
+  releve_le     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX localisation_client_idx ON localisation (client_id, role);
+
+CREATE TABLE visite_terrain (
+  id             bigserial PRIMARY KEY,
+  cle            varchar(64),                     -- identifiant donné par le téléphone (saisie hors ligne)
+  agence_id      smallint NOT NULL REFERENCES agence(id),
+  date_visite    date NOT NULL DEFAULT current_date,
+  type           varchar(15) NOT NULL CHECK (type IN ('visite','recouvrement')),
+  agent_id       integer NOT NULL REFERENCES utilisateur(id),
+  client_id      integer NOT NULL REFERENCES client(id),
+  credit_id      integer REFERENCES credit(id),
+  localisation_id bigint REFERENCES localisation(id),
+  resultat       text,
+  cree_le        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX visite_terrain_credit_idx ON visite_terrain (credit_id, date_visite);
+CREATE INDEX visite_terrain_date_idx ON visite_terrain (agence_id, date_visite);
+
+CREATE UNIQUE INDEX localisation_cle_idx ON localisation (cle) WHERE cle IS NOT NULL;
+CREATE UNIQUE INDEX visite_terrain_cle_idx ON visite_terrain (cle) WHERE cle IS NOT NULL;
+
+CREATE TRIGGER audit_localisation AFTER INSERT ON localisation FOR EACH ROW EXECUTE FUNCTION trg_audit();
+CREATE TRIGGER audit_visite_terrain AFTER INSERT ON visite_terrain FOR EACH ROW EXECUTE FUNCTION trg_audit();
+
+-- Enregistre la position d'un lieu de travail (emprunteur ou caution) ou d'une visite.
+CREATE FUNCTION enregistrer_localisation(p_client integer, p_role text, p_lat numeric, p_lon numeric,
+                                         p_libelle text DEFAULT NULL, p_precision numeric DEFAULT NULL,
+                                         p_utilisateur integer DEFAULT NULL, p_cle text DEFAULT NULL) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE c mf.client; v_id bigint;
+BEGIN
+  IF p_cle IS NOT NULL THEN                       -- déjà reçue (rejeu d'une synchronisation) : même identifiant
+    SELECT id INTO v_id FROM mf.localisation WHERE cle = p_cle;
+    IF FOUND THEN RETURN v_id; END IF;
+  END IF;
+  SELECT * INTO c FROM mf.client WHERE id = p_client;
+  IF NOT FOUND THEN RAISE EXCEPTION 'client % inconnu', p_client; END IF;
+  INSERT INTO mf.localisation(cle, agence_id, client_id, role, libelle, latitude, longitude, precision_m, releve_par)
+  VALUES (p_cle, c.agence_id, p_client, p_role, p_libelle, p_lat, p_lon, p_precision, p_utilisateur)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+-- Enregistre une visite de terrain sur un crédit : le client et l'agence sont ceux du crédit.
+CREATE FUNCTION enregistrer_visite_terrain(p_credit integer, p_type text, p_utilisateur integer,
+                                           p_localisation bigint DEFAULT NULL, p_resultat text DEFAULT NULL,
+                                           p_date date DEFAULT current_date, p_cle text DEFAULT NULL) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE k mf.credit; v_id bigint;
+BEGIN
+  IF p_cle IS NOT NULL THEN                       -- déjà reçue (rejeu d'une synchronisation) : même identifiant
+    SELECT id INTO v_id FROM mf.visite_terrain WHERE cle = p_cle;
+    IF FOUND THEN RETURN v_id; END IF;
+  END IF;
+  SELECT * INTO k FROM mf.credit WHERE id = p_credit;
+  IF NOT FOUND THEN RAISE EXCEPTION 'crédit % inconnu', p_credit; END IF;
+  IF p_type NOT IN ('visite', 'recouvrement') THEN RAISE EXCEPTION 'type de visite inconnu : %', p_type; END IF;
+  IF p_localisation IS NOT NULL THEN
+    PERFORM 1 FROM mf.localisation WHERE id = p_localisation AND client_id = k.client_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'position % n''appartient pas au client du crédit', p_localisation; END IF;
+  END IF;
+  INSERT INTO mf.visite_terrain(cle, agence_id, date_visite, type, agent_id, client_id, credit_id, localisation_id, resultat)
+  VALUES (p_cle, k.agence_id, p_date, p_type, p_utilisateur, k.client_id, p_credit, p_localisation, p_resultat)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END $$;
+
+-- =====================================================================
+-- MODULE 79_solde_a_retirer_date.sql
+-- =====================================================================
+-- =====================================================================
+-- 79_solde_a_retirer_date.sql
+-- Soldes que les clients pouvaient retirer à une date donnée (rapport par produit, client et cycle).
+--   * solde à la date D = collecte jusqu'à D (lignes de collecte datées ≤ D) - mise du cycle - retraits clients
+--     et virements vers l'épargne datés ≤ D et non annulés ;
+--   * ne retiennent que les cycles ouverts à D (date_debut ≤ D) et dont le solde à D est positif ;
+--   * approximation : la mise prise est la mise du cycle (pas l'historique des changements de mise).
+-- Dépend de : 01 (cycle, ligne_collecte), 03 (retrait), 75 (rapport courant, même forme de sortie).
+-- =====================================================================
+SET search_path = mf, public;
+
+CREATE FUNCTION rapport_solde_a_retirer_date(p_agence smallint, p_date date, p_produit integer DEFAULT NULL)
+RETURNS TABLE (produit_code text, produit_libelle text, client_numero text, client text, zone text,
+               cycle text, statut text, date_fin date, solde numeric)
+LANGUAGE sql STABLE AS $$
+  SELECT pe.code::text, pe.libelle::text, cl.numero::text, cl.nom::text, z.libelle::text,
+         c.numero::text, c.statut::text, c.date_fin, x.solde
+    FROM (
+      SELECT c.id,
+             COALESCE((SELECT sum(l.montant_collecte) FROM mf.ligne_collecte l
+                        WHERE l.cycle_id = c.id AND l.date_collecte <= p_date), 0)
+             - COALESCE(c.mise_finale, c.mise_courante)
+             - COALESCE((SELECT sum(r.montant) FROM mf.retrait r
+                          WHERE r.cycle_id = c.id AND r.statut <> 'annule'
+                            AND r.nature IN ('retrait_client','virement_vers_epargne')
+                            AND r.date_demande <= p_date), 0) AS solde
+        FROM mf.cycle c
+       WHERE c.agence_id = p_agence
+         AND c.date_debut <= p_date
+    ) x
+    JOIN mf.cycle c ON c.id = x.id
+    JOIN mf.client cl ON cl.id = c.client_id
+    JOIN mf.produit_epargne pe ON pe.id = c.produit_id
+    LEFT JOIN mf.zone z ON z.id = cl.zone_id
+   WHERE x.solde > 0
+     AND (p_produit IS NULL OR pe.id = p_produit)
+   ORDER BY pe.code, cl.nom, c.numero;
+$$;
