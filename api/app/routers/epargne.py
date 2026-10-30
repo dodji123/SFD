@@ -9,6 +9,7 @@ from ..auth import User, agence_filter, agence_scope, require, verifier_agence
 from ..controles import compte_dormant, controler_seuil_retrait
 from ..db import all_rows, one_row, tx
 from .collecte import trouver_client
+from .caisse import verifier_session
 from .pieces import piece_adhesion, piece_mouvement
 
 router = APIRouter(prefix="/api/comptes-epargne", tags=["epargne"])
@@ -160,6 +161,7 @@ class MouvementIn(BaseModel):
     date_operation: dt.date | None = None
     libelle: str | None = None
     procuration_id: int | None = None      # retrait effectué par un mandataire
+    session_id: int | None = None          # session de caisse de la caissière (sinon : sa session ouverte unique)
 
 
 def controle_adhesion(cur, agence_id: int, compte_id: int) -> None:
@@ -182,12 +184,15 @@ def _mouvement(compte_id: int, type_: Literal["depot", "retrait"], body: Mouveme
             dormant = compte_dormant(cur, compte_id)
             if dormant and user.role == "caissier":
                 raise HTTPException(status_code=403, detail=f"Compte dormant (aucun mouvement depuis {dormant['jours_inactif']} jours) : le chef d'agence doit autoriser ce retrait")
-        mv = one_row(
+        if body.session_id is not None:
+            verifier_session(cur, user, body.session_id)   # 404 si la session est d'une autre agence
+        # espèces au guichet : le mouvement et son encaissement/décaissement en caisse sont inscrits ensemble (module 77)
+        mid = one_row(
             cur,
-            "INSERT INTO mouvement_epargne(compte_id, type, montant, date_operation, libelle, procuration_id) "
-            "VALUES (%s, %s, %s, COALESCE(%s, current_date), %s, %s) RETURNING *",
-            (compte_id, type_, body.montant, body.date_operation, body.libelle, body.procuration_id),
-        )
+            "SELECT mouvement_epargne_especes(%s, %s, %s, COALESCE(%s, current_date), %s, %s, %s, %s) AS id",
+            (compte_id, type_, body.montant, body.date_operation, body.libelle, body.procuration_id, user.id, body.session_id),
+        )["id"]
+        mv = one_row(cur, "SELECT * FROM mouvement_epargne WHERE id = %s", (mid,))
         cpt = one_row(cur, "SELECT v.solde, solde_disponible(v.compte_id) AS disponible FROM v_solde_compte_epargne v WHERE v.compte_id = %s", (compte_id,))
         piece_id = piece_mouvement(cur, user, mv["id"])          # pièce justificative remise au client
     return {"mouvement": mv, **cpt, "piece_id": piece_id}

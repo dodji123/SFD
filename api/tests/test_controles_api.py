@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -15,14 +16,14 @@ def base(client, h, produits, sql, agences):
         cpt = client.post("/api/comptes-epargne", json={"client_id": c["id"], "produit_id": produits["CL"]}, headers=h("chef1"))
         assert cpt.status_code == 201, cpt.text
         res[cle] = {"client": c, "compte": cpt.json()}
-        d = client.post(f"/api/comptes-epargne/{cpt.json()['id']}/depot", json={"montant": 3000000}, headers=h("chef1"))
+        d = client.post(f"/api/comptes-epargne/{cpt.json()['id']}/depot", json={"session_id": session_especes(client, h, "chef1"), "montant": 3000000}, headers=h("chef1"))
         assert d.status_code == 201, d.text
     yield res
     sql("DELETE FROM parametre WHERE cle = 'separation_decaissement'")
 
 
 def _retrait(client, h, login, cle, base, montant):
-    return client.post(f"/api/comptes-epargne/{base[cle]['compte']['id']}/retrait", json={"montant": montant}, headers=h(login))
+    return client.post(f"/api/comptes-epargne/{base[cle]['compte']['id']}/retrait", json={"session_id": session_especes(client, h, login), "montant": montant}, headers=h(login))
 
 
 def test_seuil_par_niveau(client, h, base):

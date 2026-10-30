@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import pytest
 
 
@@ -102,13 +103,13 @@ def test_comptabilisation_automatique(client, h, agences, produits, compta_auto)
     a1 = agences["a1"]
     cl = client.post("/api/clients", json={"nom": "Client compta"}, headers=h("chef1")).json()
     cpt = client.post("/api/comptes-epargne", json={"client_id": cl["id"], "produit_id": produits["CL"]}, headers=h("caissier1")).json()
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 10000, "date_operation": "2026-10-09"}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 10000, "date_operation": "2026-10-09"}, headers=h("caissier1")).status_code == 201
     auto = [p for p in client.get("/api/compta/pieces", params={"agence_id": a1}, headers=h("comptable")).json() if p["origine"] == "auto"]
     assert len(auto) == 1 and auto[0]["evenement"] == "epargne_depot" and auto[0]["total"] == 10000 and auto[0]["journal"] == "CAI"
     d = client.get(f"/api/compta/pieces/{auto[0]['id']}", headers=h("comptable")).json()
     assert [(e["compte_code"], e["debit"], e["credit"]) for e in d["ecritures"]] == [("1011", 10000, 0), ("25111", 0, 10000)]
     # sans exercice pour la date, l'opération est refusée (rien n'est enregistré à moitié)
-    r = client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 500, "date_operation": "2019-06-01"}, headers=h("caissier1"))
+    r = client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 500, "date_operation": "2019-06-01"}, headers=h("caissier1"))
     assert r.status_code == 422 and "exercice" in r.json()["detail"]
     assert client.get(f"/api/comptes-epargne/{cpt['id']}", headers=h("caissier1")).json()["solde"] == 10000
     assert len(client.get("/api/compta/regles", headers=h("comptable")).json()) >= 40
@@ -118,7 +119,7 @@ def test_automatique_desactive_par_defaut_et_cloture(client, h, agences, produit
     cl = client.post("/api/clients", json={"nom": "Client sans compta"}, headers=h("chef1")).json()
     cpt = client.post("/api/comptes-epargne", json={"client_id": cl["id"], "produit_id": produits["CL"]}, headers=h("caissier1")).json()
     avant = len(client.get("/api/compta/pieces", params={"agence_id": agences["a1"], "limit": 500}, headers=h("comptable")).json())
-    client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 700, "date_operation": "2019-06-01"}, headers=h("caissier1"))
+    client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 700, "date_operation": "2019-06-01"}, headers=h("caissier1"))
     assert len(client.get("/api/compta/pieces", params={"agence_id": agences["a1"], "limit": 500}, headers=h("comptable")).json()) == avant
     # clôture : plus aucune écriture sur l'exercice
     assert client.post(f"/api/compta/exercices/{exercice['id']}/cloturer", headers=h("comptable")).json()["statut"] == "cloture"

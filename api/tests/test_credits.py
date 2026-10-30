@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -9,7 +10,7 @@ def base(client, h, agences, produits):
     ag = client.post("/api/agents", json={"matricule": "K-A1", "nom": "Agent K"}, headers=h("chef1")).json()
     cl = [client.post("/api/clients", json={"nom": f"Cli Crédit {i}", "zone_id": z["id"]}, headers=h("chef1")).json() for i in (1, 2, 3)]
     compte = client.post("/api/comptes-epargne", json={"client_id": cl[0]["id"], "produit_id": produits["CL"]}, headers=h("caissier1")).json()
-    client.post(f"/api/comptes-epargne/{compte['id']}/depot", json={"montant": 150000}, headers=h("caissier1"))
+    client.post(f"/api/comptes-epargne/{compte['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 150000}, headers=h("caissier1"))
     pce = client.post("/api/produits-credit", json={"code": "PCE1", "libelle": "Crédit sur épargne", "type": "sur_epargne",
                                                     "taux_annuel": 0.12, "frais_dossier_taux": 0.01}, headers=h("chef1")).json()
     pcs = client.post("/api/produits-credit", json={"code": "PCS1", "libelle": "Crédit sans épargne", "type": "sans_epargne",
@@ -71,7 +72,7 @@ def test_cycle_de_vie_prelevement_retard_saisie(client, h, base):
     assert client.post("/api/taches/prelever-echeances", json={"date": "2026-12-31"}, headers=h("chef1")).json() == {"prelevements": 1}
     # le client vide son disponible : 5000 restent
     dispo = client.get(f"/api/comptes-epargne/{compte}", headers=h("caissier1")).json()["disponible"]
-    assert client.post(f"/api/comptes-epargne/{compte}/retrait", json={"montant": dispo - 5000}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{compte}/retrait", json={"session_id": session_especes(client, h, "caissier1"), "montant": dispo - 5000}, headers=h("caissier1")).status_code == 201
     assert client.post("/api/taches/prelever-echeances", json={"date": "2027-02-04"}, headers=h("chef1")).json() == {"prelevements": 0}   # fonds insuffisants
     assert client.post("/api/taches/maj-statuts-credit", json={"date": "2027-02-04"}, headers=h("chef1")).json()["echeances_mises_a_jour"] >= 1
     detail = client.get(f"/api/credits/{cr['id']}", headers=h("chef1")).json()

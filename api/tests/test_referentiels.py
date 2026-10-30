@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import pytest
 
 
@@ -94,24 +95,24 @@ def test_comptes_epargne(client, h, base):
     c = client.post("/api/comptes-epargne", json={"client_id": cid, "produit_id": pid_cl}, headers=h("caissier1"))
     assert c.status_code == 201 and c.json()["numero"].startswith("CE-T1-") and c.json()["solde"] == 0
     cpt = c.json()["id"]
-    r = client.post(f"/api/comptes-epargne/{cpt}/depot", json={"montant": 100000, "libelle": "Premier dépôt"}, headers=h("caissier1"))
+    r = client.post(f"/api/comptes-epargne/{cpt}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 100000, "libelle": "Premier dépôt"}, headers=h("caissier1"))
     assert r.status_code == 201 and r.json()["solde"] == 100000 and r.json()["disponible"] == 95000
-    r = client.post(f"/api/comptes-epargne/{cpt}/retrait", json={"montant": 95001}, headers=h("caissier1"))
+    r = client.post(f"/api/comptes-epargne/{cpt}/retrait", json={"session_id": session_especes(client, h, "caissier1"), "montant": 95001}, headers=h("caissier1"))
     assert r.status_code == 422 and "disponible" in r.json()["detail"]
-    r = client.post(f"/api/comptes-epargne/{cpt}/retrait", json={"montant": 95000}, headers=h("caissier1"))
+    r = client.post(f"/api/comptes-epargne/{cpt}/retrait", json={"session_id": session_especes(client, h, "caissier1"), "montant": 95000}, headers=h("caissier1"))
     assert r.status_code == 201 and r.json()["solde"] == 5000 and r.json()["disponible"] == 0
-    assert client.post(f"/api/comptes-epargne/{cpt}/depot", json={"montant": 0}, headers=h("caissier1")).status_code == 422
+    assert client.post(f"/api/comptes-epargne/{cpt}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 0}, headers=h("caissier1")).status_code == 422
     mv = client.get(f"/api/comptes-epargne/{cpt}/mouvements", headers=h("caissier1")).json()
     assert [m["type"] for m in mv] == ["retrait", "depot"] and mv[0]["sens"] == -1
     assert client.get(f"/api/comptes-epargne/{cpt}", headers=h("caissier2")).status_code == 404
     # l'auditeur lit mais n'écrit pas
     assert client.get(f"/api/comptes-epargne/{cpt}", headers=h("auditeur")).status_code == 200
-    assert client.post(f"/api/comptes-epargne/{cpt}/depot", json={"montant": 10}, headers=h("auditeur")).status_code == 403
+    assert client.post(f"/api/comptes-epargne/{cpt}/depot", json={"session_id": session_especes(client, h, "auditeur"), "montant": 10}, headers=h("auditeur")).status_code == 403
 
 
 def test_les_operations_sont_auditees_avec_l_utilisateur(client, h, sql, base):
     cid = base["client"]["id"]
     c = client.post("/api/comptes-epargne", json={"client_id": cid, "produit_id": base["produits"]["CL"]}, headers=h("caissier1")).json()
-    client.post(f"/api/comptes-epargne/{c['id']}/depot", json={"montant": 1234}, headers=h("caissier1"))
+    client.post(f"/api/comptes-epargne/{c['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 1234}, headers=h("caissier1"))
     rows = sql("SELECT utilisateur FROM audit_log WHERE table_name = 'mouvement_epargne' AND (apres->>'montant')::int = 1234")
     assert rows and rows[0]["utilisateur"] == "caissier1"

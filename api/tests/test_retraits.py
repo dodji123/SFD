@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -10,7 +11,7 @@ def base(client, h, agences, produits):
     agents = [client.post("/api/agents", json={"matricule": f"R-A{i}", "nom": f"Agent R{i}"}, headers=h("chef1")).json() for i in (1, 2)]
     clients = [client.post("/api/clients", json={"nom": f"Cli Retrait {i}", "zone_id": z["id"]}, headers=h("chef1")).json() for i in (1, 2, 3, 4)]
     compte = client.post("/api/comptes-epargne", json={"client_id": clients[0]["id"], "produit_id": produits["CL"]}, headers=h("caissier1")).json()
-    client.post(f"/api/comptes-epargne/{compte['id']}/depot", json={"montant": 100000}, headers=h("caissier1"))
+    client.post(f"/api/comptes-epargne/{compte['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 100000}, headers=h("caissier1"))
     caisse = client.post("/api/caisses", json={"code": "CP-R"}, headers=h("chef1")).json()
     session = client.post(f"/api/caisses/{caisse['id']}/sessions", json={"date_session": "2026-10-10", "solde_ouverture": 1000000}, headers=h("caissier1")).json()
     return {"zone": z, "ag": agents, "cl": clients, "compte": compte, "session": session, "produits": produits}
@@ -30,12 +31,12 @@ def test_livret_superieur_a_la_machine_surplus_puis_perte(client, h, base):
     ag = base["ag"][0]["id"]
     c = _cycle_avec_lignes(client, h, base, 0, 5)
     # versements de fin de tournée : sans écart, manquant 200, surplus 300
-    v1 = client.post(f"/api/agents/{ag}/versement", json={"date_tournee": "2026-10-01", "montant_verse": 1000}, headers=h("caissier1"))
+    v1 = client.post(f"/api/agents/{ag}/versement", json={"session_id": session_especes(client, h, "caissier1"), "date_tournee": "2026-10-01", "montant_verse": 1000}, headers=h("caissier1"))
     assert v1.status_code == 201 and v1.json()["ecart"] == 0
-    assert client.post(f"/api/agents/{ag}/versement", json={"date_tournee": "2026-10-02", "montant_verse": 800}, headers=h("caissier1")).json()["ecart"] == 200
-    assert client.post(f"/api/agents/{ag}/versement", json={"date_tournee": "2026-10-03", "montant_verse": 1300}, headers=h("caissier1")).json()["ecart"] == -300
-    assert client.post(f"/api/agents/{ag}/versement", json={"date_tournee": "2026-10-03", "montant_verse": 1}, headers=h("caissier1")).status_code == 409
-    assert client.post(f"/api/agents/{ag}/versement", json={"date_tournee": "2026-10-04", "montant_verse": 1000}, headers=h("agent1")).status_code == 403
+    assert client.post(f"/api/agents/{ag}/versement", json={"session_id": session_especes(client, h, "caissier1"), "date_tournee": "2026-10-02", "montant_verse": 800}, headers=h("caissier1")).json()["ecart"] == 200
+    assert client.post(f"/api/agents/{ag}/versement", json={"session_id": session_especes(client, h, "caissier1"), "date_tournee": "2026-10-03", "montant_verse": 1300}, headers=h("caissier1")).json()["ecart"] == -300
+    assert client.post(f"/api/agents/{ag}/versement", json={"session_id": session_especes(client, h, "caissier1"), "date_tournee": "2026-10-03", "montant_verse": 1}, headers=h("caissier1")).status_code == 409
+    assert client.post(f"/api/agents/{ag}/versement", json={"session_id": None, "date_tournee": "2026-10-04", "montant_verse": 1000}, headers=h("agent1")).status_code == 403
     compte = client.get(f"/api/agents/{ag}/compte", headers=h("chef1")).json()
     assert compte["solde"] == -200
     s = client.get("/api/surplus", params={"agent_id": ag}, headers=h("chef1")).json()
@@ -139,9 +140,9 @@ def test_reglement_du_compte_agent(client, h, base):
     ag = base["ag"][0]["id"]
     avant = client.get(f"/api/agents/{ag}/compte", headers=h("chef1")).json()["solde"]
     assert avant < 0
-    r = client.post(f"/api/agents/{ag}/compte/reglement", json={"montant": -avant}, headers=h("caissier1"))
+    r = client.post(f"/api/agents/{ag}/compte/reglement", json={"session_id": session_especes(client, h, "caissier1"), "montant": -avant}, headers=h("caissier1"))
     assert r.status_code == 201 and r.json()["solde"] == 0
-    assert client.post(f"/api/agents/{ag}/compte/reglement", json={"montant": 0}, headers=h("caissier1")).status_code == 422
+    assert client.post(f"/api/agents/{ag}/compte/reglement", json={"session_id": session_especes(client, h, "caissier1"), "montant": 0}, headers=h("caissier1")).status_code == 422
 
 
 def test_versement_de_tournee_entre_en_caisse(client, h, base):

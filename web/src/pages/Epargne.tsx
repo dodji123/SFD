@@ -90,15 +90,18 @@ function FormulaireOperation({ op, jour, produit, onFait }: { op: 'depot' | 'ret
   const refMontant = useRef<HTMLInputElement>(null)
   const { run, busy } = useAction()
   const piece = useAffichagePiece()
+  const [session, setSession] = useState('')
+  const sessions = useFetch(() => api.get<{ id: number; caisse: string; date_session: string }[]>('/api/sessions', { statut: 'ouverte' }), [])
+  useEffect(() => { if (sessions.data?.length === 1 && !session) setSession(String(sessions.data[0].id)) }, [sessions.data, session])
   const { data: trouve, erreur } = useRecherche<Trouve>('/api/comptes-epargne/recherche', estNumero(suffixe) && produit ? { suffixe, produit_id: produit, date: jour } : null)
   useEffect(() => { if (trouve) refMontant.current?.focus() }, [trouve])
 
   const c = trouve?.compte
   const m = Number(montant)
   const insuffisant = !depot && !!c && m > c.disponible
-  const pret = !!c && m > 0 && !insuffisant && !busy
+  const pret = !!c && m > 0 && !insuffisant && !busy && !!session
   const valider = () => void run(
-    async () => { const r = await api.post<{ piece_id: number | null }>(`/api/comptes-epargne/${c!.id}/${op}`, { montant: m, date_operation: jour, libelle: libelle.trim() || null }); piece.ouvrir(r.piece_id) },
+    async () => { const r = await api.post<{ piece_id: number | null }>(`/api/comptes-epargne/${c!.id}/${op}`, { montant: m, date_operation: jour, libelle: libelle.trim() || null, session_id: Number(session) }); piece.ouvrir(r.piece_id) },
     depot ? 'Dépôt enregistré' : 'Retrait enregistré',
     () => { setSuffixe(''); setMontant(''); setLibelle(''); onFait(); setTimeout(() => refNumero.current?.focus(), 0) },
   )
@@ -120,6 +123,12 @@ function FormulaireOperation({ op, jour, produit, onFait }: { op: 'depot' | 'ret
         </Field>
         <Field label={depot ? 'Origine des fonds (facultatif)' : 'Motif du retrait (facultatif)'}>
           <Input value={libelle} maxLength={120} disabled={!c} onChange={(e) => setLibelle(e.target.value)} />
+        </Field>
+        <Field label="Caisse (espèces)">
+          <Select value={session} onChange={(e) => setSession(e.target.value)}>
+            <option value="">Choisir la session ouverte</option>
+            {sessions.data?.map((s) => <option key={s.id} value={s.id}>{s.caisse} — {s.date_session}</option>)}
+          </Select>
         </Field>
         <Button variant="primary" disabled={!pret} onClick={valider}>{depot ? 'Valider le dépôt' : 'Valider le retrait'}</Button>
       </div>

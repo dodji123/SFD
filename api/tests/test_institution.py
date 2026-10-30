@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import pytest
 
 # Modules sous test : routers/institution.py (fiche de l'institution, coordonnées des agences) et l'en-tête des pièces justificatives
@@ -44,7 +45,7 @@ def test_la_piece_porte_l_entete_de_l_institution_et_de_l_agence(client, h, prod
     client.patch(f"/api/agences/{agences['a1']}", json={"adresse": "Boulevard du Mono", "ville": "Lomé", "telephone": "+228 90 00 00 01"}, headers=h("admin"))
     c = client.post("/api/clients", json={"nom": "Entete Test"}, headers=h("chef1")).json()
     cpt = client.post("/api/comptes-epargne", json={"client_id": c["id"], "produit_id": produits["CL"]}, headers=h("caissier1")).json()
-    d = client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 15000}, headers=h("caissier1")).json()
+    d = client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 15000}, headers=h("caissier1")).json()
     p = client.get(f"/api/pieces/{d['piece_id']}", headers=h("caissier1")).json()
     assert p["institution"]["raison_sociale"] == "Caisse de Test" and p["institution"]["logo"] == PNG and p["institution"]["pied_de_page"]
     assert p["agence_adresse"] == "Boulevard du Mono" and p["agence_telephone"] == "+228 90 00 00 01" and p["agence_code"] == "T1"

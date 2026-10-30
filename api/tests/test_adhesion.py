@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -41,7 +42,7 @@ def test_chaque_compte_a_son_adhesion_et_ses_parts(client, h, sql, base):
         assert sorted(c["nb_parts"] for c in d["comptes"]) == [1, 2] and len({c["adhesion_numero"] for c in d["comptes"]}) == 2
         # compte sans adhésion (données antérieures) : opérations refusées, adhésion puis parts
         sans = sql("INSERT INTO compte_epargne(agence_id, client_id, produit_id) VALUES (%s, %s, %s) RETURNING id", (base["a1"], cid, pcl))[0]["id"]
-        assert client.post(f"/api/comptes-epargne/{sans}/depot", json={"montant": 1000}, headers=h("caissier1")).status_code == 422
+        assert client.post(f"/api/comptes-epargne/{sans}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 1000}, headers=h("caissier1")).status_code == 422
         assert client.post("/api/adhesions/parts", json={"compte_id": sans, "nb_parts": 2}, headers=h("caissier1")).status_code == 422      # adhérer d'abord
         assert client.post("/api/adhesions", json={"compte_id": sans}, headers=h("agent1")).status_code == 403
         assert client.post("/api/adhesions", json={"compte_id": sans}, headers=h("caissier2")).status_code == 404                           # autre agence
@@ -51,7 +52,7 @@ def test_chaque_compte_a_son_adhesion_et_ses_parts(client, h, sql, base):
         assert client.post("/api/adhesions/parts", json={"compte_id": sans, "nb_parts": 1, "date": "2999-01-01"}, headers=h("caissier1")).status_code == 422
         p = client.post("/api/adhesions/parts", json={"compte_id": sans, "nb_parts": 2}, headers=h("caissier1"))
         assert p.status_code == 201 and p.json()["en_regle"] is True and p.json()["capital_souscrit"] == 10000
-        assert client.post(f"/api/comptes-epargne/{sans}/depot", json={"montant": 1000}, headers=h("caissier1")).status_code == 201
+        assert client.post(f"/api/comptes-epargne/{sans}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 1000}, headers=h("caissier1")).status_code == 201
         # tableau du jour : adhésions et parts, avec le compte concerné
         j = client.get("/api/adhesions/jour", params={"date": str(dt.date.today())}, headers=h("caissier1")).json()
         mine = [x for x in j["lignes"] if x["client"] == "Membre Test"]
@@ -69,9 +70,9 @@ def test_guichet_depot_retrait(client, h, base):
     assert r.status_code == 200 and r.json()["client"]["nom"] == "Membre Test"
     assert client.get("/api/comptes-epargne/recherche", params={**p, "suffixe": "987654"}, headers=h("caissier1")).status_code == 404
     assert client.get("/api/comptes-epargne/recherche", params={**p, "produit_id": base["produits"]["P1"]}, headers=h("caissier1")).status_code == 404
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 50000, "date_operation": "2999-01-01"}, headers=h("caissier1")).status_code == 422
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 50000}, headers=h("caissier1")).status_code == 201
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/retrait", json={"montant": 10000}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 50000, "date_operation": "2999-01-01"}, headers=h("caissier1")).status_code == 422
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 50000}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/retrait", json={"session_id": session_especes(client, h, "caissier1"), "montant": 10000}, headers=h("caissier1")).status_code == 201
     ops = client.get("/api/comptes-epargne/operations", params={"date": str(dt.date.today())}, headers=h("caissier1")).json()
     mine = [o for o in ops["lignes"] if o["compte"] == cpt["numero"]]
     assert sorted((o["type"], o["montant"]) for o in mine) == [("depot", 50000), ("retrait", 10000)]
@@ -107,7 +108,7 @@ def test_annulation_et_validation_de_la_journee_d_epargne(client, h, base):
     d = {"date": aujourdhui}
     ops = lambda: client.get("/api/comptes-epargne/operations", params=d, headers=h("caissier1")).json()
     avant = client.get(f"/api/comptes-epargne/{cpt['id']}", headers=h("caissier1")).json()["solde"]
-    dep = client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 7000}, headers=h("caissier1")).json()["mouvement"]["id"]
+    dep = client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 7000}, headers=h("caissier1")).json()["mouvement"]["id"]
     try:
         o = ops()
         assert next(l for l in o["lignes"] if l["id"] == dep)["annulable"] is True and o["validee"] is False
@@ -126,13 +127,13 @@ def test_annulation_et_validation_de_la_journee_d_epargne(client, h, base):
         assert client.post("/api/comptes-epargne/valider-journee", json=d, headers=h("caissier1")).status_code == 403
         v = client.post("/api/comptes-epargne/valider-journee", json=d, headers=h("chef1"))
         assert v.status_code == 201 and v.json()["validee"] is True and all(l["annulable"] is False for l in v.json()["lignes"])
-        assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 1000}, headers=h("caissier1")).status_code == 422
+        assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 1000}, headers=h("caissier1")).status_code == 422
         assert client.post("/api/comptes-epargne/valider-journee", json=d, headers=h("chef1")).status_code == 422
         assert client.post("/api/comptes-epargne/rouvrir-journee", json=d, headers=h("chef1")).status_code == 422                 # motif obligatoire
     finally:
         r = client.post("/api/comptes-epargne/rouvrir-journee", json={**d, "motif": "fin du test"}, headers=h("chef1"))
         assert r.status_code in (200, 422)
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 1000}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 1000}, headers=h("caissier1")).status_code == 201
 
 
 def test_sortie_du_compte_et_remboursement_des_parts(client, h, sql, base):
@@ -148,7 +149,7 @@ def test_sortie_du_compte_et_remboursement_des_parts(client, h, sql, base):
     assert r.status_code == 422 and "tontine" in r.json()["detail"]
     sql("UPDATE cycle SET statut = 'retire' WHERE id = %s", (cy["id"],))
     # solde non nul : sortie refusée
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 2000}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 2000}, headers=h("caissier1")).status_code == 201
     r = sortie(cpt["id"])
     assert r.status_code == 422 and "solde" in r.json()["detail"]
     sql("DELETE FROM mouvement_epargne WHERE compte_id = %s", (cpt["id"],))                 # solde remis à zéro (le produit impose un solde minimum aux retraits)
@@ -157,4 +158,4 @@ def test_sortie_du_compte_et_remboursement_des_parts(client, h, sql, base):
     assert r.json()["adhesion_statut"] == "radiee" and r.json()["rembourse_montant"] == 10000 and r.json()["statut"] == "clos" and r.json()["en_regle"] is False
     assert sortie(cpt["id"]).status_code == 422                                                                                     # déjà radiée
     assert client.post("/api/adhesions/parts", json={"compte_id": cpt["id"], "nb_parts": 1}, headers=h("caissier1")).status_code == 422
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 500}, headers=h("caissier1")).status_code == 422   # compte clos
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 500}, headers=h("caissier1")).status_code == 422   # compte clos

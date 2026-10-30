@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -17,7 +18,7 @@ def ecart(client, h, produits):
 
     for jour, verse in [(1, 1000), (2, 1000), (3, 1000), (4, 1000), (5, 1400)]:
         r = client.post(f"/api/agents/{ag['id']}/versement",
-                        json={"date_tournee": str(d0 + dt.timedelta(days=jour - 1)), "montant_verse": verse}, headers=h("caissier1"))
+                        json={"session_id": session_especes(client, h, "caissier1"), "date_tournee": str(d0 + dt.timedelta(days=jour - 1)), "montant_verse": verse}, headers=h("caissier1"))
         assert r.status_code == 201, r.text
 
     retrait = client.post(f"/api/cycles/{c['id']}/retrait", json={"date": "2026-10-10"}, headers=h("chef1")).json()

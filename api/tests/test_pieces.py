@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -34,10 +35,10 @@ def test_ouverture_de_compte_adhesion_et_parts_sur_une_piece(client, h, base):
 
 def test_depot_et_retrait_d_epargne_ont_leur_piece(client, h, base):
     cid = base["compte"]["id"]
-    d = client.post(f"/api/comptes-epargne/{cid}/depot", json={"montant": 90000, "libelle": "salaire"}, headers=h("caissier1")).json()
+    d = client.post(f"/api/comptes-epargne/{cid}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 90000, "libelle": "salaire"}, headers=h("caissier1")).json()
     p = _piece(client, h, d["piece_id"])
     assert p["type"] == "depot_epargne" and p["montant"] == 90000 and "salaire" in p["lignes"][0]["libelle"] and p["utilisateur"] == "caissier1"
-    r = client.post(f"/api/comptes-epargne/{cid}/retrait", json={"montant": 10000}, headers=h("caissier1")).json()
+    r = client.post(f"/api/comptes-epargne/{cid}/retrait", json={"session_id": session_especes(client, h, "caissier1"), "montant": 10000}, headers=h("caissier1")).json()
     assert _piece(client, h, r["piece_id"])["type"] == "retrait_epargne"
     # la pièce d'une opération est unique : la redemander renvoie la même
     again = client.post("/api/pieces/operation", json={"source": "mouvement_epargne", "id": d["mouvement"]["id"]}, headers=h("caissier1"))

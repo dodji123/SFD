@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -43,9 +44,9 @@ def test_cloture_manuelle_par_selection(client, h, base):
 def test_releve_de_compte(client, h, base, produits):
     cid = base["client"]["id"]
     cpt = client.post("/api/comptes-epargne", json={"client_id": cid, "produit_id": produits["CL"]}, headers=h("chef1")).json()
-    client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 50000, "date_operation": "2026-09-01"}, headers=h("chef1"))
-    client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 20000, "date_operation": "2026-10-02"}, headers=h("chef1"))
-    client.post(f"/api/comptes-epargne/{cpt['id']}/retrait", json={"montant": 5000, "date_operation": "2026-10-03"}, headers=h("chef1"))
+    client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "chef1"), "montant": 50000, "date_operation": "2026-09-01"}, headers=h("chef1"))
+    client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "chef1"), "montant": 20000, "date_operation": "2026-10-02"}, headers=h("chef1"))
+    client.post(f"/api/comptes-epargne/{cpt['id']}/retrait", json={"session_id": session_especes(client, h, "chef1"), "montant": 5000, "date_operation": "2026-10-03"}, headers=h("chef1"))
     r = client.get(f"/api/clients/{cid}/releve", params={"du": "2026-10-01", "au": "2026-10-31"}, headers=h("chef1"))
     assert r.status_code == 200, r.text
     d = r.json()

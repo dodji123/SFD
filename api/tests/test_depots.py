@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import datetime as dt
 
 import pytest
@@ -9,7 +10,7 @@ import pytest
 def base(client, h, sql, agences, produits):
     c = client.post("/api/clients", json={"nom": "Deposant Test"}, headers=h("chef1")).json()
     cpt = client.post("/api/comptes-epargne", json={"client_id": c["id"], "produit_id": produits["CL"]}, headers=h("caissier1")).json()
-    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"montant": 800000}, headers=h("caissier1")).status_code == 201
+    assert client.post(f"/api/comptes-epargne/{cpt['id']}/depot", json={"session_id": session_especes(client, h, "caissier1"), "montant": 800000}, headers=h("caissier1")).status_code == 201
     return {"client": c, "compte": cpt, "a1": agences["a1"]}
 
 
@@ -29,7 +30,7 @@ def test_depot_de_garantie_bloque_puis_debloque(client, h, sql, base):
     assert g["numero"].startswith("DG-T1-") and g["statut"] == "bloque" and g["client"] == "Deposant Test"
     c = _compte(client, h, base)
     assert c["solde"] == 900000 and c["disponible"] == dispo0                      # le solde monte, le disponible ne bouge pas : la somme est bloquée
-    assert client.post(f"/api/comptes-epargne/{cid}/retrait", json={"montant": dispo0 + 1}, headers=h("caissier1")).status_code == 422
+    assert client.post(f"/api/comptes-epargne/{cid}/retrait", json={"session_id": session_especes(client, h, "caissier1"), "montant": dispo0 + 1}, headers=h("caissier1")).status_code == 422
     # déblocage : réservé au chef / admin
     assert client.post(f"/api/depots/garanties/{g['id']}/liberer", json={}, headers=h("caissier1")).status_code == 403
     assert client.post(f"/api/depots/garanties/{g['id']}/liberer", json={}, headers=h("chef2")).status_code == 404

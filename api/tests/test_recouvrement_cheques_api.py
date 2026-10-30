@@ -1,3 +1,4 @@
+from caisse_helpers import session_especes
 import pytest
 
 # Module sous test : routers/recouvrement.py et routers/procurations_cheques.py (+ action « dormant » de epargne.py)
@@ -16,7 +17,7 @@ def base(client, h, sql, produits, agences, utilisateurs):
     sql("UPDATE demande_credit SET credit_id = %s WHERE id = %s", (cid, did))
     sql("INSERT INTO echeance(credit_id,no_echeance,date_prevue,capital,interet,statut) VALUES (%s,1,current_date - 570,300000,4500,'echue')", (cid,))
     compte = client.post("/api/comptes-epargne", json={"client_id": c["id"], "produit_id": produits["CL"]}, headers=h("chef1")).json()
-    client.post(f"/api/comptes-epargne/{compte['id']}/depot", json={"montant": 300000}, headers=h("chef1"))
+    client.post(f"/api/comptes-epargne/{compte['id']}/depot", json={"session_id": session_especes(client, h, "chef1"), "montant": 300000}, headers=h("chef1"))
     sql("INSERT INTO compte_banque(agence_id,code,libelle) VALUES (%s,'BQREC','Banque test')", (a1,))
     return {"credit": cid, "client": c, "compte": compte, "banque": sql("SELECT id FROM compte_banque WHERE code = 'BQREC'")[0]["id"], "u": utilisateurs}
 
@@ -79,7 +80,7 @@ def test_procuration(client, h, base):
     assert client.post(f"/api/procurations/{pid}/valider", headers=h("caissier1")).status_code == 403                       # le caissier ne valide pas
 
     def retrait(m):
-        return client.post(f"/api/comptes-epargne/{cpt}/retrait", json={"montant": m, "procuration_id": pid}, headers=h("chef1"))
+        return client.post(f"/api/comptes-epargne/{cpt}/retrait", json={"session_id": session_especes(client, h, "chef1"), "montant": m, "procuration_id": pid}, headers=h("chef1"))
     assert retrait(10000).status_code == 422                                                                                  # pas encore validée
     assert client.post(f"/api/procurations/{pid}/valider", headers=h("chef1")).json()["statut"] == "validee"
     assert retrait(10000).status_code == 201
