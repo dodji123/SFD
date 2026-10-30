@@ -1,0 +1,121 @@
+import { useState } from 'react'
+import { session } from '../lib/api'
+import { Alert, Card, Page, Table } from '../components/ui'
+
+interface Erreur { ligne: number; champ: string; motif: string }
+interface Apercu { ligne: number; numero: string; nom: string; zone_code: string; produit_code: string; telephone: string | null }
+interface Resultat { lignes_lues: number; lignes_valides: number; erreurs: Erreur[]; apercu: Apercu[] }
+
+// Import des clients par produit et par zone. Étape 1 : contrôle seul. Étape 2 : création des clients acceptés, numéros conservés.
+export default function ImportClients() {
+  const [resultat, setResultat] = useState<Resultat | null>(null)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [occupe, setOccupe] = useState(false)
+  const [fichier, setFichier] = useState<File | null>(null)
+  const [creation, setCreation] = useState<{ crees: number; refus: Erreur[] } | null>(null)
+
+  function entete(): HeadersInit {
+    const t = session.getToken()
+    return t ? { Authorization: `Bearer ${t}` } : {}
+  }
+
+  async function envoyer(route: 'verifier' | 'valider', f: File) {
+    const corps = new FormData()
+    corps.append('fichier', f)
+    const r = await fetch(`/api/import/clients/${route}`, { method: 'POST', body: corps, headers: entete() })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(d.detail ?? `Erreur ${r.status}`)
+    return d
+  }
+
+  async function telecharger() {
+    setErreur(null)
+    const r = await fetch('/api/import/clients/modele', { headers: entete() })
+    if (!r.ok) { setErreur(`Fichier type indisponible (${r.status})`); return }
+    const url = URL.createObjectURL(await r.blob())
+    const lien = document.createElement('a')
+    lien.href = url
+    lien.download = 'modele_import_clients.xlsx'
+    lien.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function controler(f: File) {
+    setOccupe(true)
+    setErreur(null)
+    setResultat(null)
+    setCreation(null)
+    setFichier(f)
+    try {
+      setResultat((await envoyer('verifier', f)) as Resultat)
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : 'Contrôle impossible')
+    } finally {
+      setOccupe(false)
+    }
+  }
+
+  async function creer() {
+    if (!fichier || !confirm('Créer les clients acceptés ? Cette opération enregistre les clients.')) return
+    setOccupe(true)
+    setErreur(null)
+    try {
+      setCreation((await envoyer('valider', fichier)) as { crees: number; refus: Erreur[] })
+      setResultat(null)
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : 'Création impossible')
+    } finally {
+      setOccupe(false)
+    }
+  }
+
+  return (
+    <Page title="Import des clients" subtitle="Contrôle du fichier Excel par produit et par zone, puis création des clients acceptés. Les numéros du terrain sont conservés.">
+      <Card>
+        <p className="muted" style={{ marginTop: 0 }}>Colonnes : numero, nom, zone_code, produit_code (facultative : telephone). Importez les clients avant les cycles.</p>
+        <p><button type="button" className="btn" onClick={() => void telecharger()}>Télécharger le fichier type</button></p>
+        <input type="file" accept=".xlsx" disabled={occupe} onChange={(e) => { const f = e.target.files?.[0]; if (f) void controler(f) }} />
+      </Card>
+      {occupe && <p className="muted">Traitement en cours…</p>}
+      {erreur && <Alert tone="bad">{erreur}</Alert>}
+      {creation && (
+        <Alert tone={creation.refus.length ? 'warn' : 'info'}>
+          {creation.crees} client(s) créé(s).{creation.refus.length ? ` ${creation.refus.length} ligne(s) refusée(s) : ${creation.refus.map((e) => `ligne ${e.ligne} (${e.motif})`).join(' ; ')}` : ''}
+        </Alert>
+      )}
+      {resultat && (
+        <>
+          <Card>
+            <p style={{ margin: 0 }}>
+              <strong>{resultat.lignes_lues}</strong> ligne(s) lue(s) · <strong>{resultat.lignes_valides}</strong> acceptée(s) · <strong>{resultat.erreurs.length}</strong> erreur(s)
+            </p>
+          </Card>
+          {resultat.erreurs.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Card title="Erreurs à corriger" flush>
+                <Table rows={resultat.erreurs} cols={[
+                  { titre: 'Ligne', num: true, render: (e) => e.ligne },
+                  { titre: 'Colonne', render: (e) => e.champ },
+                  { titre: 'Motif', render: (e) => e.motif },
+                ]} />
+              </Card>
+            </div>
+          )}
+          {resultat.apercu.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Card title="Aperçu des clients acceptés" flush actions={<button type="button" className="btn btn-primary" disabled={occupe} onClick={() => void creer()}>Créer les clients</button>}>
+                <Table rows={resultat.apercu} cols={[
+                  { titre: 'Numéro', render: (a) => a.numero },
+                  { titre: 'Nom', render: (a) => a.nom },
+                  { titre: 'Zone', render: (a) => a.zone_code },
+                  { titre: 'Produit', render: (a) => a.produit_code },
+                  { titre: 'Téléphone', render: (a) => a.telephone ?? '—' },
+                ]} />
+              </Card>
+            </div>
+          )}
+        </>
+      )}
+    </Page>
+  )
+}
