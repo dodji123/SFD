@@ -152,6 +152,11 @@ function Referentiels() {
   const produits = useFetch(() => api.get<ProduitEp[]>('/api/produits-epargne'), [])
   const pcredit = useFetch(() => api.get<{ id: number; code: string; libelle: string; type: string; taux_annuel: number; frais_dossier_taux: number }[]>('/api/produits-credit'), [])
   const recharger = () => { zones.reload(); agents.reload(); colls.reload(); produits.reload(); pcredit.reload() }
+  const [edition, setEdition] = useState<ProduitEp | null>(null)
+  const supprimerProduit = (p: ProduitEp) => {
+    if (!window.confirm(`Supprimer le produit « ${p.libelle} » (${p.code}) ? Un produit déjà utilisé ne peut pas être supprimé.`)) return
+    void run(() => api.del(`/api/produits-epargne/${p.id}`), 'Produit supprimé', recharger)
+  }
   const changerGrace = (p: ProduitEp) => {
     const v = window.prompt(`Délai de grâce de « ${p.libelle} » en jours (0 à 90). Laisser vide pour reprendre le paramètre commun :`, p.delai_grace_jours === null ? '' : String(p.delai_grace_jours))
     if (v === null) return
@@ -174,12 +179,44 @@ function Referentiels() {
           { titre: 'Nature', render: (p) => (p.categorie === 'collecte' ? (p.type_cycle ? `Tontine — type ${p.type_cycle} imposé` : 'Tontine — type choisi à chaque cycle') : 'Épargne classique') },
           { titre: 'Délai de grâce', num: true, render: (p) => (p.categorie === 'collecte' ? (p.delai_grace_jours === null ? 'paramètre commun' : `${p.delai_grace_jours} j`) : '') },
           { titre: 'Solde minimum', num: true, render: (p) => p.solde_minimum },
-          { titre: '', render: (p) => can('ref:write') && p.categorie === 'collecte' && <Button small disabled={busy} onClick={() => changerGrace(p)}>Délai de grâce</Button> },
+          { titre: '', render: (p) => can('ref:write') && <span className="row">
+            <Button small disabled={busy} onClick={() => setEdition(p)}>Modifier</Button>
+            <Button small variant="danger" disabled={busy} onClick={() => supprimerProduit(p)}>Supprimer</Button>
+            {p.categorie === 'collecte' && <Button small disabled={busy} onClick={() => changerGrace(p)}>Délai de grâce</Button>}
+          </span> },
         ]} />}</Charge>}
         {type === 'credit' && <Charge q={pcredit}>{(r) => <Table rows={r.filter((p) => contient(texte, p.code, p.libelle) && (!nature || p.type === nature))} cols={[{ titre: 'Code', render: (p) => p.code }, { titre: 'Libellé', render: (p) => p.libelle }, { titre: 'Type', render: (p) => (p.type === 'sur_epargne' ? 'Sur épargne' : 'Sans épargne') }, { titre: 'Taux annuel', num: true, render: (p) => `${Math.round(p.taux_annuel * 1000) / 10} %` }, { titre: 'Frais de dossier', num: true, render: (p) => `${Math.round(p.frais_dossier_taux * 1000) / 10} %` }]} />}</Charge>}
       </Card>
       {modale && <AjoutReferentiel type={type} onClose={() => setModale(false)} onFait={() => { setModale(false); recharger() }} />}
+      {edition && <ModifierProduit produit={edition} onClose={() => setEdition(null)} onFait={() => { setEdition(null); recharger() }} />}
     </div>
+  )
+}
+
+function ModifierProduit({ produit, onClose, onFait }: { produit: ProduitEp; onClose: () => void; onFait: () => void }) {
+  const { run, busy } = useAction()
+  const [f, setF] = useState({ libelle: produit.libelle, categorie: produit.categorie, type_cycle: produit.type_cycle === null ? '' : String(produit.type_cycle), solde_minimum: String(produit.solde_minimum), grace: produit.delai_grace_jours === null ? '' : String(produit.delai_grace_jours) })
+  const maj = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
+  const envoyer = () => {
+    const collecte = f.categorie === 'collecte'
+    return api.patch(`/api/produits-epargne/${produit.id}`, {
+      libelle: f.libelle,
+      categorie: f.categorie,
+      type_cycle: collecte && f.type_cycle !== '' ? Number(f.type_cycle) : null,
+      solde_minimum: Number(f.solde_minimum),
+      delai_grace_jours: collecte && f.grace !== '' ? Number(f.grace) : null,
+    })
+  }
+  return (
+    <FormModal titre={`Modifier ${produit.code}`} onClose={onClose} busy={busy} onSubmit={() => void run(envoyer, 'Produit modifié', onFait)}>
+      <Field label="Libellé"><Input value={f.libelle} onChange={maj('libelle')} required autoFocus /></Field>
+      <Field label="Nature"><Select value={f.categorie} onChange={maj('categorie')}><option value="collecte">Tontine (collecte)</option><option value="classique">Épargne classique</option></Select></Field>
+      {f.categorie === 'collecte'
+        ? <><Field label="Type de cycle imposé" hint="Vide : le type se choisit à chaque nouveau cycle."><Select value={f.type_cycle} onChange={maj('type_cycle')}><option value="">Choisi à chaque cycle</option><option value="1">Type 1</option><option value="2">Type 2</option><option value="3">Type 3</option></Select></Field>
+            <Field label="Délai de grâce (jours)" hint="Vide : paramètre commun."><Input type="number" min={0} max={90} value={f.grace} onChange={maj('grace')} /></Field></>
+        : <Field label="Solde minimum (F)"><Input type="number" min={0} value={f.solde_minimum} onChange={maj('solde_minimum')} /></Field>}
+      <Alert tone="info">La nature et le type de cycle ne peuvent plus changer dès qu'un cycle ou un compte existe sur ce produit.</Alert>
+    </FormModal>
   )
 }
 

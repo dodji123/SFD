@@ -2,6 +2,7 @@
 import datetime as dt
 from typing import Literal
 
+import psycopg2
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -268,9 +269,20 @@ class ProduitIn(BaseModel):
 
 class ProduitPatch(BaseModel):
     libelle: str | None = Field(default=None, min_length=1)
+    categorie: Literal["collecte", "classique"] | None = None
+    type_cycle: Literal[1, 2, 3] | None = None
     delai_grace_jours: int | None = Field(default=None, ge=0, le=90)
     nb_pages_livret: int | None = Field(default=None, ge=1, le=20)
+    solde_minimum: int | None = Field(default=None, ge=0)
     actif: bool | None = None
+
+
+def _produit_utilise(cur, produit_id: int) -> bool:
+    """Vrai dès qu'un cycle, un compte d'épargne ou un lot de carnets existe sur ce produit."""
+    return one_row(cur, "SELECT (EXISTS (SELECT 1 FROM cycle WHERE produit_id = %s) "
+                        "OR EXISTS (SELECT 1 FROM compte_epargne WHERE produit_id = %s) "
+                        "OR EXISTS (SELECT 1 FROM carnet_lot WHERE produit_id = %s)) AS utilise",
+                   (produit_id, produit_id, produit_id))["utilise"]
 
 
 @router.patch("/produits-epargne/{produit_id}")
@@ -280,10 +292,28 @@ def modifier_produit(produit_id: int, body: ProduitPatch, user: User = Depends(r
         raise HTTPException(status_code=422, detail="Aucune modification")
     sets = ", ".join(f"{c} = %s" for c in champs)
     with tx(user.login) as cur:
+        actuel = one_row(cur, "SELECT categorie, type_cycle FROM produit_epargne WHERE id = %s", (produit_id,))
+        if actuel is None:
+            raise HTTPException(status_code=404, detail="Produit introuvable")
+        structure_change = any(c in champs and champs[c] != actuel[c] for c in ("categorie", "type_cycle"))
+        if structure_change and _produit_utilise(cur, produit_id):
+            raise HTTPException(status_code=409, detail="Ce produit a déjà des données : sa nature et son type de cycle ne peuvent plus changer")
         r = one_row(cur, f"UPDATE produit_epargne SET {sets} WHERE id = %s RETURNING *", (*champs.values(), produit_id))
-    if r is None:
-        raise HTTPException(status_code=404, detail="Produit introuvable")
     return r
+
+
+@router.delete("/produits-epargne/{produit_id}", status_code=204)
+def supprimer_produit(produit_id: int, user: User = Depends(require("ref:write"))):
+    """Supprime un produit sans données. Un produit déjà utilisé (cycle, compte, carnet…) ne peut être que désactivé."""
+    try:
+        with tx(user.login) as cur:
+            cur.execute("DELETE FROM produit_epargne WHERE id = %s", (produit_id,))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Produit introuvable")
+    except psycopg2.Error as e:
+        if e.pgcode == "23503":
+            raise HTTPException(status_code=409, detail="Ce produit a déjà des données : il ne peut pas être supprimé, désactivez-le")
+        raise
 
 
 @router.get("/produits-epargne")
