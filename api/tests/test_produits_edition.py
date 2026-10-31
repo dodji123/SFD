@@ -38,3 +38,13 @@ def test_produit_avec_donnees_ne_se_supprime_ni_ne_change_de_nature(client, h, p
 def test_edition_produit_reserve_au_referentiel(client, h, produits):
     assert client.delete(f"/api/produits-epargne/{produits['P1']}", headers=h("caissier1")).status_code == 403
     assert client.patch(f"/api/produits-epargne/{produits['P1']}", json={"libelle": "x"}, headers=h("caissier1")).status_code == 403
+
+
+def test_zone_sans_donnees_supprimable_et_zone_utilisee_refusee(client, h, agences):
+    z = client.post("/api/zones", json={"code": "ZSUP", "libelle": "À supprimer"}, headers=h("chef1"))
+    assert z.status_code == 201, z.text
+    assert client.delete(f"/api/zones/{z.json()['id']}", headers=h("chef1")).status_code == 204
+    assert "ZSUP" not in [x["code"] for x in client.get("/api/zones", headers=h("chef1")).json()]
+    utilisee = _zone_et_client(client, h, "ZUSE")
+    r = client.delete(f"/api/zones/{utilisee['zone_id']}", headers=h("chef1"))
+    assert r.status_code == 409 and "données" in r.json()["detail"]

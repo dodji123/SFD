@@ -59,6 +59,19 @@ def affecter_agent_zone(zone_id: int, body: ZoneAgentIn, user: User = Depends(re
         return one_row(cur, "UPDATE zone SET agent_id = %s WHERE id = %s RETURNING *", (body.agent_id, zone_id))
 
 
+@router.delete("/zones/{zone_id}", status_code=204)
+def supprimer_zone(zone_id: int, user: User = Depends(require("ref:write"))):
+    """Supprime une zone sans données. Une zone déjà utilisée (clients, affectations, transferts) ne peut pas être supprimée."""
+    try:
+        with tx(user.login) as cur:
+            verifier_agence(cur, user, "zone", zone_id)
+            cur.execute("DELETE FROM zone WHERE id = %s", (zone_id,))
+    except psycopg2.Error as e:
+        if e.pgcode == "23503":
+            raise HTTPException(status_code=409, detail="Cette zone a déjà des données (clients, affectations ou transferts) : suppression impossible")
+        raise
+
+
 @router.get("/zones")
 def lister_zones(agence_id: int | None = None, user: User = Depends(require("ref:read"))):
     ag = agence_filter(user, agence_id)

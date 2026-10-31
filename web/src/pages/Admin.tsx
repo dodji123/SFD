@@ -153,6 +153,10 @@ function Referentiels() {
   const pcredit = useFetch(() => api.get<{ id: number; code: string; libelle: string; type: string; taux_annuel: number; frais_dossier_taux: number }[]>('/api/produits-credit'), [])
   const recharger = () => { zones.reload(); agents.reload(); colls.reload(); produits.reload(); pcredit.reload() }
   const [edition, setEdition] = useState<ProduitEp | null>(null)
+  const supprimerZone = (z: { id: number; code: string }) => {
+    if (!window.confirm(`Supprimer la zone ${z.code} ? Une zone déjà utilisée ne peut pas être supprimée.`)) return
+    void run(() => api.del(`/api/zones/${z.id}`), 'Zone supprimée', recharger)
+  }
   const supprimerProduit = (p: ProduitEp) => {
     if (!window.confirm(`Supprimer le produit « ${p.libelle} » (${p.code}) ? Un produit déjà utilisé ne peut pas être supprimé.`)) return
     void run(() => api.del(`/api/produits-epargne/${p.id}`), 'Produit supprimé', recharger)
@@ -171,7 +175,7 @@ function Referentiels() {
           {type === 'produit' && <Field label="Nature"><Select value={nature} onChange={(e) => setNature(e.target.value)}><option value="">Toutes</option><option value="collecte">Tontine</option><option value="classique">Épargne classique</option></Select></Field>}
           {type === 'credit' && <Field label="Type"><Select value={nature} onChange={(e) => setNature(e.target.value)}><option value="">Tous</option><option value="sur_epargne">Sur épargne</option><option value="sans_epargne">Sans épargne</option></Select></Field>}
         </div>
-        {type === 'zone' && <Charge q={zones}>{(r) => <Table rows={r.filter((z) => contient(texte, z.code, z.libelle, z.collectrice))} cols={[{ titre: 'Code', render: (z) => z.code }, { titre: 'Libellé', render: (z) => z.libelle }, { titre: 'Collectrice actuelle', render: (z) => z.collectrice ?? '—' }]} />}</Charge>}
+        {type === 'zone' && <Charge q={zones}>{(r) => <Table rows={r.filter((z) => contient(texte, z.code, z.libelle, z.collectrice))} cols={[{ titre: 'Code', render: (z) => z.code }, { titre: 'Libellé', render: (z) => z.libelle }, { titre: 'Collectrice actuelle', render: (z) => z.collectrice ?? '—' }, { titre: '', render: (z) => can('ref:write') && <Button small variant="danger" disabled={busy} onClick={() => supprimerZone(z)}>Supprimer</Button> }]} />}</Charge>}
         {type === 'agent' && <Charge q={agents}>{(r) => <Table rows={r.filter((a) => contient(texte, a.matricule, a.nom))} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
         {type === 'collectrice' && <Charge q={colls}>{(r) => <Table rows={r.filter((a) => contient(texte, a.matricule, a.nom))} cols={[{ titre: 'Matricule', render: (a) => a.matricule }, { titre: 'Nom', render: (a) => a.nom }]} />}</Charge>}
         {type === 'produit' && <Charge q={produits}>{(r) => <Table rows={r.filter((p) => contient(texte, p.code, p.libelle) && (!nature || p.categorie === nature))} cols={[
