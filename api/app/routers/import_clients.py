@@ -20,7 +20,7 @@ COLONNES_CLIENTS = ["numero", "nom", "zone_code", "produit_code"]
 NOTICE_CLIENTS = [
     "Import des clients : mode d'emploi",
     "",
-    "1. Un fichier par produit et par zone : chaque ligne est un client de ce produit, dans cette zone.",
+    "1. Un fichier par produit et par zone : chaque ligne est un client de ce produit, dans cette zone. Un client qui souscrit à plusieurs produits a une ligne par produit, avec le même numéro, le même nom et la même zone : la fiche n'est créée qu'une fois.",
     "2. numero : le numéro client du terrain, conservé tel quel. Il ne doit pas exister déjà dans l'agence.",
     "3. nom : nom du client, saisi comme il doit apparaître dans l'application.",
     "4. zone_code : un code de l'onglet Zones (zone de l'agence). produit_code : un code de l'onglet Produits.",
@@ -46,7 +46,7 @@ def _controler(contenu: bytes, ag: int) -> dict:
         zones = {z["code"] for z in all_rows(cur, "SELECT code FROM zone WHERE agence_id = %s", (ag,))}
         produits = {p["code"] for p in all_rows(cur, "SELECT code FROM produit_epargne", ())}
 
-    erreurs, valides, vus = [], [], set()
+    erreurs, valides, vus = [], [], {}
     for d in donnees:
         ligne = d["ligne"]
         avant = len(erreurs)
@@ -55,16 +55,16 @@ def _controler(contenu: bytes, ag: int) -> dict:
             erreurs.append({"ligne": ligne, "champ": champ, "motif": motif})
 
         numero = _texte(d.get("numero"))
+        nom = _texte(d.get("nom"))
+        zone = _texte(d.get("zone_code"))
         if not numero:
             erreur("numero", "numéro client obligatoire")
         elif numero in existants:
             erreur("numero", f"le client {numero} existe déjà dans l'agence")
-        elif numero in vus:
-            erreur("numero", f"le client {numero} est présent deux fois dans le fichier")
-        nom = _texte(d.get("nom"))
+        elif numero in vus and vus[numero] != (nom, zone):
+            erreur("numero", f"le client {numero} est présent deux fois avec un nom ou une zone différents")
         if not nom:
             erreur("nom", "nom obligatoire")
-        zone = _texte(d.get("zone_code"))
         if zone not in zones:
             erreur("zone_code", f"zone {zone or '(vide)'} inconnue dans l'agence")
         produit = _texte(d.get("produit_code"))
@@ -72,7 +72,10 @@ def _controler(contenu: bytes, ag: int) -> dict:
             erreur("produit_code", f"produit {produit or '(vide)'} inconnu")
         if len(erreurs) > avant:
             continue
-        vus.add(numero)
+        if numero in vus:
+            # deuxième produit du même client : la fiche est déjà retenue, la ligne est acceptée sans second client
+            continue
+        vus[numero] = (nom, zone)
         valides.append({"ligne": ligne, "numero": numero, "nom": nom, "zone_code": zone, "produit_code": produit,
                         "telephone": _texte(d.get("telephone")) or None})
     return {"lignes_lues": len(donnees), "lignes_valides": len(valides), "erreurs": erreurs, "valides": valides}

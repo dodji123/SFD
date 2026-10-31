@@ -62,6 +62,23 @@ def test_valider_garde_les_numeros_du_terrain(client, h, produits):
     assert r2.json()["crees"] == 0 and len(r2.json()["refus"]) == 2
 
 
+def test_client_multi_produits_cree_une_seule_fiche(client, h, produits):
+    _zone(client, h, "ZPM")
+    fichier = _xlsx([
+        ["PM-0001", "Multi Produit", "ZPM", "P1", None],
+        ["PM-0001", "Multi Produit", "ZPM", "P2", None],
+        ["PM-0002", "Autre Client", "ZPM", "P1", None],
+        ["PM-0001", "Autre nom", "ZPM", "P1", None],
+    ])
+    r = client.post("/api/import/clients/verifier", files={"fichier": ("clients.xlsx", fichier, MIME)}, headers=h("chef1"))
+    d = r.json()
+    assert d["lignes_valides"] == 2
+    assert {(e["ligne"], e["champ"]) for e in d["erreurs"]} == {(5, "numero")}
+    r = client.post("/api/import/clients/valider", files={"fichier": ("clients.xlsx", fichier, MIME)}, headers=h("chef1"))
+    assert r.json()["crees"] == 2 and r.json()["numeros"] == ["PM-0001", "PM-0002"]
+    assert len(client.get("/api/clients", params={"q": "PM-0001"}, headers=h("chef1")).json()) == 1
+
+
 def test_import_clients_refuse_sans_permission(client, h):
     fichier = _xlsx([["X-1", "Test", "ZVC", "P1", None]])
     assert client.post("/api/import/clients/valider", files={"fichier": ("c.xlsx", fichier, MIME)}, headers=h("caissier1")).status_code == 403
