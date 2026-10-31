@@ -54,6 +54,19 @@ def test_validation_cree_les_cycles_puis_refuse_le_doublon(client, h, produits):
     assert any("existe déjà" in e["motif"] for e in r2.json()["refus"])
 
 
+def test_client_deux_produits_donne_deux_cycles(client, h, produits):
+    cl = client.post("/api/clients", json={"nom": "Import Deux Produits"}, headers=h("chef1")).json()
+    fichier = _xlsx([
+        ["CY-DP-1", cl["numero"], "P1", "2026-10-01", "2026-11-30", 1000],
+        ["CY-DP-2", cl["numero"], "P2", "2026-10-01", "2026-11-30", 2000],
+    ])
+    mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    r = client.post("/api/import/cycles/valider", files={"fichier": ("c.xlsx", fichier, mime)}, headers=h("chef1"))
+    assert r.status_code == 200, r.text
+    assert r.json()["crees"] == 2 and r.json()["numeros"] == ["CY-DP-1", "CY-DP-2"]
+    assert r.json()["refus"] == []
+
+
 def test_modele_telechargeable_avec_notice_et_produits(client, h):
     import io
     from openpyxl import load_workbook
