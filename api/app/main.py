@@ -1,8 +1,12 @@
 """Point d'entrée : uvicorn app.main:app"""
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
+import psycopg2
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from . import errors
 from .config import settings
@@ -73,6 +77,16 @@ async def lifespan(app: FastAPI):
     close_pool()
 
 
+def _controler_horloge() -> str | None:
+    """Motif de refus si la date système de la machine a reculé (patch 83), sinon None."""
+    try:
+        with tx() as cur:
+            cur.execute("SELECT mf.controler_horloge(%s)", (datetime.now(timezone.utc),))
+    except psycopg2.Error as e:
+        return errors.message_pg(e)
+    return None
+
+
 def create_app() -> FastAPI:
     prod = settings.env == "prod"
     # documentation interactive désactivée en production
@@ -97,6 +111,15 @@ def create_app() -> FastAPI:
         if request.url.path.startswith("/api/"):
             reponse.headers["Cache-Control"] = "no-store"          # aucune donnée de compte dans les caches
         return reponse
+    @app.middleware("http")
+    async def horloge_systeme(request, call_next):
+        # toute écriture est refusée si l'horloge de la machine a reculé : le logiciel n'agit pas sur une date falsifiée
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/"):
+            motif = await run_in_threadpool(_controler_horloge)
+            if motif:
+                return JSONResponse(status_code=423, content={"detail": motif})
+        return await call_next(request)
+
     for r in ROUTERS:
         app.include_router(r)
 

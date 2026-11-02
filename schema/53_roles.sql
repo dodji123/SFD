@@ -271,6 +271,7 @@ INSERT INTO permission(code, categorie) VALUES
   ('tresorerie:read', 'tresorerie'),
   ('tresorerie:write', 'tresorerie'),
   ('users:manage', 'users'),
+  ('journee:admin', 'journee'),
   ('versement:write', 'versement');
 
 -- matrice d'origine : quel rôle a quelle permission
@@ -677,6 +678,7 @@ INSERT INTO droit_role(role_code, perm) VALUES
   ('coordinateur', 'tresorerie:write'),
   ('directeur', 'tresorerie:write'),
   ('admin', 'users:manage'),
+  ('admin', 'journee:admin'),
   ('admin', 'versement:write'),
   ('caissier', 'versement:write'),
   ('chef_agence', 'versement:write');
