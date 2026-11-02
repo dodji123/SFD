@@ -90,13 +90,12 @@ def operations_du_jour(date: dt.date, agence_id: int | None = None, user: User =
             "WHERE ce.agence_id = %s AND m.date_operation = %s AND m.type IN ('depot', 'retrait') ORDER BY m.id DESC",
             (ag, date),
         )
-        ouverte = one_row(cur, "SELECT date_operation FROM date_operation WHERE statut = 'ouverte'")
-    # une opération se contre-passe seulement sur la date d'opération ouverte
-    jour_ouvert = ouverte is not None and ouverte["date_operation"] == date
+        val = one_row(cur, "SELECT v.valide_le, u.login AS valide_par FROM validation_epargne v LEFT JOIN utilisateur u ON u.id = v.valide_par "
+                           "WHERE v.agence_id = %s AND v.date_operation = %s", (ag, date))
     for l in lignes:
-        l["annulable"] = jour_ouvert and not l["annulee"] and not l["contre_passation"]
+        l["annulable"] = val is None and not l["annulee"] and not l["contre_passation"]
     comptes = [l for l in lignes if not l["annulee"] and not l["contre_passation"]]
-    return {"date": date, "lignes": lignes,
+    return {"date": date, "lignes": lignes, "validee": val is not None, "validation": val,
             "total_depots": sum(l["montant"] for l in comptes if l["type"] == "depot"),
             "total_retraits": sum(l["montant"] for l in comptes if l["type"] == "retrait")}
 
@@ -116,6 +115,22 @@ class JourneeEpargneIn(BaseModel):
     date: dt.date
     agence_id: int | None = None
     motif: str | None = Field(default=None, max_length=300)
+
+
+@router.post("/valider-journee", status_code=201)
+def valider_journee(body: JourneeEpargneIn, user: User = Depends(require("collecte:admin"))):
+    ag = agence_scope(user, body.agence_id)
+    with tx(user.login) as cur:
+        cur.execute("SELECT valider_journee_epargne(%s::smallint, %s, %s)", (ag, body.date, user.id))
+    return operations_du_jour(body.date, ag, user)
+
+
+@router.post("/rouvrir-journee")
+def rouvrir_journee(body: JourneeEpargneIn, user: User = Depends(require("collecte:admin"))):
+    ag = agence_scope(user, body.agence_id)
+    with tx(user.login) as cur:
+        cur.execute("SELECT rouvrir_journee_epargne(%s::smallint, %s, %s, %s)", (ag, body.date, body.motif, user.id))
+    return operations_du_jour(body.date, ag, user)
 
 
 @router.get("/dormants")

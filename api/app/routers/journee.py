@@ -1,38 +1,51 @@
-"""Date d'opération : journée comptable unique de l'institution (module 81). Ouverte avant toute opération,
-clôturée pour tout le monde ; une date ne peut être future ni recréée. Les règles sont dans la base."""
+"""Ouverture et clôture de la journée de l'agence (module 64). Les règles (ordre des journées, sessions de caisse fermées,
+collecte et épargne validées, réouverture avec motif) sont dans la base."""
 import datetime as dt
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ..auth import User, require
+from ..auth import User, agence_scope, require
 from ..db import all_rows, one_row, tx
 
 router = APIRouter(prefix="/api/journee", tags=["journee"])
 
 
-class DateOperationIn(BaseModel):
+class JourneeIn(BaseModel):
     date: dt.date
+    motif: str | None = Field(default=None, max_length=300)
 
 
 @router.get("")
-def etat(user: User = Depends(require("caisse:read"))):
+def etat(agence_id: int | None = None, user: User = Depends(require("caisse:read"))):
+    ag = agence_scope(user, agence_id)
     with tx() as cur:
-        ouverte = one_row(cur, "SELECT date_operation FROM date_operation WHERE statut = 'ouverte'")
-        jours = all_rows(cur, "SELECT date_operation, statut, ouverte_le, cloturee_le FROM date_operation "
-                              "ORDER BY date_operation DESC LIMIT 30")
-    return {"date_operation_ouverte": ouverte["date_operation"] if ouverte else None, "jours": jours}
+        jours = all_rows(cur, "SELECT date_journee, statut, ouverte_le, cloturee_le FROM journee_agence "
+                              "WHERE agence_id = %s ORDER BY date_journee DESC LIMIT 30", (ag,))
+        sessions = one_row(cur, "SELECT count(*) AS n FROM session_caisse s JOIN caisse k ON k.id = s.caisse_id "
+                                "WHERE k.agence_id = %s AND s.statut = 'ouverte'", (ag,))["n"]
+    return {"agence_id": ag, "jours": jours, "sessions_ouvertes": sessions}
 
 
 @router.post("/ouvrir", status_code=201)
-def ouvrir(body: DateOperationIn, user: User = Depends(require("journee:admin"))):
+def ouvrir(body: JourneeIn, agence_id: int | None = None, user: User = Depends(require("caisse:write"))):
+    ag = agence_scope(user, agence_id)
     with tx(user.login) as cur:
-        cur.execute("SELECT ouvrir_date_operation(%s, %s)", (body.date, user.id))
+        cur.execute("SELECT ouvrir_journee(%s::smallint, %s, %s)", (ag, body.date, user.id))
     return {"ok": True}
 
 
 @router.post("/cloturer")
-def cloturer(user: User = Depends(require("journee:admin"))):
+def cloturer(body: JourneeIn, agence_id: int | None = None, user: User = Depends(require("caisse:write"))):
+    ag = agence_scope(user, agence_id)
     with tx(user.login) as cur:
-        cur.execute("SELECT cloturer_date_operation(%s)", (user.id,))
+        cur.execute("SELECT cloturer_journee(%s::smallint, %s, %s)", (ag, body.date, user.id))
+    return {"ok": True}
+
+
+@router.post("/rouvrir")
+def rouvrir(body: JourneeIn, agence_id: int | None = None, user: User = Depends(require("collecte:admin"))):
+    ag = agence_scope(user, agence_id)
+    with tx(user.login) as cur:
+        cur.execute("SELECT rouvrir_journee(%s::smallint, %s, %s, %s)", (ag, body.date, body.motif, user.id))
     return {"ok": True}

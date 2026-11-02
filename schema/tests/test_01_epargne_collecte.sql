@@ -20,16 +20,11 @@ SELECT t.refuse('A type inconnu', 'INSERT INTO mouvement_epargne(compte_id,type,
 INSERT INTO mouvement_epargne(compte_id,type,montant) VALUES (1,'retrait',95000);
 SELECT t.eq('A disponible après retrait', solde_disponible(1)::text, '0');
 
--- ===== B. Cycle type 1 : prévisionnel, reste, net (une date d'opération à la fois, dans l'ordre) =====
+-- ===== B. Cycle type 1 : prévisionnel, reste, net =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
 VALUES (1,'CY1',1,1,1,500,500,15500,'2026-10-01','2026-10-31');
-DO $$ BEGIN
-  FOR g IN 1..6 LOOP
-    PERFORM t.ouvrir(DATE '2026-10-01' + g - 1);
-    INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
-    VALUES (1,1,g,DATE '2026-10-01' + g - 1,1,500);
-  END LOOP;
-END $$;
+INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
+SELECT 1,1,g,'2026-10-01'::date+g-1,1,500 FROM generate_series(1,6) g;
 SELECT t.eq('B collecté',     montant_collecte::text,      '3000')  FROM v_cycle_situation WHERE cycle_id=1;
 SELECT t.eq('B prévisionnel', montant_previsionnel::text,  '15500') FROM v_cycle_situation WHERE cycle_id=1;
 SELECT t.eq('B reste',        reste_a_collecter::text,     '12500') FROM v_cycle_situation WHERE cycle_id=1;
@@ -39,7 +34,6 @@ SELECT t.eq('B mise appliquée par défaut', min(mise_appliquee)::text, '500') F
 -- ===== C. Changement de mise : le passé n'est pas faussé =====
 SELECT t.refuse('C changement sur une date déjà saisie', 'SELECT mf.changer_mise(1, 1000, ''2026-10-03'')');
 SELECT changer_mise(1, 1000, '2026-10-07', 'hausse');
-SELECT t.ouvrir('2026-10-07');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
 VALUES (1,1,7,'2026-10-07',1,1000);
 SELECT t.eq('C mise ligne 7', mise_appliquee::text, '1000') FROM ligne_collecte WHERE cycle_id=1 AND no_ligne=7;
@@ -48,7 +42,6 @@ SELECT t.eq('C prévisionnel (6x500 + 1x1000 + 24x1000)', montant_previsionnel::
 SELECT t.eq('C historique', count(*)::text, '2') FROM cycle_mise_historique WHERE cycle_id=1;
 
 -- ===== D. Livret : 31 lignes par page =====
-SELECT t.ouvrir('2026-10-08');
 SELECT t.refuse('D ligne en double', 'INSERT INTO mf.ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES (1,1,7,''2026-10-08'',1,1000)');
 SELECT t.refuse('D no_ligne 32', 'INSERT INTO mf.ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES (1,1,32,''2026-10-08'',1,1000)');
 SELECT t.refuse('D page 2 sur livret d''une page', 'INSERT INTO mf.ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES (1,2,1,''2026-10-08'',1,1000)');
@@ -63,18 +56,16 @@ SELECT t.eq('D ligne virement sans agent', count(*)::text, '1') FROM ligne_colle
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin)
 VALUES (1,'CY3A',1,3,3,500,500,'2026-10-01','2026-10-31'),
        (1,'CY3B',2,3,3,500,500,'2026-10-01','2026-10-31');
-SELECT t.ouvrir('2026-10-09');
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES
-  (2,1,1,'2026-10-09',1,7000),(3,1,1,'2026-10-09',1,4000);
-SELECT t.ouvrir('2026-10-10');
+  (2,1,1,'2026-10-02',1,7000),(2,1,2,'2026-10-09',1,13000);      -- total 20000 -> 645,16 -> 650
 INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES
-  (2,1,2,'2026-10-10',1,13000),(3,1,2,'2026-10-10',1,6000);      -- cycle 2 : total 20000 -> 645,16 -> 650 ; cycle 3 : 10000 -> 322,58 -> 325 < 500 -> 500
+  (3,1,1,'2026-10-02',1,4000),(3,1,2,'2026-10-09',1,6000);       -- total 10000 -> 322,58 -> 325 < 500 -> 500
 SELECT t.eq('F prévisionnel type 3 absent', coalesce(montant_previsionnel::text,'NULL'), 'NULL') FROM v_cycle_situation WHERE cycle_id=2;
 SELECT t.eq('F mise finale 20000/31', cloturer_cycle(2,'2026-10-31')::text, '650');
 SELECT t.eq('F mise finale plancher mise initiale', cloturer_cycle(3,'2026-10-31')::text, '500');
 SELECT t.eq('F net type 3 (20000 - 650)', net::text, '19350') FROM v_cycle_situation WHERE cycle_id=2;
 SELECT t.refuse('F cycle déjà clos', 'SELECT mf.cloturer_cycle(2)');
-SELECT t.refuse('F saisie sur cycle clos', 'INSERT INTO mf.ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES (2,1,3,''2026-10-10'',1,500)');
+SELECT t.refuse('F saisie sur cycle clos', 'INSERT INTO mf.ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte) VALUES (2,1,3,''2026-10-31'',1,500)');
 SELECT t.refuse('F changement de mise sur type 3', 'SELECT mf.changer_mise(2, 700)');
 
 -- ===== G. Arrondi paramétrable =====
@@ -87,15 +78,10 @@ SELECT t.eq('G inférieur 340 (agence 2)', arrondir(340, 2::smallint)::text, '32
 
 -- ===== H. Clôture planifiée : date de fin ou objectif atteint (type 1) =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
-VALUES (1,'CY-OBJ',2,1,1,1000,1000,3000,'2026-10-11','2026-11-30'),
+VALUES (1,'CY-OBJ',2,1,1,1000,1000,3000,'2026-11-01','2026-11-30'),
        (1,'CY-FIN',1,2,2,1000,1000,31000,'2026-09-01','2026-09-30');
-DO $$ BEGIN
-  FOR g IN 1..3 LOOP
-    PERFORM t.ouvrir(DATE '2026-10-11' + g - 1);
-    INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
-    VALUES (4,1,g,DATE '2026-10-11' + g - 1,1,1000);   -- objectif atteint avant la date de fin
-  END LOOP;
-END $$;
+INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
+SELECT 4,1,g,'2026-11-01'::date+g-1,1,1000 FROM generate_series(1,3) g;   -- objectif atteint avant la date de fin
 SELECT t.eq('H cycles clos par la tâche (objectif atteint + fin dépassée + CY1 échu)', cloturer_cycles_echus(1::smallint,'2026-11-05')::text, '3');
 SELECT t.eq('H statut CY-OBJ', statut, 'clos') FROM cycle WHERE numero='CY-OBJ';
 SELECT t.eq('H statut CY-FIN', statut, 'clos') FROM cycle WHERE numero='CY-FIN';
@@ -103,15 +89,10 @@ SELECT t.eq('H date de clôture', date_cloture::text, '2026-11-05') FROM cycle W
 
 -- ===== I. Demande de retrait par cycle =====
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
-VALUES (1,'CY-RET',1,1,1,1000,1000,31000,'2026-10-14','2026-10-31');
-DO $$ BEGIN
-  FOR g IN 1..10 LOOP
-    PERFORM t.ouvrir(DATE '2026-10-14' + g - 1);
-    INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
-    VALUES (6,1,g,DATE '2026-10-14' + g - 1,1,1000);
-  END LOOP;
-END $$;
-SELECT demander_retrait_cycle(6,'retrait_client','2026-10-24');
+VALUES (1,'CY-RET',1,1,1,1000,1000,31000,'2026-12-01','2026-12-31');
+INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
+SELECT 6,1,g,'2026-12-01'::date+g-1,1,1000 FROM generate_series(1,10) g;
+SELECT demander_retrait_cycle(6,'retrait_client','2026-12-20');
 SELECT t.eq('I montant = collecté - mise', montant::text, '9000') FROM retrait WHERE cycle_id=6;
 SELECT t.eq('I décaissement client', decaissement::text, 'true') FROM retrait WHERE cycle_id=6;
 SELECT t.eq('I statut demande', statut, 'demande') FROM retrait WHERE cycle_id=6;
@@ -123,22 +104,18 @@ INSERT INTO collectrice(agence_id,matricule,nom) VALUES (2,'K9','Akou');
 INSERT INTO affectation_zone(zone_id,collectrice_id,date_debut) VALUES (2,1,'2026-01-01');
 INSERT INTO cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,objectif,date_debut,date_fin)
 VALUES (2,'CY-PROD',3,1,1,1000,1000,31000,'2026-10-01','2026-10-31');
-DO $$ BEGIN
-  FOR g IN 1..3 LOOP
-    PERFORM t.ouvrir(DATE '2026-10-25' + g - 1);
-    INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
-    VALUES (7,1,g,DATE '2026-10-25' + g - 1,2,1000);
-  END LOOP;
-END $$;
+INSERT INTO ligne_collecte(cycle_id,page,no_ligne,date_collecte,agent_id,montant_collecte)
+SELECT 7,1,g,'2026-10-01'::date+g-1,2,1000 FROM generate_series(1,3) g;
 SELECT t.eq('J calendaire : cycle non clos, rien compté', production_collectrice(1,'2026-10-01','2026-10-31')::text, '0');
 SELECT cloturer_cycle(7,'2026-10-31');
 SELECT t.eq('J calendaire : après clôture', production_collectrice(1,'2026-10-01','2026-10-31')::text, '3000');
 SELECT t.eq('J calendaire : hors période', production_collectrice(1,'2026-11-01','2026-11-30')::text, '0');
 INSERT INTO parametre(agence_id,cle,valeur) VALUES (2,'mode_cloture','date_fin_client');
-SELECT t.eq('J au fil des collectes, 25-26 oct', production_collectrice(1,'2026-10-25','2026-10-26')::text, '2000');
+SELECT t.eq('J au fil des collectes, 1er-2 oct', production_collectrice(1,'2026-10-01','2026-10-02')::text, '2000');
 
 -- (en fin de fichier : un INSERT refusé consomme un id de séquence et décalerait les cycles ci-dessus)
 -- ===== E. Cohérence cycle / produit / client =====
 -- type de cycle libre (module 62) : un type 1 sur un produit de type 3 est accepté, il n'est plus refusé
 SELECT t.refuse('E produit classique', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''X2'',1,4,1,500,500,''2026-10-01'',''2026-10-31'')');
 SELECT t.refuse('E client d''une autre agence', 'INSERT INTO mf.cycle(agence_id,numero,client_id,produit_id,type_cycle,mise_initiale,mise_courante,date_debut,date_fin) VALUES (1,''X3'',3,1,1,500,500,''2026-10-01'',''2026-10-31'')');
+

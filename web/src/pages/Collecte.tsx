@@ -18,7 +18,7 @@ interface LigneJour {
   zone_id: number | null; zone_code: string | null; zone: string | null
   mise: number; montant_collecte: number; agent_id: number; agent: string; versee: boolean; modifiable: boolean
 }
-interface Jour { date: string; lignes: LigneJour[]; total: number }
+interface Jour { date: string; validee: boolean; validation: { valide_le: string; valide_par: string | null } | null; lignes: LigneJour[]; total: number }
 interface Trouve {
   client: { id: number; numero: string; nom: string; zone_id: number | null }
   cycle: { id: number; numero: string; type_cycle: number; mise_courante: number; montant_collecte: number; reste_a_collecter: number | null }
@@ -194,10 +194,22 @@ Elle disparaîtra des écrans mais restera tracée pour l'audit. Motif obligatoi
       else if (motif !== null) window.alert('Motif trop court : suppression annulée.')
     }
   }
+  const rouvrir = () => {
+    const motif = window.prompt('Motif de la réouverture de la journée (obligatoire) :')
+    if (motif) void run(() => api.post('/api/collecte/rouvrir-journee', { date: jour, motif }), 'Journée rouverte', apres)
+  }
+
   return (
     <Charge q={q}>
       {(d) => (
-        <Card title={`Collectes du ${jour.split('-').reverse().join('/')}`} flush>
+        <Card title={`Collectes du ${jour.split('-').reverse().join('/')}`} flush actions={
+          <>
+            {d.validee ? <Badge tone="ok">Journée validée</Badge> : <Badge tone="warn">Journée en cours</Badge>}
+            {can('collecte:admin') && (d.validee
+              ? <Button small disabled={busy} onClick={rouvrir}>Rouvrir la journée</Button>
+              : <Button small variant="primary" disabled={busy || d.lignes.length === 0}
+                  onClick={() => { if (window.confirm(`Valider la journée : ${d.lignes.length} collecte(s), ${xof(d.total)}. Elles ne seront plus modifiables.`)) void run(() => api.post('/api/collecte/valider-journee', { date: jour }), 'Journée validée', apres) }}>Valider la journée</Button>)}
+          </>}>
           <div className="grid-kpi" style={{ padding: '0 16px' }}>
             <Kpi label="Total collecté" value={xof(d.total)} />
             <Kpi label="Collectes saisies" value={d.lignes.length} />
