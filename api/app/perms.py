@@ -21,6 +21,7 @@ PERMS: dict[str, set[str]] = {
     "lbc:write": {ADMIN, DIR},
     "lbc:listes": {ADMIN, DIR},
     "users:manage": {ADMIN},
+    "journee:admin": {ADMIN},   # ouverture et clôture de la date d'opération : institution entière, pas une seule agence
     "agences:write": {ADMIN},
     "params:read": {ADMIN, DIR, CHEF, COMPTA, AUD},
     "params:write": {ADMIN},

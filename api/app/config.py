@@ -13,7 +13,7 @@ ENV_FILE = pathlib.Path(__file__).resolve().parents[1] / ".env"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SFD_", env_file=str(ENV_FILE), extra="ignore")
 
-    env: str = "dev"  # dev | test | prod
+    env: str = ""  # dev | test | prod : obligatoire, aucun défaut (audit E1 : sans SFD_ENV, le secret de développement était accepté)
     database_url: str = "postgresql://postgres:sfd@localhost:5440/sfd"
     pool_max: int = 20
     jwt_secret: str = ""
@@ -66,3 +66,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+if settings.env not in ("dev", "test", "prod"):
+    raise RuntimeError("SFD_ENV doit valoir dev, test ou prod : aucun démarrage sans environnement explicite")
