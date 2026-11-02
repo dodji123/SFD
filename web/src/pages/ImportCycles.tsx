@@ -14,11 +14,17 @@ export default function ImportCycles() {
   const [fichier, setFichier] = useState<File | null>(null)
   const [creation, setCreation] = useState<{ crees: number; refus: Erreur[] } | null>(null)
 
+  // le siège doit désigner l'agence : on envoie celle de la session
+  function agenceQuery(): string {
+    const a = session.getAgence()
+    return a ? `?agence_id=${a}` : ''
+  }
+
   async function envoyer(route: 'verifier' | 'valider', f: File) {
     const corps = new FormData()
     corps.append('fichier', f)
     const t = session.getToken()
-    const r = await fetch(`/api/import/cycles/${route}`, { method: 'POST', body: corps, headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    const r = await fetch(`/api/import/cycles/${route}${agenceQuery()}`, { method: 'POST', body: corps, headers: t ? { Authorization: `Bearer ${t}` } : {} })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.detail ?? `Erreur ${r.status}`)
     return d
@@ -42,7 +48,7 @@ export default function ImportCycles() {
   async function telecharger() {
     setErreur(null)
     const t = session.getToken()
-    const r = await fetch('/api/import/cycles/modele', { headers: t ? { Authorization: `Bearer ${t}` } : {} })
+    const r = await fetch(`/api/import/cycles/modele${agenceQuery()}`, { headers: t ? { Authorization: `Bearer ${t}` } : {} })
     if (!r.ok) { setErreur(`Fichier type indisponible (${r.status})`); return }
     const url = URL.createObjectURL(await r.blob())
     const lien = document.createElement('a')

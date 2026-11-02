@@ -19,10 +19,16 @@ export default function ImportClients() {
     return t ? { Authorization: `Bearer ${t}` } : {}
   }
 
+  // le siège doit désigner l'agence : on envoie celle de la session
+  function agenceQuery(): string {
+    const a = session.getAgence()
+    return a ? `?agence_id=${a}` : ''
+  }
+
   async function envoyer(route: 'verifier' | 'valider', f: File) {
     const corps = new FormData()
     corps.append('fichier', f)
-    const r = await fetch(`/api/import/clients/${route}`, { method: 'POST', body: corps, headers: entete() })
+    const r = await fetch(`/api/import/clients/${route}${agenceQuery()}`, { method: 'POST', body: corps, headers: entete() })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.detail ?? `Erreur ${r.status}`)
     return d
@@ -30,7 +36,7 @@ export default function ImportClients() {
 
   async function telecharger() {
     setErreur(null)
-    const r = await fetch('/api/import/clients/modele', { headers: entete() })
+    const r = await fetch(`/api/import/clients/modele${agenceQuery()}`, { headers: entete() })
     if (!r.ok) { setErreur(`Fichier type indisponible (${r.status})`); return }
     const url = URL.createObjectURL(await r.blob())
     const lien = document.createElement('a')

@@ -82,3 +82,9 @@ def test_client_multi_produits_cree_une_seule_fiche(client, h, produits):
 def test_import_clients_refuse_sans_permission(client, h):
     fichier = _xlsx([["X-1", "Test", "ZVC", "P1", None]])
     assert client.post("/api/import/clients/valider", files={"fichier": ("c.xlsx", fichier, MIME)}, headers=h("caissier1")).status_code == 403
+
+
+def test_modele_siege_doit_designer_agence(client, h, agences):
+    # le siège n'a pas d'agence propre : sans agence_id, le fichier type est refusé ; avec l'agence de la session, il est servi
+    assert client.get("/api/import/clients/modele", headers=h("admin")).status_code == 400
+    assert client.get("/api/import/clients/modele", params={"agence_id": agences["a1"]}, headers=h("admin")).status_code == 200
