@@ -25,3 +25,16 @@ BEGIN
   END IF;
   RAISE NOTICE 'OK    % refusé (%)', p_label, left(v_msg, 70);
 END $$;
+
+-- Date d'opération de test : ferme la journée ouverte si elle est différente, puis ouvre p_date.
+-- Les dates ne se rouvrent pas : un jeu de test doit saisir ses lignes dans l'ordre chronologique.
+CREATE OR REPLACE FUNCTION t.ouvrir(p_date date) RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM mf.date_operation WHERE statut = 'ouverte' AND date_operation IS DISTINCT FROM p_date) THEN
+    PERFORM mf.cloturer_date_operation();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM mf.date_operation WHERE statut = 'ouverte' AND date_operation = p_date) THEN
+    PERFORM mf.ouvrir_date_operation(p_date);
+  END IF;
+END $$;

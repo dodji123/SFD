@@ -3,8 +3,8 @@
 -- Compléments de l'épargne classique et de l'adhésion.
 --   1. Annulation d'un dépôt ou d'un retrait du jour par contre-passation (jamais de suppression : la comptabilisation
 --      automatique et la piste d'audit restent cohérentes). Un dépôt ne s'annule que si le solde disponible le permet.
---   2. Validation globale de la journée d'épargne par agence : plus de dépôt, retrait ni annulation ce jour-là.
---      rouvrir_journee_epargne la lève (motif obligatoire, tracée).
+--   2. Dépôt et retrait seulement sur la date d'opération ouverte (module 81) ; l'annulation suit la même règle.
+--      Les validations journalières d'épargne sont retirées.
 --   3. Sortie d'un membre : radier_adhesion rembourse les parts (capital libéré) et radie l'adhésion, à condition qu'aucun
 --      compte d'épargne ne soit actif avec un solde, qu'aucun cycle de tontine ne soit en cours et qu'aucun crédit ne soit non soldé.
 -- Dépend de : 01, 02 (mouvements), 03 (crédit), 24 (adhésion).
@@ -18,59 +18,20 @@ CREATE TABLE annulation_mouvement (
   cree_le        timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE validation_epargne (
-  agence_id      smallint NOT NULL REFERENCES agence(id),
-  date_operation date NOT NULL,
-  valide_par     integer REFERENCES utilisateur(id),
-  valide_le      timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (agence_id, date_operation)
-);
-
-CREATE TABLE validation_epargne_journal (
-  id             bigserial PRIMARY KEY,
-  agence_id      smallint NOT NULL REFERENCES agence(id),
-  date_operation date NOT NULL,
-  action         varchar(10) NOT NULL CHECK (action IN ('validee','rouverte')),
-  utilisateur_id integer REFERENCES utilisateur(id),
-  motif          text,
-  cree_le        timestamptz NOT NULL DEFAULT now()
-);
-
--- Verrou : pas de dépôt ni de retrait sur une journée validée
-CREATE FUNCTION trg_epargne_jour_valide() RETURNS trigger
+-- Dépôt ou retrait : seulement sur la date d'opération ouverte (module 81). Les autres types de mouvement ne sont pas concernés.
+CREATE FUNCTION controler_date_epargne() RETURNS trigger
 LANGUAGE plpgsql AS $$
-DECLARE v_agence smallint;
 BEGIN
   IF NEW.type NOT IN ('depot', 'retrait') THEN RETURN NEW; END IF;
-  SELECT agence_id INTO v_agence FROM mf.compte_epargne WHERE id = NEW.compte_id;
-  IF EXISTS (SELECT 1 FROM mf.validation_epargne WHERE agence_id = v_agence AND date_operation = NEW.date_operation) THEN
-    RAISE EXCEPTION 'la journée d''épargne du % est validée : opération refusée', NEW.date_operation;
+  IF NEW.date_operation IS DISTINCT FROM mf.date_operation_courante() THEN
+    RAISE EXCEPTION 'une opération d''épargne se saisit sur la date d''opération ouverte (%), pas le %',
+      mf.date_operation_courante(), NEW.date_operation;
   END IF;
   RETURN NEW;
 END $$;
--- nom précédant « mouvement_controle » dans l'ordre alphabétique des déclencheurs : le verrou passe en premier
-CREATE TRIGGER mouvement_a_jour_valide BEFORE INSERT ON mouvement_epargne
-  FOR EACH ROW EXECUTE FUNCTION trg_epargne_jour_valide();
-
-CREATE FUNCTION valider_journee_epargne(p_agence smallint, p_date date, p_utilisateur integer DEFAULT NULL) RETURNS void
-LANGUAGE plpgsql AS $$
-BEGIN
-  IF p_date > current_date THEN RAISE EXCEPTION 'impossible de valider une journée à venir'; END IF;
-  IF EXISTS (SELECT 1 FROM mf.validation_epargne WHERE agence_id = p_agence AND date_operation = p_date) THEN
-    RAISE EXCEPTION 'la journée d''épargne du % est déjà validée', p_date;
-  END IF;
-  INSERT INTO mf.validation_epargne(agence_id, date_operation, valide_par) VALUES (p_agence, p_date, p_utilisateur);
-  INSERT INTO mf.validation_epargne_journal(agence_id, date_operation, action, utilisateur_id) VALUES (p_agence, p_date, 'validee', p_utilisateur);
-END $$;
-
-CREATE FUNCTION rouvrir_journee_epargne(p_agence smallint, p_date date, p_motif text, p_utilisateur integer DEFAULT NULL) RETURNS void
-LANGUAGE plpgsql AS $$
-BEGIN
-  IF p_motif IS NULL OR btrim(p_motif) = '' THEN RAISE EXCEPTION 'un motif est obligatoire pour rouvrir une journée'; END IF;
-  DELETE FROM mf.validation_epargne WHERE agence_id = p_agence AND date_operation = p_date;
-  IF NOT FOUND THEN RAISE EXCEPTION 'la journée d''épargne du % n''est pas validée', p_date; END IF;
-  INSERT INTO mf.validation_epargne_journal(agence_id, date_operation, action, utilisateur_id, motif) VALUES (p_agence, p_date, 'rouverte', p_utilisateur, p_motif);
-END $$;
+-- nom précédant « mouvement_controle » dans l'ordre alphabétique des déclencheurs : le contrôle passe en premier
+CREATE TRIGGER mouvement_date_operation BEFORE INSERT ON mouvement_epargne
+  FOR EACH ROW EXECUTE FUNCTION controler_date_epargne();
 
 -- Contre-passation d'un dépôt ou d'un retrait (même date que l'opération). Retourne l'id du mouvement inverse.
 CREATE FUNCTION annuler_mouvement_epargne(p_mouvement bigint, p_utilisateur integer DEFAULT NULL) RETURNS bigint

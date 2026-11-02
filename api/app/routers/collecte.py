@@ -326,7 +326,7 @@ def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int 
             aff = one_row(cur, "SELECT zone_id FROM affectation_zone WHERE collectrice_id = %s AND date_fin IS NULL "
                                "ORDER BY date_debut DESC LIMIT 1", (user.collectrice_id,))
         if aff is None:
-            return {"date": date, "agence_id": ag, "validee": False, "validation": None, "lignes": [], "total": 0}
+            return {"date": date, "agence_id": ag, "lignes": [], "total": 0}
         zone = aff["zone_id"]
     with tx() as cur:
         lignes = all_rows(
@@ -343,12 +343,12 @@ def collecte_du_jour(date: dt.date, agent_id: int | None = None, agence_id: int 
             "AND (%s::int IS NULL OR l.agent_id = %s) AND (%s::int IS NULL OR z.id = %s) ORDER BY l.id DESC",
             (ag, date, agent_id, agent_id, zone, zone),
         )
-        val = one_row(cur, "SELECT v.valide_le, u.login AS valide_par FROM validation_collecte v LEFT JOIN utilisateur u ON u.id = v.valide_par "
-                           "WHERE v.agence_id = %s AND v.date_collecte = %s", (ag, date))
+        ouverte = one_row(cur, "SELECT date_operation FROM date_operation WHERE statut = 'ouverte'")
+    # une collecte se corrige seulement sur la date d'opération ouverte, et tant que la tournée n'est pas versée
+    jour_ouvert = ouverte is not None and ouverte["date_operation"] == date
     for l in lignes:
-        l["modifiable"] = val is None and not l["versee"]
-    return {"date": date, "agence_id": ag, "validee": val is not None, "validation": val, "lignes": lignes,
-            "total": sum(l["montant_collecte"] for l in lignes)}
+        l["modifiable"] = jour_ouvert and not l["versee"]
+    return {"date": date, "agence_id": ag, "lignes": lignes, "total": sum(l["montant_collecte"] for l in lignes)}
 
 
 def _ligne_autorisee(cur, user: User, ligne_id: int) -> dict:
@@ -390,23 +390,6 @@ class JourneeIn(BaseModel):
     date: dt.date
     agence_id: int | None = None
     motif: str | None = Field(default=None, max_length=300)
-
-
-@router.post("/collecte/valider-journee", status_code=201)
-def valider_journee(body: JourneeIn, user: User = Depends(require("collecte:admin"))):
-    """Validation globale de la journée : les lignes du jour ne se modifient plus."""
-    ag = agence_scope(user, body.agence_id)
-    with tx(user.login) as cur:
-        cur.execute("SELECT valider_journee_collecte(%s::smallint, %s, %s)", (ag, body.date, user.id))
-    return collecte_du_jour(body.date, None, ag, user)
-
-
-@router.post("/collecte/rouvrir-journee")
-def rouvrir_journee(body: JourneeIn, user: User = Depends(require("collecte:admin"))):
-    ag = agence_scope(user, body.agence_id)
-    with tx(user.login) as cur:
-        cur.execute("SELECT rouvrir_journee_collecte(%s::smallint, %s, %s, %s)", (ag, body.date, body.motif, user.id))
-    return collecte_du_jour(body.date, None, ag, user)
 
 
 # ---------------------------------------------------------------- prolongation d'un cycle (avec autorisation)

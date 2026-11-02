@@ -13,7 +13,7 @@ interface Trouve {
   compte: { id: number; numero: string; produit: string; solde: number; disponible: number; solde_minimum: number }
 }
 interface Jour {
-  total_depots: number; total_retraits: number; validee: boolean
+  total_depots: number; total_retraits: number
   lignes: { id: number; type: 'depot' | 'retrait'; montant: number; compte: string; client_numero: string; client: string; produit: string; libelle: string | null; annulee: boolean; contre_passation: boolean; annulable: boolean }[]
 }
 
@@ -48,14 +48,7 @@ export default function Epargne() {
       )}
       <Charge q={tableau}>
         {(d) => (
-          <Card title={`Opérations du ${jour.split('-').reverse().join('/')}`} flush actions={
-            <>
-              {d.validee ? <Badge tone="ok">Journée validée</Badge> : <Badge tone="warn">Journée en cours</Badge>}
-              {can('collecte:admin') && (d.validee
-                ? <Button small disabled={busy} onClick={() => { const motif = window.prompt('Motif de la réouverture de la journée (obligatoire) :'); if (motif) void run(() => api.post('/api/comptes-epargne/rouvrir-journee', { date: jour, motif }), 'Journée rouverte', tableau.reload) }}>Rouvrir la journée</Button>
-                : <Button small variant="primary" disabled={busy || d.lignes.length === 0}
-                    onClick={() => { if (window.confirm(`Valider la journée : dépôts ${xof(d.total_depots)}, retraits ${xof(d.total_retraits)}. Plus aucune opération ne pourra être saisie ni annulée ce jour.`)) void run(() => api.post('/api/comptes-epargne/valider-journee', { date: jour }), 'Journée validée', tableau.reload) }}>Valider la journée</Button>)}
-            </>}>
+          <Card title={`Opérations du ${jour.split('-').reverse().join('/')}`} flush>
             <div className="grid-kpi" style={{ padding: '0 16px' }}>
               <Kpi label="Dépôts" value={xof(d.total_depots)} />
               <Kpi label="Retraits" value={xof(d.total_retraits)} />
@@ -71,7 +64,7 @@ export default function Epargne() {
               { titre: '', render: (l) => l.annulee ? <span className="muted">annulée</span> : l.contre_passation ? <span className="muted">contre-passation</span>
                 : l.annulable && can('epargne:write')
                   ? <Button small variant="danger" disabled={busy} onClick={() => { if (window.confirm(`Annuler ${l.type === 'depot' ? 'le dépôt' : 'le retrait'} de ${xof(l.montant)} de ${l.client} ? Une écriture inverse est enregistrée.`)) void run(() => api.post(`/api/comptes-epargne/operations/${l.id}/annuler`), 'Opération annulée', tableau.reload) }}>Annuler</Button>
-                  : <span className="muted">{d.validee ? 'validée' : ''}</span> },
+                  : null },
             ]} />
           </Card>
         )}
